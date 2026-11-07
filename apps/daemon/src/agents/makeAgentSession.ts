@@ -98,13 +98,15 @@ export const makeAgentSession = Effect.fnUntraced(function* (capabilities: Agent
 					Effect.gen(function* () {
 						const running = Option.isSome(yield* Ref.get(currentTurn));
 						if (options?.steer && capabilities.steerWhileRunning && running) {
-							return yield* driver.steerTurn(text);
+							yield* driver.steerTurn(text);
+							return "steered" as const;
 						}
 						if (!Queue.offerUnsafe(inbox, text)) {
 							return yield* new SessionBusyError({
 								queued: MAX_QUEUED_MESSAGES,
 							});
 						}
+						return "queued" as const;
 					}),
 				respondToApproval: (requestId, decision) =>
 					Effect.gen(function* () {

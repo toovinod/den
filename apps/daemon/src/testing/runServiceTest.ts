@@ -1,18 +1,29 @@
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
+import type { CredentialStore } from "../agents/CredentialStore.ts";
 import type { ProjectService } from "../projects/ProjectService.ts";
+import type { SessionService } from "../sessions/SessionService.ts";
 import type { LocalDatabase } from "../database/LocalDatabase.ts";
 import { DaemonServices } from "../server/DaemonServices.ts";
 import { Effect, FileSystem, Layer, Schedule } from "effect";
+import { testAgentServices } from "./testAgentServices.ts";
 import { testDaemonConfig } from "./testDaemonConfig.ts";
 import { BunServices } from "@effect/platform-bun";
 import { join } from "node:path";
 
-type Services = LocalDatabase | ProjectService | WorkspaceService | BunServices.BunServices;
+export type Services =
+	| LocalDatabase
+	| ProjectService
+	| WorkspaceService
+	| SessionService
+	| CredentialStore
+	| BunServices.BunServices;
 
 export const withServices =
-	(dataDir: string) =>
+	(dataDir: string, agents: ReturnType<typeof testAgentServices> = testAgentServices()) =>
 	<A, E>(program: Effect.Effect<A, E, Services>) =>
-		program.pipe(Effect.provide(DaemonServices.pipe(Layer.provide(testDaemonConfig(dataDir)))));
+		program.pipe(
+			Effect.provide(DaemonServices.pipe(Layer.provideMerge(agents), Layer.provide(testDaemonConfig(dataDir)))),
+		);
 
 export const runInTempDir = <A, E>(program: (tempDir: string) => Effect.Effect<A, E, BunServices.BunServices>) =>
 	Effect.gen(function* () {

@@ -78,7 +78,11 @@ export interface AgentSessionHandle {
 	// Waits until the agent reports its id, which may only happen after the first message.
 	readonly nativeSessionId: Effect.Effect<string, AgentError>;
 	readonly events: Stream.Stream<AgentEvent, AgentError>;
-	sendMessage(text: string, options?: { readonly steer?: boolean }): Effect.Effect<void, SendMessageError>;
+	// Says whether the text went into the running turn or waits for its own turn.
+	sendMessage(
+		text: string,
+		options?: { readonly steer?: boolean },
+	): Effect.Effect<"steered" | "queued", SendMessageError>;
 	respondToApproval(requestId: string, decision: ApprovalDecision): Effect.Effect<void, ApprovalError>;
 	// Cancels pending approvals first, then stops the running turn.
 	readonly interrupt: Effect.Effect<void, AgentError>;
