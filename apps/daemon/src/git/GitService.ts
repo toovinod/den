@@ -101,18 +101,16 @@ const GhReviewComments = Schema.fromJsonString(
 	),
 );
 
-const GhPullRequests = Schema.fromJsonString(
-	Schema.Array(
-		Schema.Struct({
-			number: Schema.Int,
-			url: Schema.String,
-			title: Schema.String,
-			state: PullRequestState,
-			isDraft: Schema.Boolean,
-			reviewDecision: Schema.NullOr(Schema.String),
-			statusCheckRollup: Schema.NullOr(Schema.Array(GhCheck)),
-		}),
-	),
+const GhPullRequest = Schema.fromJsonString(
+	Schema.Struct({
+		number: Schema.Int,
+		url: Schema.String,
+		title: Schema.String,
+		state: PullRequestState,
+		isDraft: Schema.Boolean,
+		reviewDecision: Schema.NullOr(Schema.String),
+		statusCheckRollup: Schema.NullOr(Schema.Array(GhCheck)),
+	}),
 );
 
 const FAILED_CONCLUSIONS = new Set([
@@ -362,31 +360,27 @@ export class GitService extends Context.Service<GitService>()("swarm/daemon/git/
 			yield* pushWorkspace(yield* workspaces.get(workspaceId));
 		}, Effect.provide(services));
 
-		// gh reads a branch argument made only of digits as a pull request number, so pull requests are
-		// found with --head, which always means a branch, and then named by their number. The newest
-		// pull request for the branch comes first.
+		// With no argument, run in the workspace folder, gh finds the pull request of the checked-out branch
+		// through the remote it pushes to. A branch argument would be read as a pull request number when it is
+		// all digits, and would match a fork's branch of the same name. Everything after uses the number.
 		const findPullRequest = Effect.fn("GitService.findPullRequest")(function* (current: Workspace) {
 			const output = yield* runGh(current.path, [
 				"pr",
-				"list",
-				"--head",
-				current.branch,
-				"--state",
-				"all",
-				"--limit",
-				"1",
+				"view",
 				"--json",
 				"number,url,title,state,isDraft,reviewDecision,statusCheckRollup",
 			]).pipe(
-				Effect.catchTag(
-					"GhCommandError",
-					failGh(current.path, "gh pr list failed", new PullRequestReadError({ branch: current.branch })),
+				Effect.map((found): string | null => found),
+				Effect.catchTag("GhCommandError", (cause) =>
+					/no pull requests found/i.test(cause.stderr)
+						? Effect.succeed(null)
+						: failGh(current.path, "gh pr view failed", new PullRequestReadError({ branch: current.branch }))(cause),
 				),
 			);
-			const [found] = yield* decodeGh(GhPullRequests, output, current.branch);
-			if (found === undefined) {
+			if (output === null) {
 				return null;
 			}
+			const found = yield* decodeGh(GhPullRequest, output, current.branch);
 			return new PullRequest({
 				number: found.number,
 				url: found.url,
