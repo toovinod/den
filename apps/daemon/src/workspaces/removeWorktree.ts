@@ -11,6 +11,13 @@ export const findUnsavedWork = Effect.fn("findUnsavedWork")(function* (worktreeP
 	return { changedFiles, unpushedCommits: Number(unpushed) };
 });
 
+const restoreStash = (worktreePath: string) =>
+	runGit(worktreePath, ["stash", "pop", "--index"]).pipe(
+		Effect.catchTag("GitCommandError", (cause) =>
+			Effect.logError("Could not restore the stashed changes, they are still in git stash", cause),
+		),
+	);
+
 // Removes the worktree folder and keeps its branch, so commits stay reachable.
 // With `stashChanges`, uncommitted and untracked files are stashed first; stashes live in the
 // shared repository, so they survive the folder.
@@ -29,6 +36,8 @@ export const removeWorktree = Effect.fn("removeWorktree")(function* (options: {
 	yield* runGit(repositoryPath, ["worktree", "remove", worktreePath]).pipe(
 		Effect.catchTag("GitCommandError", (cause) =>
 			Effect.logError("git worktree remove failed", cause).pipe(
+				// The workspace stays active, so its changes go back into its folder.
+				Effect.andThen(stashMessage === null ? Effect.void : restoreStash(worktreePath)),
 				Effect.andThen(Effect.fail(new WorktreeRemoveError({ path: worktreePath }))),
 			),
 		),

@@ -1,5 +1,6 @@
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { FileNotFoundError, FileReadError } from "@repo/contracts/WorkspaceFile";
+import { basename, dirname, join, relative, resolve } from "node:path";
+import { leavesRoot } from "./leavesRoot.ts";
 import { Effect, FileSystem } from "effect";
 
 export type WorkspaceFileRead =
@@ -10,7 +11,7 @@ export type WorkspaceFileRead =
 
 const isInside = (root: string, path: string) => {
 	const rest = relative(root, path);
-	return rest !== "" && !rest.startsWith("..") && !isAbsolute(rest);
+	return rest !== "" && !leavesRoot(rest);
 };
 
 const isBinary = (bytes: Uint8Array) => bytes.subarray(0, 8000).includes(0);

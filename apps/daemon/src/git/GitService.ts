@@ -40,7 +40,8 @@ import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import { readWorkspaceFile } from "../files/readWorkspaceFile.ts";
 import type { Workspace } from "@repo/contracts/Workspace";
 import type { ChildProcessSpawner } from "effect/process";
-import { isAbsolute, normalize } from "node:path";
+import { leavesRoot } from "../files/leavesRoot.ts";
+import { normalize } from "node:path";
 import { runGit } from "./runGit.ts";
 
 // The workspace diff sends at most this many changed lines per file and in total.
@@ -100,16 +101,18 @@ const GhReviewComments = Schema.fromJsonString(
 	),
 );
 
-const GhPullRequest = Schema.fromJsonString(
-	Schema.Struct({
-		number: Schema.Int,
-		url: Schema.String,
-		title: Schema.String,
-		state: PullRequestState,
-		isDraft: Schema.Boolean,
-		reviewDecision: Schema.NullOr(Schema.String),
-		statusCheckRollup: Schema.NullOr(Schema.Array(GhCheck)),
-	}),
+const GhPullRequests = Schema.fromJsonString(
+	Schema.Array(
+		Schema.Struct({
+			number: Schema.Int,
+			url: Schema.String,
+			title: Schema.String,
+			state: PullRequestState,
+			isDraft: Schema.Boolean,
+			reviewDecision: Schema.NullOr(Schema.String),
+			statusCheckRollup: Schema.NullOr(Schema.Array(GhCheck)),
+		}),
+	),
 );
 
 const FAILED_CONCLUSIONS = new Set([
@@ -284,7 +287,7 @@ export class GitService extends Context.Service<GitService>()("swarm/daemon/git/
 		const getFileDiff = Effect.fn("GitService.getFileDiff")(function* (workspaceId: string, path: string) {
 			const current = yield* workspaces.get(workspaceId);
 			// Only paths inside the workspace can be part of its diff.
-			if (isAbsolute(path) || normalize(path).startsWith("..")) {
+			if (leavesRoot(normalize(path))) {
 				return null;
 			}
 			const diff = yield* loadDiff(current, {
@@ -307,6 +310,10 @@ export class GitService extends Context.Service<GitService>()("swarm/daemon/git/
 			paths: ReadonlyArray<string> | null,
 		) {
 			const { path: cwd } = yield* workspaces.get(workspaceId);
+			// null means every change. An empty list means none, never "all" through a bare `--`.
+			if (paths !== null && paths.length === 0) {
+				return yield* new NothingToCommitError();
+			}
 			const selected = paths === null ? [] : pathspecs(paths);
 			yield* runGit(cwd, ["add", "--all", ...selected]);
 			// diff --quiet exits 1 when something is staged.
@@ -355,44 +362,54 @@ export class GitService extends Context.Service<GitService>()("swarm/daemon/git/
 			yield* pushWorkspace(yield* workspaces.get(workspaceId));
 		}, Effect.provide(services));
 
-		const viewPullRequest = Effect.fn("GitService.viewPullRequest")(function* (current: Workspace) {
+		// gh reads a branch argument made only of digits as a pull request number, so pull requests are
+		// found with --head, which always means a branch, and then named by their number. The newest
+		// pull request for the branch comes first.
+		const findPullRequest = Effect.fn("GitService.findPullRequest")(function* (current: Workspace) {
 			const output = yield* runGh(current.path, [
 				"pr",
-				"view",
+				"list",
+				"--head",
 				current.branch,
+				"--state",
+				"all",
+				"--limit",
+				"1",
 				"--json",
 				"number,url,title,state,isDraft,reviewDecision,statusCheckRollup",
-			]);
-			const decoded = yield* Schema.decodeUnknownEffect(GhPullRequest)(output).pipe(
-				Effect.catchTag("SchemaError", (cause) =>
-					Effect.logError("Could not read gh pr view output", cause).pipe(
-						Effect.andThen(Effect.fail(new PullRequestReadError({ branch: current.branch }))),
-					),
+			]).pipe(
+				Effect.catchTag(
+					"GhCommandError",
+					failGh(current.path, "gh pr list failed", new PullRequestReadError({ branch: current.branch })),
 				),
 			);
+			const [found] = yield* decodeGh(GhPullRequests, output, current.branch);
+			if (found === undefined) {
+				return null;
+			}
 			return new PullRequest({
-				number: decoded.number,
-				url: decoded.url,
-				title: decoded.title,
-				state: decoded.state,
-				isDraft: decoded.isDraft,
-				reviewDecision: decoded.reviewDecision === "" ? null : decoded.reviewDecision,
-				checks: summarizeChecks(decoded.statusCheckRollup ?? []),
+				number: found.number,
+				url: found.url,
+				title: found.title,
+				state: found.state,
+				isDraft: found.isDraft,
+				reviewDecision: found.reviewDecision === "" ? null : found.reviewDecision,
+				checks: summarizeChecks(found.statusCheckRollup ?? []),
 			});
 		});
 
-		const getPullRequest = Effect.fn("GitService.getPullRequest")(function* (workspaceId: string) {
-			const current = yield* workspaces.get(workspaceId);
-			const found = yield* viewPullRequest(current).pipe(
-				Effect.catchTag("GhCommandError", (cause) =>
-					/no pull requests found/i.test(cause.stderr)
-						? Effect.succeed(null)
-						: requireGhLogin(current.path).pipe(
-								Effect.andThen(Effect.logError("gh pr view failed", cause)),
-								Effect.andThen(Effect.fail(new PullRequestReadError({ branch: current.branch }))),
-							),
+		const requirePullRequestNumber = (current: Workspace) =>
+			findPullRequest(current).pipe(
+				Effect.flatMap((found) =>
+					found === null
+						? Effect.fail(new PullRequestNotFoundError({ branch: current.branch }))
+						: Effect.succeed(String(found.number)),
 				),
 			);
+
+		const getPullRequest = Effect.fn("GitService.getPullRequest")(function* (workspaceId: string) {
+			const current = yield* workspaces.get(workspaceId);
+			const found = yield* findPullRequest(current);
 			if (found === null) {
 				return { status: "none" } satisfies PullRequestStatus;
 			}
@@ -462,20 +479,17 @@ export class GitService extends Context.Service<GitService>()("swarm/daemon/git/
 		) {
 			const current = yield* workspaces.get(workspaceId);
 			const { branch } = current;
+			const number = yield* requirePullRequestNumber(current);
 			const viewed = yield* runGh(current.path, [
 				"pr",
 				"view",
-				branch,
+				number,
 				"--json",
 				"number,statusCheckRollup,comments,reviews",
 			]).pipe(
-				Effect.catchTag("GhCommandError", (cause) =>
-					(/no pull requests found/i.test(cause.stderr)
-						? Effect.fail(new PullRequestNotFoundError({ branch }))
-						: Effect.void
-					).pipe(
-						Effect.andThen(failGh(current.path, "gh pr view failed", new PullRequestReadError({ branch }))(cause)),
-					),
+				Effect.catchTag(
+					"GhCommandError",
+					failGh(current.path, "gh pr view failed", new PullRequestReadError({ branch })),
 				),
 			);
 			const conversation = yield* decodeGh(GhConversation, viewed, branch);
@@ -536,10 +550,11 @@ export class GitService extends Context.Service<GitService>()("swarm/daemon/git/
 			review: PullRequestReviewInput,
 		) {
 			const current = yield* workspaces.get(workspaceId);
+			const number = yield* requirePullRequestNumber(current);
 			yield* runGh(current.path, [
 				"pr",
 				"review",
-				current.branch,
+				number,
 				REVIEW_FLAGS[review.verdict],
 				...(review.body === "" ? [] : ["--body", review.body]),
 			]).pipe(
@@ -560,7 +575,8 @@ export class GitService extends Context.Service<GitService>()("swarm/daemon/git/
 		) {
 			const current = yield* workspaces.get(workspaceId);
 			const { branch } = current;
-			yield* runGh(current.path, ["pr", "merge", branch, MERGE_FLAGS[method]]).pipe(
+			const number = yield* requirePullRequestNumber(current);
+			yield* runGh(current.path, ["pr", "merge", number, MERGE_FLAGS[method]]).pipe(
 				Effect.catchTag(
 					"GhCommandError",
 					failGh(current.path, "gh pr merge failed", new PullRequestMergeError({ branch })),

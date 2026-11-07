@@ -146,13 +146,19 @@ describe("WorkspaceService", () => {
 				});
 				yield* fs.writeFileString(join(created.path, "README.md"), "edited\n");
 				yield* fs.writeFileString(join(created.path, "new.txt"), "new\n");
+				const terminals = yield* TerminalService;
+				yield* terminals.open(created.id, created.path, { cols: 80, rows: 24 });
 				const refused = yield* Effect.flip(workspaces.archive(created.id, { force: false }));
 				const stillThere = yield* fs.exists(created.path);
+				// A refused archive changes nothing, so the workspace's terminals keep running.
+				const terminalsAfterRefusal = terminals.list(created.id).length;
 				const archived = yield* workspaces.archive(created.id, { force: true });
 				return {
 					created,
 					refused,
 					stillThere,
+					terminalsAfterRefusal,
+					terminalsAfterArchive: terminals.list(created.id).length,
 					archived,
 					folderExists: yield* fs.exists(created.path),
 					stashes: yield* runGit(project.path, ["stash", "list"]),
@@ -166,11 +172,41 @@ describe("WorkspaceService", () => {
 			unpushedCommits: 0,
 		});
 		expect(result.stillThere).toBe(true);
+		expect(result.terminalsAfterRefusal).toBe(1);
+		expect(result.terminalsAfterArchive).toBe(0);
 		expect(result.archived.status).toBe("archived");
 		expect(result.folderExists).toBe(false);
 		expect(result.stashes).toContain(`swarm-archive/${result.created.id}`);
 		// The untracked file is in the stash's untracked-files commit.
 		expect(result.stashedFiles).toBe("new.txt");
+	});
+
+	test("puts stashed changes back when the worktree cannot be removed", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const workspaces = yield* WorkspaceService;
+				const project = yield* addProject(tempDir);
+				const created = yield* workspaces.create({ kind: "worktree", projectId: project.id, name: "feature" });
+				yield* fs.writeFileString(join(created.path, "README.md"), "edited\n");
+				yield* fs.writeFileString(join(created.path, "new.txt"), "new\n");
+				// A locked worktree refuses `git worktree remove`.
+				yield* runGit(project.path, ["worktree", "lock", created.path]);
+				const failed = yield* Effect.flip(workspaces.archive(created.id, { force: true }));
+				return {
+					failed,
+					readme: yield* fs.readFileString(join(created.path, "README.md")),
+					untracked: yield* fs.exists(join(created.path, "new.txt")),
+					stashes: yield* runGit(project.path, ["stash", "list"]),
+					workspace: yield* workspaces.get(created.id),
+				};
+			}),
+		);
+		expect(result.failed._tag).toBe("WorktreeRemoveError");
+		expect(result.readme).toBe("edited\n");
+		expect(result.untracked).toBe(true);
+		expect(result.stashes).toBe("");
+		expect(result.workspace.status).toBe("active");
 	});
 
 	test("counts commits no remote has as unsaved work", async () => {

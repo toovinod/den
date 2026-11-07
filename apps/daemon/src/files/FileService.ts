@@ -3,6 +3,7 @@ import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import { Context, Effect, type FileSystem, Layer } from "effect";
 import { readWorkspaceFile } from "./readWorkspaceFile.ts";
 import type { ChildProcessSpawner } from "effect/process";
+import { leavesRoot } from "./leavesRoot.ts";
 import { runGit } from "../git/runGit.ts";
 import { normalize } from "node:path";
 
@@ -34,7 +35,7 @@ export class FileService extends Context.Service<FileService>()("swarm/daemon/fi
 		const listDirectory = Effect.fn("FileService.listDirectory")(function* (workspaceId: string, path: string) {
 			const { path: root } = yield* workspaces.get(workspaceId);
 			const directory = path.replace(/^\/+|\/+$/g, "");
-			if (normalize(directory).startsWith("..")) {
+			if (leavesRoot(normalize(directory))) {
 				return [];
 			}
 			const scope = directory === "" ? [] : ["--", `:(literal)${directory}/`];

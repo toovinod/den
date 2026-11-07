@@ -39,6 +39,19 @@ const fakeGh = Effect.fn("fakeGh")(function* (tempDir: string, body: string) {
 	return path;
 });
 
+// What `gh pr list --head feature` prints when the branch has pull request 7.
+const listJson = JSON.stringify([
+	{
+		number: 7,
+		url: "https://github.com/acme/repo/pull/7",
+		title: "Add feature",
+		state: "OPEN",
+		isDraft: false,
+		reviewDecision: "",
+		statusCheckRollup: [],
+	},
+]);
+
 describe("GitService diff", () => {
 	test("shows committed, modified, deleted, renamed, untracked and binary changes against the base", async () => {
 		const diff = await runServiceTest((tempDir) =>
@@ -138,11 +151,13 @@ describe("GitService commit and push", () => {
 				const created = yield* createWorkspace(tempDir);
 				yield* fs.writeFileString(join(created.path, "a.txt"), "a\n");
 				yield* fs.writeFileString(join(created.path, "b.txt"), "b\n");
+				const none = yield* Effect.flip(git.commit(created.id, "no files", []));
 				yield* git.commit(created.id, "add a", ["a.txt"]);
 				const afterFirst = yield* runGit(created.path, ["status", "--porcelain"]);
 				const second = yield* git.commit(created.id, "add the rest", null);
 				const nothing = yield* Effect.flip(git.commit(created.id, "again", null));
 				return {
+					none,
 					afterFirst,
 					second,
 					nothing,
@@ -152,6 +167,7 @@ describe("GitService commit and push", () => {
 				};
 			}),
 		);
+		expect(result.none._tag).toBe("NothingToCommitError");
 		expect(result.afterFirst).toBe("?? b.txt");
 		expect(result.second.sha).toBe(result.head);
 		expect(result.log).toBe("add the rest\nadd a");
@@ -250,7 +266,7 @@ describe("GitService pull requests", () => {
 						'case "$1 $2" in',
 						'  "auth status") exit 0 ;;',
 						'  "pr create") echo "Creating pull request"; echo "https://github.com/acme/repo/pull/7" ;;',
-						`  "pr view") [ -f "${tempDir}/created" ] || { echo "no pull requests found for branch" >&2; exit 1; }; echo '${prJson}' ;;`,
+						`  "pr list") [ -f "${tempDir}/created" ] && echo '[${prJson}]' || echo '[]' ;;`,
 						"esac",
 						`[ "$2" = create ] && touch "${tempDir}/created"`,
 						"exit 0",
@@ -273,6 +289,7 @@ describe("GitService pull requests", () => {
 		expect(result.updated.pullRequestUrl).toBe("https://github.com/acme/repo/pull/7");
 		expect(result.remoteBranch).toContain("feature");
 		expect(result.ghLog).toContain("pr create --title Add feature --body Body --base main --head feature --draft");
+		expect(result.ghLog).toContain("pr list --head feature --state all --limit 1");
 		expect(result.after).toMatchObject({
 			status: "found",
 			pullRequest: { number: 7, isDraft: true, reviewDecision: null, checks: { passing: 2, failing: 1, pending: 1 } },
@@ -300,9 +317,12 @@ describe("GitService pull requests", () => {
 				const created = yield* createWorkspace(tempDir);
 				const executable = yield* fakeGh(
 					tempDir,
-					[`[ "$1" = api ] && echo '${commentsJson}'`, `[ "$1 $2" = "pr view" ] && echo '${viewJson}'`, "exit 0"].join(
-						"\n",
-					),
+					[
+						`[ "$1" = api ] && echo '${commentsJson}'`,
+						`[ "$1 $2" = "pr list" ] && echo '${listJson}'`,
+						`[ "$1 $2" = "pr view" ] && echo '${viewJson}'`,
+						"exit 0",
+					].join("\n"),
 				);
 				const conversation = yield* Effect.flatMap(GitService, (git) =>
 					git.getPullRequestConversation(created.id),
@@ -321,6 +341,7 @@ describe("GitService pull requests", () => {
 		expect(result.conversation.reviewComments).toEqual([
 			{ id: "11", author: "bo", body: "Rename this", createdAt: "2026-01-03", path: "src/a.ts", line: 4 },
 		]);
+		expect(result.ghLog).toContain("pr view 7 --json");
 		expect(result.ghLog).toContain("api repos/{owner}/{repo}/pulls/7/comments?per_page=100");
 	});
 
@@ -328,7 +349,7 @@ describe("GitService pull requests", () => {
 		const error = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {
 				const created = yield* createWorkspace(tempDir);
-				const executable = yield* fakeGh(tempDir, 'echo "no pull requests found for branch" >&2; exit 1');
+				const executable = yield* fakeGh(tempDir, "echo '[]'");
 				return yield* Effect.flatMap(GitService, (git) => Effect.flip(git.getPullRequestConversation(created.id))).pipe(
 					Effect.provideService(GhSettings, { executable }),
 				);
@@ -342,7 +363,7 @@ describe("GitService pull requests", () => {
 			Effect.gen(function* () {
 				const fs = yield* FileSystem.FileSystem;
 				const created = yield* createWorkspace(tempDir);
-				const executable = yield* fakeGh(tempDir, "exit 0");
+				const executable = yield* fakeGh(tempDir, `[ "$1 $2" = "pr list" ] && echo '${listJson}'\nexit 0`);
 				yield* Effect.gen(function* () {
 					const git = yield* GitService;
 					yield* git.reviewPullRequest(created.id, { verdict: "approve", body: "" });
@@ -351,10 +372,10 @@ describe("GitService pull requests", () => {
 				return yield* fs.readFileString(join(tempDir, "gh.log"));
 			}),
 		);
-		expect(ghLog.split("\n")).toEqual([
-			"pr review feature --approve",
-			"pr review feature --request-changes --body Add tests",
-			"",
+		// By number: gh would read a branch named only with digits as a pull request number.
+		expect(ghLog.split("\n").filter((line) => line.startsWith("pr review"))).toEqual([
+			"pr review 7 --approve",
+			"pr review 7 --request-changes --body Add tests",
 		]);
 	});
 
@@ -375,7 +396,7 @@ describe("GitService pull requests", () => {
 				const created = yield* createWorkspace(tempDir);
 				const origin = yield* addOrigin(tempDir, join(tempDir, "repo"));
 				yield* git.push(created.id);
-				const executable = yield* fakeGh(tempDir, `[ "$1 $2" = "pr view" ] && echo '${merged}'\nexit 0`);
+				const executable = yield* fakeGh(tempDir, `[ "$1 $2" = "pr list" ] && echo '[${merged}]'\nexit 0`);
 				const status = yield* git
 					.mergePullRequest(created.id, "squash", true)
 					.pipe(Effect.provideService(GhSettings, { executable }));
@@ -386,7 +407,7 @@ describe("GitService pull requests", () => {
 				};
 			}),
 		);
-		expect(result.ghLog).toContain("pr merge feature --squash");
+		expect(result.ghLog).toContain("pr merge 7 --squash");
 		expect(result.remoteBranches).toBe("");
 		expect(result.status).toMatchObject({ status: "found", pullRequest: { state: "MERGED" } });
 	});
@@ -395,7 +416,10 @@ describe("GitService pull requests", () => {
 		const error = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {
 				const created = yield* createWorkspace(tempDir);
-				const executable = yield* fakeGh(tempDir, '[ "$1" = auth ] && exit 0\nexit 1');
+				const executable = yield* fakeGh(
+					tempDir,
+					`[ "$1" = auth ] && exit 0\n[ "$1 $2" = "pr list" ] && echo '${listJson}' && exit 0\nexit 1`,
+				);
 				return yield* Effect.flatMap(GitService, (git) =>
 					Effect.flip(git.mergePullRequest(created.id, "rebase", false)),
 				).pipe(Effect.provideService(GhSettings, { executable }));

@@ -97,7 +97,14 @@ export class GitRpcs extends RpcGroup.make(
 	}),
 	Rpc.make("reviewPullRequest", {
 		payload: { workspaceId: Schema.String, review: PullRequestReviewInput },
-		error: Schema.Union([WorkspaceNotFoundError, ...GhError, PullRequestReviewError, DaemonInternalError]),
+		error: Schema.Union([
+			WorkspaceNotFoundError,
+			...GhError,
+			PullRequestNotFoundError,
+			PullRequestReadError,
+			PullRequestReviewError,
+			DaemonInternalError,
+		]),
 	}),
 	// Returns the pull request as it is after the merge.
 	Rpc.make("mergePullRequest", {
@@ -106,6 +113,7 @@ export class GitRpcs extends RpcGroup.make(
 		error: Schema.Union([
 			WorkspaceNotFoundError,
 			...GhError,
+			PullRequestNotFoundError,
 			PullRequestMergeError,
 			RemoteBranchDeleteError,
 			PullRequestReadError,
