@@ -58,6 +58,14 @@ export class LocalDatabase extends Context.Service<
 			yield* client`PRAGMA foreign_keys = ON`;
 			yield* migrate(embeddedMigrations(), db._.session);
 			yield* restrictDatabaseFiles;
+			// Runs after every layer that writes has closed and before the connection closes, so the
+			// WAL is folded into the database file and truncated.
+			yield* Effect.addFinalizer(() =>
+				client`PRAGMA wal_checkpoint(TRUNCATE)`.pipe(
+					Effect.andThen(Effect.logDebug("Checkpointed the database")),
+					Effect.catch((cause) => Effect.logWarning("Could not checkpoint the database on shutdown", cause)),
+				),
+			);
 
 			return LocalDatabase.of({
 				query: (run) =>
