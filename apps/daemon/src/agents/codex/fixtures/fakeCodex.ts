@@ -99,6 +99,14 @@ const runTurn = async (text: string) => {
 	completeTurn("completed");
 };
 
+// Swarm must pin these, or the user's own Codex config could turn approvals off.
+const hasSwarmPolicy = (params: {
+	approvalPolicy?: string;
+	sandbox?: string;
+}) =>
+	params.approvalPolicy === "on-request" &&
+	params.sandbox === "workspace-write";
+
 const serve = async () => {
 	for await (const line of console) {
 		if (line.trim() === "") continue;
@@ -122,9 +130,18 @@ const serve = async () => {
 				});
 				break;
 			case "thread/start":
-				send({ id: message.id, result: { thread: { id: threadId } } });
-				break;
 			case "thread/resume":
+				if (!hasSwarmPolicy(message.params)) {
+					send({
+						id: message.id,
+						error: { code: -32602, message: "approval policy not pinned" },
+					});
+					break;
+				}
+				if (message.method === "thread/start") {
+					send({ id: message.id, result: { thread: { id: threadId } } });
+					break;
+				}
 				send({
 					id: message.id,
 					result: { thread: { id: message.params.threadId } },

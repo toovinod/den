@@ -62,6 +62,12 @@ const capabilities: AgentCapabilities = {
 
 const approvalChoices = ["allowOnce", "allowForSession", "deny"] as const;
 
+// Set on every thread so the user's own Codex config cannot turn Swarm's approvals off.
+const threadPolicy = {
+	approvalPolicy: "on-request",
+	sandbox: "workspace-write",
+} as const satisfies Pick<ThreadStartParams, "approvalPolicy" | "sandbox">;
+
 const codexDecisions = {
 	allowOnce: "accept",
 	allowForSession: "acceptForSession",
@@ -360,11 +366,13 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 							? yield* client.request("thread/start", {
 									model: input.model,
 									cwd: input.cwd,
+									...threadPolicy,
 								} satisfies ThreadStartParams)
 							: yield* client.request("thread/resume", {
 									threadId: input.resumeId,
 									model: input.model,
 									cwd: input.cwd,
+									...threadPolicy,
 								} satisfies ThreadResumeParams);
 					const { thread } = yield* decodeCodex(ThreadResponse)(response);
 					yield* session.setNativeSessionId(thread.id);
