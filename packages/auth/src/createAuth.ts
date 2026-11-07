@@ -7,7 +7,7 @@ import type { BunSQLDatabase } from "drizzle-orm/bun-sql/postgres";
 import { Redacted } from "effect";
 import type { AuthConfig } from "./AuthConfig.ts";
 import type { MembershipEvent } from "./MembershipEvents.ts";
-import { membershipHooks } from "./membershipHooks.ts";
+import { leaveOrganizationHook, membershipHooks } from "./membershipHooks.ts";
 
 export const DESKTOP_CLIENT_ID = "swarm-desktop";
 
@@ -42,6 +42,7 @@ export const createAuth = ({
 				clientSecret: Redacted.value(config.google.clientSecret),
 			},
 		},
+		hooks: { after: leaveOrganizationHook(publishMembershipEvent) },
 		advanced: {
 			// The web app is a static site on its own origin that calls the API with credentials.
 			defaultCookieAttributes: { sameSite: "none", secure: true },

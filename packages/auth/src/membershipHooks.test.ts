@@ -98,4 +98,14 @@ describe("membershipHooks", () => {
 			invitationId: "invitation_1",
 		});
 	});
+
+	test("publishes organizationDeleted after an org is deleted", async () => {
+		const event = await publishedBy((hooks) =>
+			hooks.afterDeleteOrganization({ organization, user }),
+		);
+		expect(event).toEqual({
+			_tag: "organizationDeleted",
+			organizationId: "org_1",
+		});
+	});
 });

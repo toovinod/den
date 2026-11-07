@@ -17,6 +17,9 @@ export const MembershipEvent = Schema.Union([
 		organizationId: Schema.String,
 		invitationId: Schema.String,
 	}),
+	Schema.TaggedStruct("organizationDeleted", {
+		organizationId: Schema.String,
+	}),
 ]);
 export type MembershipEvent = typeof MembershipEvent.Type;
 
