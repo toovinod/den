@@ -422,6 +422,14 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 
 		const stopRunScript = (workspaceId: string) => cancelScripts(workspaceId, "Stopped.", ["run"]);
 
+		const setPullRequestUrl = Effect.fn("WorkspaceService.setPullRequestUrl")(function* (
+			workspaceId: string,
+			pullRequestUrl: string,
+		) {
+			yield* database.query((db) => db.update(workspace).set({ pullRequestUrl }).where(eq(workspace.id, workspaceId)));
+			return yield* get(workspaceId);
+		});
+
 		// Startup recovery: runs left in processing were cut off by a restart, which is a
 		// retryable failure. Then every pending run of an active workspace starts again.
 		const recoverScriptRuns = Effect.gen(function* () {
@@ -487,6 +495,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 			followScriptRunOutput,
 			startRunScript,
 			stopRunScript,
+			setPullRequestUrl,
 		};
 	}),
 }) {

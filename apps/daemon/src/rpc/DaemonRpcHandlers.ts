@@ -4,6 +4,7 @@ import { WorkspaceRpcHandlers } from "./WorkspaceRpcHandlers.ts";
 import { TerminalRpcHandlers } from "./TerminalRpcHandlers.ts";
 import { ProjectRpcHandlers } from "./ProjectRpcHandlers.ts";
 import { SessionRpcHandlers } from "./SessionRpcHandlers.ts";
+import { GitRpcHandlers } from "./GitRpcHandlers.ts";
 import { Effect, Layer } from "effect";
 
 const HealthRpcHandlers = HealthRpcs.toLayer({
@@ -16,4 +17,5 @@ export const DaemonRpcHandlers = Layer.mergeAll(
 	WorkspaceRpcHandlers,
 	SessionRpcHandlers,
 	TerminalRpcHandlers,
+	GitRpcHandlers,
 );

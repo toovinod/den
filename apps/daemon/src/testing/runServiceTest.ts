@@ -5,10 +5,17 @@ import type { LocalDatabase } from "../database/LocalDatabase.ts";
 import { DaemonServices } from "../server/DaemonServices.ts";
 import { Effect, FileSystem, Layer, Schedule } from "effect";
 import { testDaemonConfig } from "./testDaemonConfig.ts";
+import type { GitService } from "../git/GitService.ts";
 import { BunServices } from "@effect/platform-bun";
 import { join } from "node:path";
 
-type Services = LocalDatabase | ProjectService | TerminalService | WorkspaceService | BunServices.BunServices;
+type Services =
+	| LocalDatabase
+	| ProjectService
+	| TerminalService
+	| WorkspaceService
+	| GitService
+	| BunServices.BunServices;
 
 export const withServices =
 	(dataDir: string) =>
