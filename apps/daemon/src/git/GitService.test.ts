@@ -279,3 +279,29 @@ describe("GitService pull requests", () => {
 		});
 	});
 });
+
+describe("GitService diff never leaves the workspace", () => {
+	test("shows a new symlink as its target and refuses paths outside", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const git = yield* GitService;
+				const created = yield* createWorkspace(tempDir);
+				yield* fs.symlink("/etc/hosts", join(created.path, "hosts-link"));
+				yield* fs.writeFileString(join(tempDir, "secret.txt"), "outside\n");
+				return {
+					diff: yield* git.getWorkspaceDiff(created.id),
+					outside: yield* git.getFileDiff(created.id, "../secret.txt"),
+					absolute: yield* git.getFileDiff(created.id, "/etc/hosts"),
+				};
+			}),
+		);
+		expect(result.diff.files).toHaveLength(1);
+		expect(result.diff.files[0]?.content).toEqual({
+			kind: "text",
+			hunks: [{ header: "@@ -0,0 +1,1 @@", lines: [{ kind: "add", oldLine: null, newLine: 1, text: "/etc/hosts" }] }],
+		});
+		expect(result.outside).toBeNull();
+		expect(result.absolute).toBeNull();
+	});
+});

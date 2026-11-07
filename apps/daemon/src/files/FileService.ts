@@ -1,14 +1,13 @@
-import { type FileContent, type FileEntry, FileNotFoundError } from "@repo/contracts/WorkspaceFile";
+import type { FileContent, FileEntry } from "@repo/contracts/WorkspaceFile";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
-import { Context, Effect, FileSystem, Layer } from "effect";
+import { Context, Effect, type FileSystem, Layer } from "effect";
+import { readWorkspaceFile } from "./readWorkspaceFile.ts";
 import type { ChildProcessSpawner } from "effect/process";
-import { isAbsolute, join, relative } from "node:path";
 import { runGit } from "../git/runGit.ts";
+import { normalize } from "node:path";
 
 // Bigger files are not sent to the viewer, which renders them in full.
 export const READ_FILE_BYTE_LIMIT = 1024 * 1024;
-
-const isBinary = (bytes: Uint8Array) => bytes.subarray(0, 8000).includes(0);
 
 // Children of `directory` from git's list of files, which already leaves out ignored ones.
 const childrenOf = (directory: string, files: ReadonlyArray<string>): ReadonlyArray<FileEntry> => {
@@ -30,25 +29,14 @@ const childrenOf = (directory: string, files: ReadonlyArray<string>): ReadonlyAr
 export class FileService extends Context.Service<FileService>()("swarm/daemon/files/FileService", {
 	make: Effect.gen(function* () {
 		const workspaces = yield* WorkspaceService;
-		const fs = yield* FileSystem.FileSystem;
-		const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner>();
-
-		// The real path must stay inside the workspace, so neither ../ nor a symlink can read other files.
-		const resolveInside = Effect.fn("FileService.resolveInside")(function* (root: string, path: string) {
-			const realRoot = yield* fs.realPath(root).pipe(Effect.orDie);
-			const real = yield* fs
-				.realPath(join(realRoot, path))
-				.pipe(Effect.catchTag("PlatformError", () => Effect.fail(new FileNotFoundError({ path }))));
-			const inside = relative(realRoot, real);
-			if (inside === "" || inside.startsWith("..") || isAbsolute(inside)) {
-				return yield* new FileNotFoundError({ path });
-			}
-			return real;
-		});
+		const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem>();
 
 		const listDirectory = Effect.fn("FileService.listDirectory")(function* (workspaceId: string, path: string) {
 			const { path: root } = yield* workspaces.get(workspaceId);
 			const directory = path.replace(/^\/+|\/+$/g, "");
+			if (normalize(directory).startsWith("..")) {
+				return [];
+			}
 			const scope = directory === "" ? [] : ["--", `:(literal)${directory}/`];
 			const output = yield* runGit(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z", ...scope]);
 			return childrenOf(
@@ -59,21 +47,9 @@ export class FileService extends Context.Service<FileService>()("swarm/daemon/fi
 
 		const readFile = Effect.fn("FileService.readFile")(function* (workspaceId: string, path: string) {
 			const { path: root } = yield* workspaces.get(workspaceId);
-			const real = yield* resolveInside(root, path);
-			const info = yield* fs.stat(real).pipe(Effect.orDie);
-			if (info.type !== "File") {
-				return yield* new FileNotFoundError({ path });
-			}
-			const size = Number(info.size);
-			if (size > READ_FILE_BYTE_LIMIT) {
-				return { kind: "tooLarge", path, size } satisfies FileContent;
-			}
-			const bytes = yield* fs.readFile(real).pipe(Effect.orDie);
-			if (isBinary(bytes)) {
-				return { kind: "binary", path, size } satisfies FileContent;
-			}
-			return { kind: "text", path, text: new TextDecoder().decode(bytes) } satisfies FileContent;
-		});
+			const read = yield* readWorkspaceFile(root, path, READ_FILE_BYTE_LIMIT);
+			return { ...read, path } satisfies FileContent;
+		}, Effect.provide(services));
 
 		return { listDirectory, readFile };
 	}),

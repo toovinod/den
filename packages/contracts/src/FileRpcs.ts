@@ -1,4 +1,4 @@
-import { FileContent, FileEntry, FileNotFoundError } from "./WorkspaceFile.ts";
+import { FileContent, FileEntry, FileNotFoundError, FileReadError } from "./WorkspaceFile.ts";
 import { DaemonInternalError } from "./DaemonInternalError.ts";
 import { WorkspaceNotFoundError } from "./Workspace.ts";
 import { Rpc, RpcGroup } from "effect/rpc";
@@ -14,6 +14,6 @@ export class FileRpcs extends RpcGroup.make(
 	Rpc.make("readFile", {
 		payload: { workspaceId: Schema.String, path: Schema.String },
 		success: FileContent,
-		error: Schema.Union([WorkspaceNotFoundError, FileNotFoundError, DaemonInternalError]),
+		error: Schema.Union([WorkspaceNotFoundError, FileNotFoundError, FileReadError, DaemonInternalError]),
 	}),
 ) {}

@@ -16,6 +16,7 @@ import {
 } from "./Git.ts";
 import { Workspace, WorkspaceNotFoundError } from "./Workspace.ts";
 import { DaemonInternalError } from "./DaemonInternalError.ts";
+import { FileReadError } from "./WorkspaceFile.ts";
 import { Rpc, RpcGroup } from "effect/rpc";
 import { Schema } from "effect";
 
@@ -26,13 +27,13 @@ export class GitRpcs extends RpcGroup.make(
 	Rpc.make("getWorkspaceDiff", {
 		payload: { workspaceId: Schema.String },
 		success: WorkspaceDiff,
-		error: Schema.Union([WorkspaceNotFoundError, DaemonInternalError]),
+		error: Schema.Union([WorkspaceNotFoundError, FileReadError, DaemonInternalError]),
 	}),
 	// One file in full, for a file the workspace diff left out as too large.
 	Rpc.make("getFileDiff", {
 		payload: { workspaceId: Schema.String, path: Schema.String },
 		success: Schema.NullOr(DiffFile),
-		error: Schema.Union([WorkspaceNotFoundError, DaemonInternalError]),
+		error: Schema.Union([WorkspaceNotFoundError, FileReadError, DaemonInternalError]),
 	}),
 	Rpc.make("getGitStatus", {
 		payload: { workspaceId: Schema.String },

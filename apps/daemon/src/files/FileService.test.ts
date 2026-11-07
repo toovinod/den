@@ -23,7 +23,9 @@ const createWorkspace = Effect.fn("createWorkspace")(function* (tempDir: string)
 	yield* write("debug.log", "noise\n");
 	yield* fs.writeFile(join(created.path, "logo.png"), new Uint8Array([137, 80, 0, 71]));
 	yield* fs.writeFileString(join(tempDir, "secret.txt"), "outside\n");
-	yield* fs.symlink(join(tempDir, "secret.txt"), join(created.path, "link.txt"));
+	yield* fs.symlink("/etc/hosts", join(created.path, "link.txt"));
+	// A folder link that leads out of the workspace.
+	yield* fs.symlink(tempDir, join(created.path, "src", "outside"));
 	return created;
 });
 
@@ -36,6 +38,7 @@ describe("FileService", () => {
 				return {
 					root: yield* files.listDirectory(created.id, ""),
 					src: yield* files.listDirectory(created.id, "src"),
+					parent: yield* files.listDirectory(created.id, "../"),
 				};
 			}),
 		);
@@ -46,9 +49,11 @@ describe("FileService", () => {
 			"file:logo.png",
 			"file:README.md",
 		]);
+		expect(result.parent).toEqual([]);
 		expect(result.src.map((entry) => `${entry.kind}:${entry.path}`)).toEqual([
 			"directory:src/deep",
 			"file:src/index.ts",
+			"file:src/outside",
 		]);
 	});
 
@@ -64,7 +69,9 @@ describe("FileService", () => {
 					binary: yield* files.readFile(created.id, "logo.png"),
 					big: yield* files.readFile(created.id, "big.txt"),
 					traversal: yield* Effect.flip(files.readFile(created.id, "../secret.txt")),
-					symlink: yield* Effect.flip(files.readFile(created.id, "link.txt")),
+					symlink: yield* files.readFile(created.id, "link.txt"),
+					throughLinkedFolder: yield* Effect.flip(files.readFile(created.id, "src/outside/secret.txt")),
+					absolute: yield* Effect.flip(files.readFile(created.id, "/etc/hosts")),
 					missing: yield* Effect.flip(files.readFile(created.id, "nope.txt")),
 				};
 			}),
@@ -73,7 +80,9 @@ describe("FileService", () => {
 		expect(result.binary).toEqual({ kind: "binary", path: "logo.png", size: 4 });
 		expect(result.big).toEqual({ kind: "tooLarge", path: "big.txt", size: READ_FILE_BYTE_LIMIT + 1 });
 		expect(result.traversal._tag).toBe("FileNotFoundError");
-		expect(result.symlink._tag).toBe("FileNotFoundError");
+		expect(result.symlink).toEqual({ kind: "symlink", path: "link.txt", target: "/etc/hosts" });
+		expect(result.throughLinkedFolder._tag).toBe("FileNotFoundError");
+		expect(result.absolute._tag).toBe("FileNotFoundError");
 		expect(result.missing._tag).toBe("FileNotFoundError");
 	});
 });

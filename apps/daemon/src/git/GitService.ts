@@ -23,13 +23,14 @@ import {
 	parseStatus,
 	untrackedHunks,
 } from "./parseGitOutput.ts";
+import { Context, Effect, type FileSystem, Layer, Schema } from "effect";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
-import { Context, Effect, FileSystem, Layer, Schema } from "effect";
+import { readWorkspaceFile } from "../files/readWorkspaceFile.ts";
 import type { Workspace } from "@repo/contracts/Workspace";
 import type { ChildProcessSpawner } from "effect/process";
 import { requireGhLogin, runGh } from "./runGh.ts";
+import { isAbsolute, normalize } from "node:path";
 import { runGit } from "./runGit.ts";
-import { join } from "node:path";
 
 // The workspace diff sends at most this many changed lines per file and in total.
 // Anything past that is listed as too large and loaded one file at a time.
@@ -85,13 +86,10 @@ const summarizeChecks = (checks: ReadonlyArray<typeof GhCheck.Type>) => {
 	return summary;
 };
 
-const isBinary = (bytes: Uint8Array) => bytes.subarray(0, 8000).includes(0);
-
 export class GitService extends Context.Service<GitService>()("swarm/daemon/git/GitService", {
 	make: Effect.gen(function* () {
 		const workspaces = yield* WorkspaceService;
-		const fs = yield* FileSystem.FileSystem;
-		const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner>();
+		const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem>();
 
 		// The point where the workspace left its base branch. Without one (unrelated histories, a missing
 		// base branch) the diff falls back to HEAD and shows only uncommitted changes.
@@ -110,29 +108,33 @@ export class GitService extends Context.Service<GitService>()("swarm/daemon/git/
 			path: string,
 			lineBudget: number,
 		) {
-			const tooLarge = new DiffFile({
-				path,
-				oldPath: null,
-				status: "untracked",
-				additions: 0,
-				deletions: 0,
-				content: { kind: "tooLarge" },
-			});
-			const info = yield* fs.stat(join(cwd, path)).pipe(Effect.orDie);
-			if (Number(info.size) > UNTRACKED_BYTE_LIMIT) {
-				return tooLarge;
+			const base = { path, oldPath: null, status: "untracked", deletions: 0 } as const;
+			const read = yield* readWorkspaceFile(cwd, path, UNTRACKED_BYTE_LIMIT).pipe(
+				// Deleted since git listed it, or it resolves outside the workspace: leave it out.
+				Effect.catchTag("FileNotFoundError", () =>
+					Effect.logInfo("Left an untracked file out of the diff").pipe(Effect.annotateLogs({ path }), Effect.as(null)),
+				),
+			);
+			if (read === null) {
+				return null;
 			}
-			const bytes = yield* fs.readFile(join(cwd, path)).pipe(Effect.orDie);
-			if (isBinary(bytes)) {
-				return new DiffFile({ ...tooLarge, content: { kind: "binary" } });
+			switch (read.kind) {
+				case "tooLarge":
+					return new DiffFile({ ...base, additions: 0, content: { kind: "tooLarge" } });
+				case "binary":
+					return new DiffFile({ ...base, additions: 0, content: { kind: "binary" } });
+				case "symlink":
+				case "text": {
+					// Like git, a new symlink shows the path it points to.
+					const hunks = untrackedHunks(read.kind === "text" ? read.text : read.target);
+					const additions = hunks[0]?.lines.length ?? 0;
+					return new DiffFile({
+						...base,
+						additions,
+						content: additions > lineBudget ? { kind: "tooLarge" } : { kind: "text", hunks },
+					});
+				}
 			}
-			const hunks = untrackedHunks(new TextDecoder().decode(bytes));
-			const additions = hunks[0]?.lines.length ?? 0;
-			return new DiffFile({
-				...tooLarge,
-				additions,
-				content: additions > lineBudget ? { kind: "tooLarge" } : { kind: "text", hunks },
-			});
 		});
 
 		const loadDiff = Effect.fn("GitService.loadDiff")(function* (
@@ -199,6 +201,9 @@ export class GitService extends Context.Service<GitService>()("swarm/daemon/git/
 			const untracked: Array<DiffFile> = [];
 			for (const path of untrackedPaths) {
 				const file = yield* untrackedFile(cwd, path, Math.min(options.fileLimit, budget));
+				if (file === null) {
+					continue;
+				}
 				if (file.content.kind === "text") {
 					budget -= file.additions;
 				}
@@ -221,6 +226,10 @@ export class GitService extends Context.Service<GitService>()("swarm/daemon/git/
 
 		const getFileDiff = Effect.fn("GitService.getFileDiff")(function* (workspaceId: string, path: string) {
 			const current = yield* workspaces.get(workspaceId);
+			// Only paths inside the workspace can be part of its diff.
+			if (isAbsolute(path) || normalize(path).startsWith("..")) {
+				return null;
+			}
 			const diff = yield* loadDiff(current, {
 				onlyPath: path,
 				fileLimit: SINGLE_FILE_LINE_LIMIT,
