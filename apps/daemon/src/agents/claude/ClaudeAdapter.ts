@@ -2,6 +2,7 @@ import {
 	type AgentAdapter,
 	type AgentAuthStatus,
 	type AgentModels,
+	AgentNotInstalledError,
 	AgentProcessError,
 	AgentProtocolError,
 	type StartSessionInput,
@@ -19,19 +20,22 @@ import type { ApprovalDecision, ApprovalOutcome, ToolCall } from "@repo/contract
 import { BashInput, ClaudeAuthStatus, ClaudeMessage, FileInput } from "./claudeMessages.ts";
 import type { AgentCapabilities, AgentModel } from "@repo/contracts/AgentSession";
 import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
+import { stopProcessGroup } from "../../processes/stopProcessGroup.ts";
+import { ProcessRegistry } from "../../processes/ProcessRegistry.ts";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { spawnInProcessGroup } from "./spawnInProcessGroup.ts";
 import { epochSecondsToIso } from "../epochSecondsToIso.ts";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
 
-// Inside a `bun build --compile` binary the SDK cannot find its bundled CLI, so releases
-// extract it and set this path. Unset, the SDK uses its bundled CLI and `checkAuth`
-// runs `claude` from PATH.
+// Swarm runs the user's own `claude`, found on PATH unless this names another one. Inside a
+// `bun build --compile` binary the SDK cannot find the CLI it bundles, and the user's install
+// is also the one their login belongs to.
 export const ClaudeAdapterConfig = Context.Reference<{
-	readonly executablePath: string | undefined;
+	readonly executable: string;
 }>("swarm/daemon/agents/claude/ClaudeAdapterConfig", {
-	defaultValue: () => ({ executablePath: undefined }),
+	defaultValue: () => ({ executable: "claude" }),
 });
 
 const capabilities: AgentCapabilities = {
@@ -302,10 +306,10 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 		Effect.gen(function* () {
 			const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 			const claudeQuery = yield* ClaudeQuery;
+			const registry = yield* ProcessRegistry;
 
 			const checkAuth = Effect.gen(function* () {
-				const { executablePath } = yield* ClaudeAdapterConfig;
-				const executable = executablePath ?? "claude";
+				const { executable } = yield* ClaudeAdapterConfig;
 				const output = yield* spawner
 					.string(ChildProcess.make(executable, ["auth", "status", "--json"]))
 					.pipe(Effect.mapError(toAgentError(executable, "Could not run claude auth status.")));
@@ -322,12 +326,18 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 			}).pipe(Effect.withSpan("ClaudeAdapter.checkAuth"));
 
 			const startSession = Effect.fn("ClaudeAdapter.startSession")(function* (input: StartSessionInput) {
-				const { executablePath } = yield* ClaudeAdapterConfig;
+				const { executable } = yield* ClaudeAdapterConfig;
+				// The SDK wants a path, not a command name.
+				const executablePath = Bun.which(executable);
+				if (executablePath === null) {
+					return yield* new AgentNotInstalledError({ executable });
+				}
 				const session = yield* makeAgentSession(capabilities);
 				const prompts = yield* Queue.unbounded<SDKUserMessage>();
 				const { handle, interrupting } = yield* makeMessageHandler(session);
 				const context = yield* Effect.context();
 				const runPromise = Effect.runPromiseWith(context);
+				let claudePid: number | undefined;
 
 				const canUseTool: CanUseTool = (toolName, toolInput, request) =>
 					runPromise(
@@ -364,7 +374,13 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 					settingSources: input.trustProjectSettings ? ["user", "project", "local"] : ["user"],
 					...Option.match(decodeEffort(input.effort), { onNone: () => ({}), onSome: (effort) => ({ effort }) }),
 					...(input.resumeId === undefined ? {} : { resume: input.resumeId }),
-					...(executablePath === undefined ? {} : { pathToClaudeCodeExecutable: executablePath }),
+					pathToClaudeCodeExecutable: executablePath,
+					spawnClaudeCodeProcess: (spawnOptions) => {
+						const child = spawnInProcessGroup(spawnOptions);
+						claudePid = child.pid;
+						if (child.pid !== undefined) Effect.runForkWith(context)(registry.add(child.pid));
+						return child;
+					},
 					...(input.auth.mode === "apiKey"
 						? {
 								// An optional plain string cannot fail to decode, so a ConfigError here is a defect.
@@ -380,7 +396,14 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 							options,
 						}),
 					),
-					(run) => Effect.sync(() => run.close()),
+					(run) =>
+						Effect.gen(function* () {
+							// Closing ends claude's stdin. Its process group then gets the usual stop signal and grace.
+							run.close();
+							if (claudePid === undefined) return;
+							yield* stopProcessGroup(claudePid);
+							yield* registry.remove(claudePid);
+						}),
 				);
 
 				yield* Stream.fromAsyncIterable(

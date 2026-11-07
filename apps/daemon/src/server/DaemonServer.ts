@@ -13,7 +13,7 @@ const READY_LINE_PREFIX = "SWARM_DAEMON_READY ";
 
 const RpcServerLayer = RpcServer.layer(DaemonRpcs).pipe(
 	Layer.provide([DaemonRpcHandlers, RpcWebSocketRoute]),
-	Layer.provide([RpcSerialization.layerJson, DaemonServices]),
+	Layer.provide(RpcSerialization.layerJson),
 );
 
 const AnnounceReady = Layer.effectDiscard(
@@ -40,4 +40,8 @@ export const DaemonServer = Layer.unwrap(
 			),
 		);
 	}),
+).pipe(
+	// Provided from outside the HTTP server, so it is built before the server and closed after it:
+	// on shutdown the server stops taking requests before the services behind them go away.
+	Layer.provide(DaemonServices),
 );

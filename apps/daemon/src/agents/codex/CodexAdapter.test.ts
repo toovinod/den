@@ -1,4 +1,5 @@
 import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
+import codexVersionFile from "./generated/CODEX_VERSION" with { type: "text" };
 import { CodexAdapter, CodexAdapterConfig } from "./CodexAdapter.ts";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
 import { userMessage } from "../../testing/userMessage.ts";
@@ -189,11 +190,18 @@ describe("CodexAdapter", () => {
 			_tag: "CodexVersionMismatchError",
 			actual: "0.0.1",
 		});
+		const pinned = codexVersionFile.trim();
+		expect(error.message).toBe(
+			`Swarm needs Codex ${pinned}, but the installed codex is 0.0.1. Install Codex ${pinned} to use it with Swarm.`,
+		);
 	});
 
 	test("reports a missing executable as not installed", async () => {
 		const error = await runWithCodex(Effect.flip(checkAuth), "/nonexistent/codex");
 		expect(error._tag).toBe("AgentNotInstalledError");
+		expect(error.message).toBe(
+			"Swarm could not find /nonexistent/codex. Install it, or add its folder to the PATH your login shell sets.",
+		);
 	});
 
 	test("sends the current model and effort with every turn", async () => {

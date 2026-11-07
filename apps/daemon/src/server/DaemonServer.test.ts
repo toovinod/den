@@ -1,4 +1,5 @@
 import { TEST_TOKEN, testDaemonConfig } from "../testing/testDaemonConfig.ts";
+import { testProcessRegistry } from "../testing/testProcessRegistry.ts";
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
 import { testAgentServices } from "../testing/testAgentServices.ts";
 import packageJson from "../../package.json" with { type: "json" };
@@ -20,7 +21,11 @@ const runWithDaemon = <A, E>(
 			const { address } = yield* HttpServer.HttpServer;
 			return yield* program(HttpServer.formatAddress(address), tempDir);
 		}).pipe(
-			Effect.provide(DaemonServer.pipe(Layer.provide([testDaemonConfig(join(tempDir, "data")), testAgentServices()]))),
+			Effect.provide(
+				DaemonServer.pipe(
+					Layer.provide([testDaemonConfig(join(tempDir, "data")), testAgentServices(), testProcessRegistry]),
+				),
+			),
 		);
 	}).pipe(Effect.scoped, Effect.provide(BunServices.layer), Effect.runPromise);
 

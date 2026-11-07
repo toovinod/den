@@ -4,9 +4,8 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
-		"build:sidecar": "bun build --compile ../daemon/src/main.ts --outfile src-tauri/binaries/swarmd-$(rustc --print host-tuple)",
-		"dev": "bun run build:sidecar && tauri dev",
-		"build": "bun run build:sidecar && tauri build --no-bundle",
+		"dev": "bun run --cwd ../daemon build && tauri dev",
+		"build": "tauri build --no-bundle",
 		"tauri": "tauri"
 	},
 	"devDependencies": {

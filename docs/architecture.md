@@ -71,7 +71,11 @@ It never authenticates Claude or Codex, and Swarm never sends agent credentials 
 4. Tauri hands `{ url, token }` to the UI through the `daemon_connection` command.
 
 - Migrations are embedded in the compiled binary. A compiled daemon needs no files on disk besides its data directory.
-- The daemon exits when its parent shell dies (stdin closes). It never outlives the app. (To build.)
+- The daemon exits when its parent shell dies (stdin closes). It never outlives the app.
+- There is one shutdown path, for SIGTERM, SIGINT, stdin closing and the `shutdown` RPC.
+  The daemon logs the reason and closes its layers in reverse order: the HTTP server, then workspace runtimes and their children, then the process registry, then SQLite after a WAL checkpoint.
+- A clean shutdown exits 0.
+  If a finalizer hangs past 8 s, or a second signal arrives, the daemon exits 1 at once.
 
 ### 3.2 Ownership
 
@@ -85,9 +89,15 @@ It never authenticates Claude or Codex, and Swarm never sends agent credentials 
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Close a tab         | The UI unsubscribes. Nothing stops.                                                                                                                                                                                                                                                                                                                   |
 | Close the window    | macOS: the app keeps running in the dock and agents keep working. Linux: same as quit.                                                                                                                                                                                                                                                                |
-| Quit Swarm          | The UI warns if turns are running or approvals are pending. Then the shell calls the daemon's `shutdown` RPC, and the daemon stops every workspace runtime (below) with a 5 s grace before killing.                                                                                                                                                   |
+| Quit Swarm          | The UI warns if turns are running or approvals are pending. Then the shell closes the daemon's stdin (later the `shutdown` RPC), hides its windows and waits up to 10 s, off the UI thread, before killing it. The daemon stops every workspace runtime (below).                                                                                      |
 | Stop a workspace    | Pending approvals resolve as `cancelled`. Running turns are interrupted and their sessions become `interrupted`. Terminals get SIGHUP. Setup scripts get SIGTERM, and their jobs return to `pending` so they can be retried. Files are untouched.                                                                                                     |
 | Archive a workspace | Stop it first. If the worktree has uncommitted changes or unpushed commits, archive fails with `WorkspaceHasUnsavedWork` unless the user forces it. A forced archive saves changes with `git stash push --include-untracked -m swarm-archive/<workspaceId>`, then removes the worktree and keeps the branch. An in-place archive never deletes files. |
+
+- Every child (setup and run scripts, agents, terminals) runs in its own process group, so a stop reaches its grandchildren too.
+  A stop sends SIGTERM to the group (SIGHUP for terminals), then SIGKILL after a 5 s grace.
+- While a child runs, its group is recorded in `children.json` in the data directory, readable only by the user.
+  On start-up the daemon stops every recorded group a crashed daemon left, then clears the file.
+  It skips a live pid whose start time does not match the record, because that pid now belongs to another process.
 
 ## 4. Cloud credentials and recovery
 
@@ -221,6 +231,15 @@ A release spike comes right after the current merge and before milestone 5:
    - Keychain read and write through `Bun.secrets` works.
    - Every child process dies when the app quits or crashes.
 3. Run one real agent turn per agent in the packaged app.
+
+The spike ran on 2026-11-07. Results, evidence and open items are in [packaging-spike.md](packaging-spike.md).
+It changed these decisions:
+
+- `swarmd` exits when its stdin closes, which section 3.1 asked for. Until the `shutdown` RPC exists, quitting closes stdin instead of killing the daemon.
+- The Claude adapter runs the user's own `claude` from PATH. Swarm does not embed or extract the SDK's bundled CLI.
+- The shell starts `swarmd` with the PATH of the user's login shell, because an app opened from Finder cannot otherwise find `claude`, `codex` or `node`.
+- Terminals spawn with `detached: true` and are stopped by signalling their process group.
+- A crash of `swarmd` itself leaves children running until the next start, which stops them from the process registry (section 3.3).
 
 ## 14. Memory and privacy
 

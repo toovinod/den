@@ -1,21 +1,34 @@
-import { Effect, Redacted, Stdio, Stream } from "effect";
+import { Duration, Effect, Option, Redacted, Stdio, Stream } from "effect";
 import { describe, expect, test } from "bun:test";
 import { DaemonConfig } from "./DaemonConfig.ts";
 
 const encoder = new TextEncoder();
 
-const configFromStdin = (...chunks: ReadonlyArray<string>) =>
-	Effect.gen(function* () {
-		return yield* DaemonConfig;
-	}).pipe(
+const stdinOf = (...chunks: ReadonlyArray<string>) => Stream.fromIterable(chunks.map((chunk) => encoder.encode(chunk)));
+
+const withStdin = <A, E>(stdin: Stream.Stream<Uint8Array>, program: Effect.Effect<A, E, DaemonConfig>) =>
+	program.pipe(
 		Effect.provide(DaemonConfig.layer),
-		Effect.provide(
-			Stdio.layerTest({
-				stdin: Stream.fromIterable(chunks.map((chunk) => encoder.encode(chunk))),
-			}),
-		),
+		Effect.provide(Stdio.layerTest({ stdin })),
 		Effect.result,
 		Effect.runPromise,
+	);
+
+const configFromStdin = (...chunks: ReadonlyArray<string>) =>
+	withStdin(
+		stdinOf(...chunks),
+		Effect.gen(function* () {
+			return yield* DaemonConfig;
+		}),
+	);
+
+const parentExitedWithin = (stdin: Stream.Stream<Uint8Array>, timeout: Duration.Input) =>
+	withStdin(
+		stdin,
+		Effect.gen(function* () {
+			const { parentExited } = yield* DaemonConfig;
+			return Option.isSome(yield* Effect.timeoutOption(parentExited, timeout));
+		}),
 	);
 
 describe("DaemonConfig", () => {
@@ -33,5 +46,15 @@ describe("DaemonConfig", () => {
 		if (result._tag === "Failure") {
 			expect(result.failure._tag).toBe("DaemonTokenMissingError");
 		}
+	});
+
+	test("reports the parent gone once stdin closes after the token", async () => {
+		const result = await parentExitedWithin(stdinOf("abc\n"), Duration.seconds(1));
+		expect(result).toMatchObject({ _tag: "Success", success: true });
+	});
+
+	test("keeps waiting while stdin stays open", async () => {
+		const result = await parentExitedWithin(Stream.concat(stdinOf("abc\n"), Stream.never), Duration.millis(50));
+		expect(result).toMatchObject({ _tag: "Success", success: false });
 	});
 });

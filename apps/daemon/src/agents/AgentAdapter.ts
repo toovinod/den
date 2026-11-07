@@ -49,7 +49,11 @@ export class AgentProcessError extends Schema.TaggedError<AgentProcessError>()("
 
 export class AgentNotInstalledError extends Schema.TaggedError<AgentNotInstalledError>()("AgentNotInstalledError", {
 	executable: Schema.String,
-}) {}
+}) {
+	override get message() {
+		return `Swarm could not find ${this.executable}. Install it, or add its folder to the PATH your login shell sets.`;
+	}
+}
 
 export class AgentProtocolError extends Schema.TaggedError<AgentProtocolError>()("AgentProtocolError", {
 	message: Schema.String,
@@ -59,7 +63,11 @@ export class AgentProtocolError extends Schema.TaggedError<AgentProtocolError>()
 export class CodexVersionMismatchError extends Schema.TaggedError<CodexVersionMismatchError>()(
 	"CodexVersionMismatchError",
 	{ expected: Schema.String, actual: Schema.String },
-) {}
+) {
+	override get message() {
+		return `Swarm needs Codex ${this.expected}, but the installed codex is ${this.actual || "an unknown version"}. Install Codex ${this.expected} to use it with Swarm.`;
+	}
+}
 
 export class ApprovalChoiceError extends Schema.TaggedError<ApprovalChoiceError>()("ApprovalChoiceError", {
 	requestId: Schema.String,

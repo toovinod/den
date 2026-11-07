@@ -1,3 +1,4 @@
+import { TrackedChildProcessSpawner } from "../processes/TrackedChildProcessSpawner.ts";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import { ClaudeAdapter } from "../agents/claude/ClaudeAdapter.ts";
 import { CodexAdapter } from "../agents/codex/CodexAdapter.ts";
@@ -15,13 +16,16 @@ export const AgentServices = Layer.mergeAll(
 	ClaudeAdapter.layer.pipe(Layer.provide(ClaudeQuery.layer)),
 	CodexAdapter.layer,
 	CredentialStore.layer,
-).pipe(Layer.provide(BunServices.layer));
+).pipe(Layer.provide(TrackedChildProcessSpawner), Layer.provide(BunServices.layer));
 
 // The services behind the RPC handlers. Opening the database runs pending migrations,
 // and starting the services recovers sessions and setup scripts cut off by a restart.
+// Every child they spawn goes through the tracked spawner. The ProcessRegistry comes from
+// outside, because the agent adapters record their children in the same one.
 export const DaemonServices = WorkspaceService.layer.pipe(
 	Layer.provideMerge(SessionService.layer),
 	Layer.provideMerge(ProjectService.layer),
+	Layer.provide(TrackedChildProcessSpawner),
 	Layer.provideMerge(LocalDatabase.layer),
 	Layer.provide([BunServices.layer, SecureRandom.layerWebCrypto]),
 );
