@@ -2,7 +2,7 @@
 name = "swarm"
 version = "0.1.0"
 description = "Run Claude Code and Codex in parallel"
-license = ""
+license = "MIT"
 repository = ""
 edition = "2024"
 rust-version = "1.90"

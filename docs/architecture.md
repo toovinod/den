@@ -143,6 +143,8 @@ interface AgentAdapter {
 - **Unknown server requests** (Codex) get a JSON-RPC "method not found" reply at once and a non-fatal `error` event. Nothing is left hanging.
 - **Pinned Codex.** Protocol types are generated from a specific Codex version, recorded in `generated/CODEX_VERSION`. The adapter checks `codex --version` and fails with `CodexVersionMismatchError` on a mismatch. Releases bundle that Codex version.
 - **Claude executable.** Inside a compiled Bun binary the SDK cannot find its own CLI, so the adapter takes an explicit `pathToClaudeCodeExecutable`.
+- **Project trust.** A repo's own agent settings (for Claude, `.claude/settings.json`) can add hooks that run commands and rules that skip approvals. They load only for projects the user has marked trusted, which is stored on the project row. Untrusted sessions load only the user's own settings and always start in the default permission mode.
+- **Session approvals.** "Allow for session" only adds allow rules, and only for the current session. It never changes the permission mode, adds directories or writes a settings file.
 - A `ReplayAdapter` plays recorded fixtures so sessions, approvals and the UI are tested without real agents.
 
 ## 8. Events and replay
@@ -230,4 +232,3 @@ A release spike comes right after the current merge and before milestone 5:
 - Codex with ChatGPT plans in third-party clients: confirm with OpenAI.
 - A backend secret service for cloud workspaces that restart while everyone is offline.
 - Sandbox idle, runtime and resource limits.
-- Project license.
