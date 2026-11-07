@@ -103,6 +103,35 @@ describe("GitService diff", () => {
 		expect(byPath.get("image.bin")?.content).toEqual({ kind: "binary" });
 	});
 
+	test("shows only the changed line of a file that was renamed and edited", async () => {
+		const lines = Array.from({ length: 20 }, (_, index) => `line ${index + 1}`);
+		const diff = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const repositoryPath = join(tempDir, "repo");
+				yield* makeTestRepository(repositoryPath);
+				yield* fs.writeFileString(join(repositoryPath, "notes"), `${lines.join("\n")}\n`);
+				yield* runGit(repositoryPath, ["add", "."]);
+				yield* runGit(repositoryPath, ["commit", "-m", "base"]);
+				const created = yield* createWorkspace(tempDir);
+				yield* runGit(created.path, ["mv", "notes", "journal"]);
+				const edited = lines.map((line, index) => (index === 9 ? "line ten" : line));
+				yield* fs.writeFileString(join(created.path, "journal"), `${edited.join("\n")}\n`);
+				return yield* Effect.flatMap(GitService, (git) => git.getWorkspaceDiff(created.id));
+			}),
+		);
+		const file = diff.files.find((changed) => changed.path === "journal");
+		expect(file).toMatchObject({ status: "renamed", oldPath: "notes", additions: 1, deletions: 1 });
+		const changedLines =
+			file?.content.kind === "text"
+				? file.content.hunks.flatMap((hunk) => hunk.lines).filter((line) => line.kind !== "context")
+				: [];
+		expect(changedLines.map((line) => [line.kind, line.text])).toEqual([
+			["delete", "line 10"],
+			["add", "line ten"],
+		]);
+	});
+
 	test("includes commits made in the workspace since it left the base branch", async () => {
 		const diff = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {

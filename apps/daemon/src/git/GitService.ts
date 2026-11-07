@@ -229,7 +229,11 @@ export class GitService extends Context.Service<GitService>()("den/daemon/git/Gi
 							"--no-color",
 							"--no-ext-diff",
 							mergeBase,
-							...pathspecs(fitting.flatMap(({ changed }) => [changed.path, ...(changed.oldPath ?? [])])),
+							...pathspecs(
+								fitting.flatMap(({ changed }) =>
+									changed.oldPath === null ? [changed.path] : [changed.path, changed.oldPath],
+								),
+							),
 						]);
 			const sections = parsePatch(patch);
 			if (sections.length !== fitting.length) {
