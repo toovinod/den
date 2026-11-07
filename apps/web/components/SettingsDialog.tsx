@@ -2,6 +2,7 @@
 
 import {
 	openDialog,
+	refreshAgents,
 	removeAgentApiKey,
 	setAgentApiKey,
 	setAgentAuthMode,
@@ -69,9 +70,16 @@ const Accounts = () => {
 	const agents = useAppState((current) => current.agents);
 	return (
 		<div className="flex flex-col gap-3">
-			{agents.map((agent) => (
-				<AgentAccount key={agent.kind} agent={agent} />
-			))}
+			{agents.length === 0 ? (
+				<div className="flex items-center gap-2 text-xs text-muted-foreground">
+					Checking your agents.
+					<Button variant="secondary" size="sm" onClick={() => void refreshAgents()}>
+						Retry
+					</Button>
+				</div>
+			) : (
+				agents.map((agent) => <AgentAccount key={agent.kind} agent={agent} />)
+			)}
 		</div>
 	);
 };
@@ -105,6 +113,11 @@ const AgentAccount = ({ agent }: { readonly agent: AgentInfo }) => {
 				<span className={cn("text-xs", ready ? "text-success" : "text-attention")}>
 					{availabilityText(agent.availability)}
 				</span>
+				{agent.availability.status === "unknown" ? (
+					<Button variant="ghost" size="sm" className="ml-auto" onClick={() => void refreshAgents()}>
+						Check again
+					</Button>
+				) : null}
 			</div>
 			{agent.kind === "claude" ? (
 				<p className="text-xs text-muted-foreground">

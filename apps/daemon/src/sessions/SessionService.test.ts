@@ -1,8 +1,21 @@
+import {
+	Deferred,
+	Duration,
+	Effect,
+	Fiber,
+	FileSystem,
+	Layer,
+	Logger,
+	Redacted,
+	Schedule,
+	Schema,
+	Stream,
+} from "effect";
 import { type AgentAdapter, AgentNotInstalledError, type StartSessionInput } from "../agents/AgentAdapter.ts";
 import { commandWithApproval, TEST_LOGIN_URL, testAgentServices } from "../testing/testAgentServices.ts";
-import { Deferred, Effect, Fiber, FileSystem, Logger, Redacted, Schedule, Schema, Stream } from "effect";
 import { runInTempDir, runServiceTest, type Services, withServices } from "../testing/runServiceTest.ts";
 import { makeReplayAdapter, type Recording } from "../agents/replay/ReplayAdapter.ts";
+import { CredentialStore, CredentialStoreError } from "../agents/CredentialStore.ts";
 import type { AgentSessionStatus, AgentKind } from "@repo/contracts/AgentSession";
 import { DATABASE_FILE_NAME, LocalDatabase } from "../database/LocalDatabase.ts";
 import { MAX_RUNNING_SESSIONS, SessionService } from "./SessionService.ts";
@@ -11,6 +24,7 @@ import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import { agentSession, sessionEvent } from "../database/schema.ts";
 import type { SessionEvent } from "@repo/contracts/SessionEvent";
 import { ProjectService } from "../projects/ProjectService.ts";
+import { AgentProbeSettings } from "./AgentProbeSettings.ts";
 import { AgentEvent } from "@repo/contracts/AgentEvent";
 import { describe, expect, test } from "bun:test";
 import { runGit } from "../git/runGit.ts";
@@ -586,6 +600,48 @@ describe("SessionService", () => {
 			),
 		);
 		expect(agents[0]?.availability).toEqual({ status: "notInstalled" });
+	});
+
+	test("lists both agents when the keychain cannot be read", async () => {
+		const brokenKeychain = Layer.succeed(
+			CredentialStore,
+			CredentialStore.of({
+				get: () => Effect.fail(new CredentialStoreError({ cause: "locked" })),
+				set: () => Effect.void,
+				remove: () => Effect.void,
+			}),
+		);
+		const agents = await runInTempDir((tempDir) =>
+			withServices(
+				join(tempDir, "data"),
+				Layer.merge(testAgentServices(), brokenKeychain),
+			)(Effect.flatMap(SessionService, (sessions) => sessions.listAgents)),
+		);
+		expect(agents.map((agent) => [agent.kind, agent.availability.status])).toEqual([
+			["claude", "unknown"],
+			["codex", "unknown"],
+		]);
+	});
+
+	test("an agent that never answers its probe is reported, not waited on", async () => {
+		const claude: AgentAdapter = {
+			...makeReplayAdapter({ ...commandWithApproval, kind: "claude" }),
+			checkAuth: Effect.never,
+		};
+		const agents = await runInTempDir((tempDir) =>
+			withServices(
+				join(tempDir, "data"),
+				testAgentServices({ claude, codex: makeReplayAdapter(commandWithApproval) }),
+			)(
+				Effect.flatMap(SessionService, (sessions) => sessions.listAgents).pipe(
+					Effect.provideService(AgentProbeSettings, { timeout: Duration.millis(50) }),
+				),
+			),
+		);
+		expect(agents.map((agent) => [agent.kind, agent.availability.status])).toEqual([
+			["claude", "unknown"],
+			["codex", "ready"],
+		]);
 	});
 
 	test("asks each agent for its models once per daemon run", async () => {

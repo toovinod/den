@@ -161,8 +161,11 @@ export const makeCodexRpcClient = Effect.fn("makeCodexRpcClient")(function* (com
 				const id = nextId++;
 				const deferred = yield* Deferred.make<unknown, AgentError>();
 				pending.set(id, deferred);
-				yield* send({ id, method, params });
-				return yield* Deferred.await(deferred);
+				return yield* send({ id, method, params }).pipe(
+					Effect.andThen(Deferred.await(deferred)),
+					// Also when the caller gives up, for example at a deadline, so a reply that never comes leaks nothing.
+					Effect.ensuring(Effect.sync(() => pending.delete(id))),
+				);
 			}).pipe(Effect.withSpan("CodexRpcClient.request", { attributes: { method } })),
 		notify: (method) => send({ method }),
 		respond: (id, result) => send({ id, result }),

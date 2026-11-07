@@ -16,15 +16,16 @@ import {
 	SessionLimitReachedError,
 	SessionNotFoundError,
 } from "@repo/contracts/AgentSession";
-import type {
-	AgentAdapter,
-	AgentAuthStatus,
-	AgentError,
-	AgentModels,
-	AgentSessionHandle,
-	SessionSettings,
-	StartSessionInput,
-	UserImage,
+import {
+	type AgentAdapter,
+	type AgentAuthStatus,
+	type AgentError,
+	type AgentModels,
+	AgentProcessError,
+	type AgentSessionHandle,
+	type SessionSettings,
+	type StartSessionInput,
+	type UserImage,
 } from "../agents/AgentAdapter.ts";
 import {
 	type Cause,
@@ -51,6 +52,7 @@ import { AgentEvent, type ApprovalDecision } from "@repo/contracts/AgentEvent";
 import { ClaudeAdapter } from "../agents/claude/ClaudeAdapter.ts";
 import { CodexAdapter } from "../agents/codex/CodexAdapter.ts";
 import { CredentialStore } from "../agents/CredentialStore.ts";
+import { AgentProbeSettings } from "./AgentProbeSettings.ts";
 import { and, asc, eq, gt, inArray, max } from "drizzle-orm";
 import { SessionEvent } from "@repo/contracts/SessionEvent";
 import { DaemonConfig } from "../config/DaemonConfig.ts";
@@ -701,9 +703,20 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 			const adapter = adapters[kind];
 			const hasApiKey = Option.isSome(yield* credentials.get(kind));
 			const authMode = yield* authModeOf(kind);
+			const { timeout } = yield* AgentProbeSettings;
+			const withDeadline = <A, E, R>(probe: Effect.Effect<A, E, R>) =>
+				probe.pipe(
+					Effect.timeoutOrElse({
+						duration: timeout,
+						orElse: () =>
+							Effect.fail(
+								new AgentProcessError({ message: "The agent did not answer in time. Try again.", cause: null }),
+							),
+					}),
+				);
 			// Also run in API key mode: it is what finds a missing or mismatched CLI.
-			const auth = yield* Effect.result(adapter.checkAuth);
-			const listed = yield* Effect.result(modelsOf(kind));
+			const auth = yield* Effect.result(withDeadline(adapter.checkAuth));
+			const listed = yield* Effect.result(withDeadline(modelsOf(kind)));
 			if (Result.isFailure(listed)) {
 				yield* Effect.logWarning("Could not list agent models, showing none", listed.failure).pipe(
 					Effect.annotateLogs({ agent: kind }),
@@ -728,9 +741,29 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 			});
 		});
 
-		const listAgents = Effect.forEach(["claude", "codex"] as const, agentInfo, { concurrency: "unbounded" }).pipe(
-			Effect.withSpan("SessionService.listAgents"),
-		);
+		// A keychain that cannot be read leaves that agent unknown, so the other agent and the rest of the app still work.
+		const agentInfoOrUnknown = (kind: AgentKind) =>
+			agentInfo(kind).pipe(
+				Effect.catchTag("CredentialStoreError", (error) =>
+					Effect.gen(function* () {
+						yield* Effect.logWarning("Could not read the keychain", error).pipe(Effect.annotateLogs({ agent: kind }));
+						const adapter = adapters[kind];
+						return new AgentInfo({
+							kind,
+							availability: { status: "unknown", message: "Den could not read your keychain. Unlock it, then retry." },
+							capabilities: adapter.capabilities,
+							authModes: adapter.authModes,
+							authMode: adapter.authModes[0] ?? "apiKey",
+							models: [],
+							defaultModel: "",
+						});
+					}),
+				),
+			);
+
+		const listAgents = Effect.forEach(["claude", "codex"] as const, agentInfoOrUnknown, {
+			concurrency: "unbounded",
+		}).pipe(Effect.withSpan("SessionService.listAgents"));
 
 		const setApiKey = (agent: AgentKind, apiKey: Redacted.Redacted<string>) => credentials.set(agent, apiKey);
 		const removeApiKey = (agent: AgentKind) => credentials.remove(agent);

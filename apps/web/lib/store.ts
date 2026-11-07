@@ -140,8 +140,7 @@ export const boot = async () => {
 		.then(async (projects) => {
 			setState(() => ({ projects: byId(projects) }));
 			await Promise.all(projects.map((project) => loadWorkspaces(project.id)));
-			const agents = await callDaemon((daemon) => daemon.listAgents());
-			setState(() => ({ agents, connection: { status: "ready" } }));
+			setState(() => ({ connection: { status: "ready" } }));
 			return true;
 		})
 		.catch((error: unknown) => {
@@ -149,6 +148,8 @@ export const boot = async () => {
 			return false;
 		});
 	if (!loaded) return;
+	// Checking the agents starts their CLIs and reads the keychain, so it never holds up files, terminals or history.
+	void refreshAgents();
 	watchSessions();
 	const remembered = readStored(LAST_WORKSPACE_KEY);
 	const active = Object.values(state.workspaces).filter((workspace) => workspace.status === "active");
