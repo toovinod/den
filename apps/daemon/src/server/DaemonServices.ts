@@ -2,6 +2,7 @@ import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import { TerminalService } from "../terminals/TerminalService.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
+import { FileService } from "../files/FileService.ts";
 import { BunServices } from "@effect/platform-bun";
 import { GitService } from "../git/GitService.ts";
 import { SecureRandom } from "effect/crypto";
@@ -9,7 +10,7 @@ import { Layer } from "effect";
 
 // The services behind the RPC handlers. Opening the database runs pending migrations,
 // and starting WorkspaceService recovers setup scripts cut off by a restart.
-export const DaemonServices = GitService.layer.pipe(
+export const DaemonServices = Layer.mergeAll(GitService.layer, FileService.layer).pipe(
 	Layer.provideMerge(WorkspaceService.layer),
 	Layer.provideMerge(TerminalService.layer),
 	Layer.provideMerge(ProjectService.layer),

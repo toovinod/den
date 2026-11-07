@@ -4,6 +4,7 @@ import { WorkspaceRpcHandlers } from "./WorkspaceRpcHandlers.ts";
 import { TerminalRpcHandlers } from "./TerminalRpcHandlers.ts";
 import { ProjectRpcHandlers } from "./ProjectRpcHandlers.ts";
 import { SessionRpcHandlers } from "./SessionRpcHandlers.ts";
+import { FileRpcHandlers } from "./FileRpcHandlers.ts";
 import { GitRpcHandlers } from "./GitRpcHandlers.ts";
 import { Effect, Layer } from "effect";
 
@@ -18,4 +19,5 @@ export const DaemonRpcHandlers = Layer.mergeAll(
 	SessionRpcHandlers,
 	TerminalRpcHandlers,
 	GitRpcHandlers,
+	FileRpcHandlers,
 );

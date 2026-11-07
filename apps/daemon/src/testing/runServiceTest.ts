@@ -4,6 +4,7 @@ import type { ProjectService } from "../projects/ProjectService.ts";
 import type { LocalDatabase } from "../database/LocalDatabase.ts";
 import { DaemonServices } from "../server/DaemonServices.ts";
 import { Effect, FileSystem, Layer, Schedule } from "effect";
+import type { FileService } from "../files/FileService.ts";
 import { testDaemonConfig } from "./testDaemonConfig.ts";
 import type { GitService } from "../git/GitService.ts";
 import { BunServices } from "@effect/platform-bun";
@@ -15,6 +16,7 @@ type Services =
 	| TerminalService
 	| WorkspaceService
 	| GitService
+	| FileService
 	| BunServices.BunServices;
 
 export const withServices =
