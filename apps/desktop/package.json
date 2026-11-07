@@ -1,0 +1,15 @@
+{
+	"name": "desktop",
+	"version": "0.1.0",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"build:sidecar": "bun build --compile ../daemon/src/main.ts --outfile src-tauri/binaries/swarmd-$(rustc --print host-tuple)",
+		"dev": "bun run build:sidecar && tauri dev",
+		"build": "bun run build:sidecar && tauri build --no-bundle",
+		"tauri": "tauri"
+	},
+	"devDependencies": {
+		"@tauri-apps/cli": "2.12.4"
+	}
+}
