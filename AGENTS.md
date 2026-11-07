@@ -112,6 +112,7 @@ Follow Effect's own guide, [`LLMS.md`](https://github.com/Effect-TS/effect/blob/
 ### Running and observing
 
 - Start each process with `BunRuntime.runMain` from `@effect/platform-bun`, launching the main layer with `Layer.launch`.
+- The exception is a Hono app: build its `ManagedRuntime`, start `Bun.serve`, and on SIGINT or SIGTERM stop the server and then dispose the runtime.
 - At framework edges (Hono handlers, Next.js server code), build one `ManagedRuntime` from the app layer and call `runtime.runPromise` there, nowhere else.
 - Log with `Effect.log*` and `Effect.annotateLogs`. No `console.log` in committed code.
 - Spans come from `Effect.fn` names and `Effect.withSpan`. Export telemetry with the Otlp modules in `effect/observability`.
