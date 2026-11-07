@@ -1,14 +1,12 @@
-import { Clock, Context, DateTime, Duration, Effect, FileSystem, Layer, Option, Schema, Semaphore } from "effect";
 import { processExists, signalProcessGroup, stopProcessGroup } from "./stopProcessGroup.ts";
+import { Clock, Context, Effect, FileSystem, Layer, Schema, Semaphore } from "effect";
 import { PRIVATE_FILE_MODE } from "../database/LocalDatabase.ts";
+import { lockDataDirectory } from "./lockDataDirectory.ts";
 import { DaemonConfig } from "../config/DaemonConfig.ts";
-import { processStartTime } from "./processStartTime.ts";
+import { wasStartedAt } from "./processStartTime.ts";
 import { join } from "node:path";
 
 export const REGISTRY_FILE_NAME = "children.json";
-
-// `ps` reports start times to the second, and the time is taken just after the spawn.
-const SAME_PROCESS_TOLERANCE = Duration.seconds(2);
 
 export const RegistryEntries = Schema.Array(Schema.Struct({ pgid: Schema.Int, startedAt: Schema.Number }));
 const RegistryFile = Schema.fromJsonString(RegistryEntries);
@@ -18,14 +16,7 @@ const RegistryFile = Schema.fromJsonString(RegistryEntries);
 // while any member of the group is alive, so signalling -pgid only reaches our leftovers.
 const reapEntry = Effect.fn("reapEntry")(function* (entry: { readonly pgid: number; readonly startedAt: number }) {
 	if (yield* processExists(entry.pgid)) {
-		const startedAt = yield* processStartTime(entry.pgid);
-		const recorded = DateTime.makeUnsafe(entry.startedAt);
-		const isOurs = Option.match(startedAt, {
-			onNone: () => false,
-			onSome: (started) =>
-				Duration.isLessThanOrEqualTo(Duration.abs(DateTime.distance(started, recorded)), SAME_PROCESS_TOLERANCE),
-		});
-		if (!isOurs) {
+		if (!(yield* wasStartedAt(entry.pgid, entry.startedAt))) {
 			return yield* Effect.logWarning("A recorded child's pid now belongs to another process, leaving it alone").pipe(
 				Effect.annotateLogs({ pgid: entry.pgid }),
 			);
@@ -52,6 +43,8 @@ export class ProcessRegistry extends Context.Service<
 			const { dataDir } = yield* DaemonConfig;
 			const fs = yield* FileSystem.FileSystem;
 			const file = join(dataDir, REGISTRY_FILE_NAME);
+			// Before reaping: only with the lock held is a recorded child known to be a crashed daemon's.
+			yield* lockDataDirectory(dataDir);
 
 			if (yield* fs.exists(file)) {
 				const entries = yield* fs.readFileString(file).pipe(

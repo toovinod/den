@@ -1,8 +1,9 @@
 import { isGoneWithin, killGroupOnExit, spawnDetachedShell, WITH_GRANDCHILD } from "../testing/processTesting.ts";
 import { ProcessRegistry, REGISTRY_FILE_NAME, RegistryEntries } from "./ProcessRegistry.ts";
-import { Clock, Duration, Effect, FileSystem, Layer, Schema } from "effect";
+import { Clock, Context, Duration, Effect, FileSystem, Layer, Schema } from "effect";
 import { testDaemonConfig } from "../testing/testDaemonConfig.ts";
 import { runInTempDir } from "../testing/runServiceTest.ts";
+import { LOCK_FILE_NAME } from "./lockDataDirectory.ts";
 import { processExists } from "./stopProcessGroup.ts";
 import { BunServices } from "@effect/platform-bun";
 import { describe, expect, test } from "bun:test";
@@ -64,5 +65,38 @@ describe("ProcessRegistry", () => {
 			}),
 		);
 		expect(result).toEqual({ left: [], stillRunning: true });
+	});
+
+	test("a second daemon on the same data directory refuses to start and leaves the first one's children alone", async () => {
+		const result = await runInTempDir((dataDir) =>
+			Effect.gen(function* () {
+				const { shell } = yield* spawnDetachedShell(WITH_GRANDCHILD);
+				yield* killGroupOnExit(shell.pid);
+				const layer = ProcessRegistry.layer.pipe(Layer.provide([testDaemonConfig(dataDir), BunServices.layer]));
+				// The first daemon keeps running, with the shell recorded as its child.
+				const first = yield* Layer.build(layer);
+				yield* Context.get(first, ProcessRegistry).add(shell.pid);
+				const second = yield* Effect.flip(Effect.scoped(Layer.build(layer)));
+				return { second, stillRunning: yield* processExists(shell.pid) };
+			}),
+		);
+		expect(result.second._tag).toBe("DataDirectoryInUseError");
+		expect(result.stillRunning).toBe(true);
+	});
+
+	test("a lock left by a daemon that is gone does not stop the next one", async () => {
+		const result = await runInTempDir((dataDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const { shell } = yield* spawnDetachedShell("exit 0");
+				yield* Effect.promise(() => shell.exited);
+				yield* fs.writeFileString(join(dataDir, LOCK_FILE_NAME), JSON.stringify({ pid: shell.pid, startedAt: 0 }));
+				yield* Effect.scoped(
+					Layer.build(ProcessRegistry.layer.pipe(Layer.provide([testDaemonConfig(dataDir), BunServices.layer]))),
+				);
+				return { lockLeft: yield* fs.exists(join(dataDir, LOCK_FILE_NAME)) };
+			}),
+		);
+		expect(result).toEqual({ lockLeft: false });
 	});
 });
