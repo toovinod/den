@@ -36,7 +36,7 @@ export class DefaultBranchNotFoundError extends Schema.TaggedError<DefaultBranch
 	{ path: Schema.String },
 ) {
 	override get message() {
-		return `Swarm could not find a default branch for ${this.path}. Check out a branch or set origin/HEAD, then add the project again.`;
+		return `Den could not find a default branch for ${this.path}. Check out a branch or set origin/HEAD, then add the project again.`;
 	}
 }
 
@@ -45,7 +45,7 @@ export class ProjectAlreadyAddedError extends Schema.TaggedError<ProjectAlreadyA
 	{ path: Schema.String },
 ) {
 	override get message() {
-		return `${this.path} is already a project in Swarm.`;
+		return `${this.path} is already a project in Den.`;
 	}
 }
 
@@ -79,6 +79,6 @@ export class ProjectCreateError extends Schema.TaggedError<ProjectCreateError>()
 	path: Schema.String,
 }) {
 	override get message() {
-		return `Swarm could not create a repository at ${this.path}. Set your name and email for commits (user.name and user.email), then try again.`;
+		return `Den could not create a repository at ${this.path}. Set your name and email for commits (user.name and user.email), then try again.`;
 	}
 }

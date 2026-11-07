@@ -78,7 +78,7 @@ export const makeCodexRpcClient = Effect.fn("makeCodexRpcClient")(function* (com
 				Effect.mapError(
 					(cause) =>
 						new AgentProtocolError({
-							message: "Codex sent a line Swarm could not read.",
+							message: "Codex sent a line Den could not read.",
 							cause,
 						}),
 				),

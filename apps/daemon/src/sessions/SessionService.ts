@@ -121,7 +121,7 @@ const fromAuthStatus = (auth: AgentAuthStatus): AgentAvailability => {
 		case "loggedOut":
 			return { status: "loggedOut" };
 		case "unknown":
-			return { status: "unknown", message: "Swarm could not read its sign-in status." };
+			return { status: "unknown", message: "Den could not read its sign-in status." };
 	}
 };
 
@@ -131,7 +131,7 @@ const toUnavailable = (agent: AgentKind) => (error: AgentError) =>
 const decodeEvent = Schema.decodeUnknownEffect(AgentEvent);
 const decodeMediaType = Schema.decodeUnknownOption(ImageMediaType);
 
-export class SessionService extends Context.Service<SessionService>()("swarm/daemon/sessions/SessionService", {
+export class SessionService extends Context.Service<SessionService>()("den/daemon/sessions/SessionService", {
 	make: Effect.gen(function* () {
 		const database = yield* LocalDatabase;
 		const credentials = yield* CredentialStore;

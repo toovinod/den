@@ -1,8 +1,8 @@
 {
 	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-	"productName": "Swarm",
+	"productName": "Den",
 	"version": "0.1.0",
-	"identifier": "app.swarm.desktop",
+	"identifier": "app.den.desktop",
 	"build": {
 		"frontendDist": "../../web/out",
 		"devUrl": "http://localhost:3000"
@@ -10,7 +10,7 @@
 	"app": {
 		"windows": [
 			{
-				"title": "Swarm",
+				"title": "Den",
 				"width": 1200,
 				"height": 800,
 				"resizable": true,
@@ -28,6 +28,6 @@
 		"android": {
 			"debugApplicationIdSuffix": ".debug"
 		},
-		"externalBin": ["../../daemon/dist/swarmd"]
+		"externalBin": ["../../daemon/dist/dend"]
 	}
 }

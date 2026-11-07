@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 class DaemonTokenMissingError extends Schema.TaggedError<DaemonTokenMissingError>()("DaemonTokenMissingError", {}) {
 	override get message() {
-		return "swarmd reads its token from the first line of stdin. Start it from the Swarm app.";
+		return "dend reads its token from the first line of stdin. Start it from the Den app.";
 	}
 }
 
@@ -35,13 +35,13 @@ export class DaemonConfig extends Context.Service<
 		// Completes when stdin closes, which means the app that started the daemon is gone.
 		readonly parentExited: Effect.Effect<void>;
 	}
->()("swarm/daemon/config/DaemonConfig") {
+>()("den/daemon/config/DaemonConfig") {
 	static readonly layer = Layer.effect(
 		DaemonConfig,
 		Effect.gen(function* () {
-			const port = yield* Config.Port("SWARM_DAEMON_PORT").pipe(Config.withDefault(0));
+			const port = yield* Config.Port("DEN_DAEMON_PORT").pipe(Config.withDefault(0));
 			const { token, parentExited } = yield* readStdin;
-			const dataDir = yield* Config.String("SWARM_DATA_DIR").pipe(Config.withDefault(join(homedir(), ".swarm")));
+			const dataDir = yield* Config.String("DEN_DATA_DIR").pipe(Config.withDefault(join(homedir(), ".den")));
 			return DaemonConfig.of({ port, token, dataDir, parentExited });
 		}),
 	);

@@ -18,9 +18,9 @@ use tauri_plugin_shell::{
 use tokio::sync::watch;
 
 // Must match READY_LINE_PREFIX in apps/daemon/src/server/DaemonServer.ts.
-const READY_LINE_PREFIX: &str = "SWARM_DAEMON_READY ";
+const READY_LINE_PREFIX: &str = "DEN_DAEMON_READY ";
 
-// Longer than swarmd's own 8 second shutdown deadline, so a daemon that is still stopping its
+// Longer than dend's own 8 second shutdown deadline, so a daemon that is still stopping its
 // children is not cut off. Only a daemon that hangs past its own deadline gets killed.
 const DAEMON_EXIT_WAIT: Duration = Duration::from_secs(10);
 
@@ -33,7 +33,7 @@ struct DaemonConnection {
 struct Daemon {
   connection: watch::Receiver<Option<DaemonConnection>>,
   // With the pid read at spawn: `CommandChild::pid` waits on a lock the plugin's waiter thread
-  // can hold while swarmd is stopped, and quitting runs on the UI thread.
+  // can hold while dend is stopped, and quitting runs on the UI thread.
   child: Mutex<Option<(CommandChild, u32)>>,
   exited: watch::Receiver<bool>,
   quitting: AtomicBool,
@@ -88,10 +88,10 @@ fn spawn_daemon(
   exited: watch::Sender<bool>,
 ) -> Result<CommandChild, Box<dyn std::error::Error>> {
   let token = generate_token()?;
-  let mut sidecar = app.shell().sidecar("swarmd")?;
+  let mut sidecar = app.shell().sidecar("dend")?;
   match login_shell_path() {
     Some(path) => sidecar = sidecar.env("PATH", path),
-    None => log::warn!("Could not read PATH from the login shell, so swarmd keeps the app's own PATH"),
+    None => log::warn!("Could not read PATH from the login shell, so dend keeps the app's own PATH"),
   }
   let (mut events, mut child) = sidecar.spawn()?;
   // Through stdin, not the environment: agents, scripts and git inherit the daemon's environment.
@@ -106,12 +106,12 @@ fn spawn_daemon(
             Some(url) => {
               let _ = ready.send(Some(DaemonConnection { url: url.to_string(), token: token.clone() }));
             }
-            None => log::info!("swarmd: {}", line.trim_end()),
+            None => log::info!("dend: {}", line.trim_end()),
           }
         }
-        CommandEvent::Stderr(line) => log::warn!("swarmd: {}", String::from_utf8_lossy(&line).trim_end()),
+        CommandEvent::Stderr(line) => log::warn!("dend: {}", String::from_utf8_lossy(&line).trim_end()),
         CommandEvent::Terminated(status) => {
-          log::info!("swarmd exited: {status:?}");
+          log::info!("dend exited: {status:?}");
           let _ = exited.send(true);
         }
         _ => {}
@@ -146,7 +146,7 @@ pub fn run() {
             *slot = Some((child, pid));
           }
         }
-        Err(error) => log::error!("Could not start swarmd: {error}"),
+        Err(error) => log::error!("Could not start dend: {error}"),
       });
       Ok(())
     })
@@ -186,9 +186,9 @@ fn quit(app: &tauri::AppHandle, api: tauri::ExitRequestApi) {
   let app = app.clone();
   tauri::async_runtime::spawn(async move {
     if tokio::time::timeout(DAEMON_EXIT_WAIT, exited.wait_for(|exited| *exited)).await.is_err() {
-      log::error!("swarmd did not exit within {DAEMON_EXIT_WAIT:?}, killing it");
-      // Still swarmd's pid: it has not exited, so the pid cannot have been reused. The children
-      // it leaves are stopped by the next swarmd from its process registry.
+      log::error!("dend did not exit within {DAEMON_EXIT_WAIT:?}, killing it");
+      // Still dend's pid: it has not exited, so the pid cannot have been reused. The children
+      // it leaves are stopped by the next dend from its process registry.
       unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
     }
     app.exit(0);

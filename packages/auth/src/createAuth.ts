@@ -9,7 +9,7 @@ import { type Auth, betterAuth } from "better-auth";
 import type { AuthConfig } from "./AuthConfig.ts";
 import { Redacted } from "effect";
 
-export const DESKTOP_CLIENT_ID = "swarm-desktop";
+export const DESKTOP_CLIENT_ID = "den-desktop";
 
 export interface CreateAuthInput {
 	readonly config: typeof AuthConfig.Service;

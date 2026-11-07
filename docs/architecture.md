@@ -1,6 +1,6 @@
-# Swarm architecture
+# Den architecture
 
-This document records how Swarm is built and why.
+This document records how Den is built and why.
 `AGENTS.md` says how to write code; this file says what the code must do.
 When code and this file disagree, fix one of them in the same pull request.
 Items marked **Open** are decisions we have not made yet.
@@ -12,7 +12,7 @@ Desktop machine
   Tauri shell (Rust, small)
     webview: Next.js static export (UI only, no secrets)
       Effect RPC over WebSocket, 127.0.0.1, per-launch token
-    swarmd (Bun sidecar, Effect)
+    dend (Bun sidecar, Effect)
       SQLite, git, gh, terminals, scripts
       ClaudeAdapter -> Claude Agent SDK -> claude CLI
       CodexAdapter  -> codex app-server (JSON-RPC over stdio)
@@ -22,7 +22,7 @@ Cloud
   Neon Postgres: users, orgs, members, invitations, cloud workspace records
   Redis + BullMQ: provisioning and reconcile jobs
   apps/worker: drives the SandboxProvider (Vercel Sandbox)
-  Sandbox: the same swarmd binary, dialing out to the relay
+  Sandbox: the same dend binary, dialing out to the relay
 ```
 
 - One daemon binary runs in two homes: as the desktop sidecar and inside a cloud sandbox.
@@ -36,8 +36,8 @@ Cloud
 
 ## 2. Accounts and agent authentication
 
-A Swarm login authenticates the user to Swarm only.
-It never authenticates Claude or Codex, and Swarm never sends agent credentials to its own servers.
+A Den login authenticates the user to Den only.
+It never authenticates Claude or Codex, and Den never sends agent credentials to its own servers.
 
 ### 2.1 What each provider permits (checked 2026-11-07)
 
@@ -46,28 +46,28 @@ It never authenticates Claude or Codex, and Swarm never sends agent credentials 
 
 ### 2.2 Auth modes
 
-| Mode               | Claude                                                                                                                                                                                      | Codex                                                                                                                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apiKey` (default) | User pastes an Anthropic key. Stored in the OS keychain. Passed only as `ANTHROPIC_API_KEY` to the child process.                                                                           | User pastes an OpenAI key. Stored in the OS keychain. Passed only as `OPENAI_API_KEY` to the child process.                                                                   |
-| `nativeLogin`      | Off until Anthropic approves it in writing. If enabled, Swarm spawns the user's own `claude` CLI, which uses the login the user created with `claude` itself. Swarm never reads that login. | The user signs in through `codex app-server` (`account/login/start`), which opens the browser and stores tokens in Codex's own files. Swarm only reads `account/read` status. |
+| Mode               | Claude                                                                                                                                                                                  | Codex                                                                                                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiKey` (default) | User pastes an Anthropic key. Stored in the OS keychain. Passed only as `ANTHROPIC_API_KEY` to the child process.                                                                       | User pastes an OpenAI key. Stored in the OS keychain. Passed only as `OPENAI_API_KEY` to the child process.                                                                 |
+| `nativeLogin`      | Off until Anthropic approves it in writing. If enabled, Den spawns the user's own `claude` CLI, which uses the login the user created with `claude` itself. Den never reads that login. | The user signs in through `codex app-server` (`account/login/start`), which opens the browser and stores tokens in Codex's own files. Den only reads `account/read` status. |
 
-- Swarm never reads, copies, refreshes or proxies OAuth tokens for either provider. We do not use the Codex "external tokens" login mode.
+- Den never reads, copies, refreshes or proxies OAuth tokens for either provider. We do not use the Codex "external tokens" login mode.
 - `checkAuth` reports `loggedIn`, `loggedOut` or `unknown`, plus an account label when the CLI prints one.
 - **Account switching.** Credentials are keyed by provider and account label in the keychain. A session records which credential it started with. Switching the active credential affects new sessions only; running sessions keep theirs until they end.
-- **Expiry and revocation.** API keys do not expire, but they can be revoked. A provider auth failure is a permanent error (`AgentAuthError`), which stops the turn and asks the user to fix the credential. Native logins refresh inside the CLI; Swarm only sees the result through `checkAuth`.
+- **Expiry and revocation.** API keys do not expire, but they can be revoked. A provider auth failure is a permanent error (`AgentAuthError`), which stops the turn and asks the user to fix the credential. Native logins refresh inside the CLI; Den only sees the result through `checkAuth`.
 
 ### 2.3 Cloud workspaces
 
-- Cloud workspaces support `apiKey` mode only in the MVP. Moving a native login into a sandbox would mean Swarm handles OAuth tokens.
+- Cloud workspaces support `apiKey` mode only in the MVP. Moving a native login into a sandbox would mean Den handles OAuth tokens.
 - See section 4 for how a sandbox gets its keys.
 
 ## 3. Daemon
 
 ### 3.1 Start-up
 
-1. Tauri generates a 32-byte token, spawns `swarmd` and writes the token as the first line on its stdin. It never goes in the environment, which every agent, script and git process inherits.
-2. `swarmd` opens SQLite (WAL, foreign keys, 5 s busy timeout), runs embedded migrations, then recovers interrupted work (section 6).
-3. It binds `127.0.0.1` on a random port and prints `SWARM_DAEMON_READY <url>`.
+1. Tauri generates a 32-byte token, spawns `dend` and writes the token as the first line on its stdin. It never goes in the environment, which every agent, script and git process inherits.
+2. `dend` opens SQLite (WAL, foreign keys, 5 s busy timeout), runs embedded migrations, then recovers interrupted work (section 6).
+3. It binds `127.0.0.1` on a random port and prints `DEN_DAEMON_READY <url>`.
 4. Tauri hands `{ url, token }` to the UI through the `daemon_connection` command.
 
 - Migrations are embedded in the compiled binary. A compiled daemon needs no files on disk besides its data directory.
@@ -85,13 +85,13 @@ It never authenticates Claude or Codex, and Swarm never sends agent credentials 
 
 ### 3.3 Lifecycles
 
-| Action              | What happens                                                                                                                                                                                                                                                                                                                                          |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Close a tab         | The UI unsubscribes. Nothing stops.                                                                                                                                                                                                                                                                                                                   |
-| Close the window    | macOS: the app keeps running in the dock and agents keep working. Linux: same as quit.                                                                                                                                                                                                                                                                |
-| Quit Swarm          | The UI warns if turns are running or approvals are pending. Then the shell closes the daemon's stdin (later the `shutdown` RPC), hides its windows and waits up to 10 s, off the UI thread, before killing it. The daemon stops every workspace runtime (below).                                                                                      |
-| Stop a workspace    | Pending approvals resolve as `cancelled`. Running turns are interrupted and their sessions become `interrupted`. Terminals get SIGHUP. Setup scripts get SIGTERM, and their jobs return to `pending` so they can be retried. Files are untouched.                                                                                                     |
-| Archive a workspace | Stop it first. If the worktree has uncommitted changes or unpushed commits, archive fails with `WorkspaceHasUnsavedWork` unless the user forces it. A forced archive saves changes with `git stash push --include-untracked -m swarm-archive/<workspaceId>`, then removes the worktree and keeps the branch. An in-place archive never deletes files. |
+| Action              | What happens                                                                                                                                                                                                                                                                                                                                        |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Close a tab         | The UI unsubscribes. Nothing stops.                                                                                                                                                                                                                                                                                                                 |
+| Close the window    | macOS: the app keeps running in the dock and agents keep working. Linux: same as quit.                                                                                                                                                                                                                                                              |
+| Quit Den            | The UI warns if turns are running or approvals are pending. Then the shell closes the daemon's stdin (later the `shutdown` RPC), hides its windows and waits up to 10 s, off the UI thread, before killing it. The daemon stops every workspace runtime (below).                                                                                    |
+| Stop a workspace    | Pending approvals resolve as `cancelled`. Running turns are interrupted and their sessions become `interrupted`. Terminals get SIGHUP. Setup scripts get SIGTERM, and their jobs return to `pending` so they can be retried. Files are untouched.                                                                                                   |
+| Archive a workspace | Stop it first. If the worktree has uncommitted changes or unpushed commits, archive fails with `WorkspaceHasUnsavedWork` unless the user forces it. A forced archive saves changes with `git stash push --include-untracked -m den-archive/<workspaceId>`, then removes the worktree and keeps the branch. An in-place archive never deletes files. |
 
 - Every child (setup and run scripts, agents, terminals) runs in its own process group, so a stop reaches its grandchildren too.
   A stop sends SIGTERM to the group (SIGHUP for terminals), then SIGKILL after a 5 s grace.
@@ -113,19 +113,19 @@ It never authenticates Claude or Codex, and Swarm never sends agent credentials 
 
 What must survive a sandbox stop:
 
-| Data                                                                         | Where it lives                   | How it survives                                                                   |
-| ---------------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------- |
-| Repository, including uncommitted changes                                    | Sandbox filesystem               | Vercel persistent sandbox: the filesystem is saved on stop and restored on resume |
-| Swarm SQLite (sessions, events, jobs)                                        | `$SWARM_DATA_DIR` in the sandbox | Same filesystem                                                                   |
-| Native agent transcripts (`~/.claude/projects/...`, `~/.codex/sessions/...`) | Sandbox home directory           | Same filesystem. Resuming by `nativeSessionId` needs these files.                 |
-| Agent and Swarm config, minus secrets                                        | Sandbox home and data dir        | Same filesystem                                                                   |
-| Keys                                                                         | Memory only                      | Re-sent by the desktop (section 4)                                                |
+| Data                                                                         | Where it lives                 | How it survives                                                                   |
+| ---------------------------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------- |
+| Repository, including uncommitted changes                                    | Sandbox filesystem             | Vercel persistent sandbox: the filesystem is saved on stop and restored on resume |
+| Den SQLite (sessions, events, jobs)                                          | `$DEN_DATA_DIR` in the sandbox | Same filesystem                                                                   |
+| Native agent transcripts (`~/.claude/projects/...`, `~/.codex/sessions/...`) | Sandbox home directory         | Same filesystem. Resuming by `nativeSessionId` needs these files.                 |
+| Agent and Den config, minus secrets                                          | Sandbox home and data dir      | Same filesystem                                                                   |
+| Keys                                                                         | Memory only                    | Re-sent by the desktop (section 4)                                                |
 
 Resume order after a stop or sleep:
 
 1. The worker resumes the sandbox with `Sandbox.getOrCreate({ name: <workspaceId>, resume: true })`.
-2. A small supervisor in the sandbox image starts `swarmd`.
-3. `swarmd` migrates, recovers interrupted work (section 6), and dials the relay with its workspace credentials.
+2. A small supervisor in the sandbox image starts `dend`.
+3. `dend` migrates, recovers interrupted work (section 6), and dials the relay with its workspace credentials.
 4. The api records the new `sandboxInstanceId` and drops connections from older instances.
 5. The daemon waits in `awaitingCredentials` until a desktop sends keys. Then sessions resume through their native ids.
 
@@ -222,7 +222,7 @@ Rules:
 
 A release spike comes right after the current merge and before milestone 5:
 
-1. Build a real Tauri release containing the compiled `swarmd` for macOS (arm64 and x64) and Linux (x64 and arm64), from the same daemon code with `bun build --compile --target`.
+1. Build a real Tauri release containing the compiled `dend` for macOS (arm64 and x64) and Linux (x64 and arm64), from the same daemon code with `bun build --compile --target`.
 2. In the packaged app, check each of these:
    - SQLite migrations run.
    - The Claude CLI path works when compiled.
@@ -235,11 +235,11 @@ A release spike comes right after the current merge and before milestone 5:
 The spike ran on 2026-11-07. Results, evidence and open items are in [packaging-spike.md](packaging-spike.md).
 It changed these decisions:
 
-- `swarmd` exits when its stdin closes, which section 3.1 asked for. Until the `shutdown` RPC exists, quitting closes stdin instead of killing the daemon.
-- The Claude adapter runs the user's own `claude` from PATH. Swarm does not embed or extract the SDK's bundled CLI.
-- The shell starts `swarmd` with the PATH of the user's login shell, because an app opened from Finder cannot otherwise find `claude`, `codex` or `node`.
+- `dend` exits when its stdin closes, which section 3.1 asked for. Until the `shutdown` RPC exists, quitting closes stdin instead of killing the daemon.
+- The Claude adapter runs the user's own `claude` from PATH. Den does not embed or extract the SDK's bundled CLI.
+- The shell starts `dend` with the PATH of the user's login shell, because an app opened from Finder cannot otherwise find `claude`, `codex` or `node`.
 - Terminals spawn with `detached: true` and are stopped by signalling their process group.
-- A crash of `swarmd` itself leaves children running until the next start, which stops them from the process registry (section 3.3).
+- A crash of `dend` itself leaves children running until the next start, which stops them from the process registry (section 3.3).
 
 ## 14. Memory and privacy
 
@@ -249,7 +249,7 @@ It changed these decisions:
   - Subscriber buffers: 1,000 events or 1 MB.
 - **Limits.** One file watcher per open workspace. Concurrent agent sessions are capped (default 8, configurable).
 - **Measure the whole thing.** Report the combined memory of the shell, the webview processes, the daemon and the agent processes, measured by a script in the repo against the same task in other tools. We publish only claims we measured.
-- **Privacy statement.** Swarm keeps local workspace data on your machine. The agents you configure still send context to their model providers under those providers' terms. Native agent histories (Claude Code and Codex transcripts) may keep output that Swarm itself drops.
+- **Privacy statement.** Den keeps local workspace data on your machine. The agents you configure still send context to their model providers under those providers' terms. Native agent histories (Claude Code and Codex transcripts) may keep output that Den itself drops.
 
 ## 15. Open decisions
 

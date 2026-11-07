@@ -192,7 +192,7 @@ describe("CodexAdapter", () => {
 		});
 		const pinned = codexVersionFile.trim();
 		expect(error.message).toBe(
-			`Swarm needs Codex ${pinned}, but the installed codex is 0.0.1. Install Codex ${pinned} to use it with Swarm.`,
+			`Den needs Codex ${pinned}, but the installed codex is 0.0.1. Install Codex ${pinned} to use it with Den.`,
 		);
 	});
 
@@ -200,7 +200,7 @@ describe("CodexAdapter", () => {
 		const error = await runWithCodex(Effect.flip(checkAuth), "/nonexistent/codex");
 		expect(error._tag).toBe("AgentNotInstalledError");
 		expect(error.message).toBe(
-			"Swarm could not find /nonexistent/codex. Install it, or add its folder to the PATH your login shell sets.",
+			"Den could not find /nonexistent/codex. Install it, or add its folder to the PATH your login shell sets.",
 		);
 	});
 

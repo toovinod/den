@@ -1,8 +1,8 @@
-# Swarm
+# Den
 
-Swarm is an open-source desktop app for running Claude Code and Codex in parallel.
+Den is an open-source desktop app for running Claude Code and Codex in parallel.
 Each workspace is a git worktree or the project folder itself, and runs any number of agent sessions side by side.
-Everything Conductor and Paradev do is the floor for Swarm, not the target.
+Everything Conductor and Paradev do is the floor for Den, not the target.
 This file is the contract for everyone who writes code here, human or agent.
 Architecture decisions will live in `docs/architecture.md`.
 
@@ -92,7 +92,7 @@ Follow Effect's own guide, [`LLMS.md`](https://github.com/Effect-TS/effect/blob/
 
 ### Services and layers
 
-- Put behavior in services: `class Name extends Context.Service<Name, Interface>()("swarm/<package>/<path>/Name")`.
+- Put behavior in services: `class Name extends Context.Service<Name, Interface>()("den/<package>/<path>/Name")`.
 - Give each service a `static readonly layer` built with `Layer.effect`, and return the implementation with `Name.of({...})`.
 - Compose layers with `Layer.provide` and `Layer.provideMerge`. No module-level singletons or globals.
 - Use `Context.Reference` for settings and flags that have a default value.
@@ -122,7 +122,7 @@ Follow Effect's own guide, [`LLMS.md`](https://github.com/Effect-TS/effect/blob/
 
 ## Agents and jobs
 
-- Swarm orchestrates Claude Code and Codex. It does not implement its own agent loop.
+- Den orchestrates Claude Code and Codex. It does not implement its own agent loop.
 - Every agent sits behind one adapter interface. Agent-specific code stays inside its adapter.
 - Keep the daemon stateless: durable state lives in the database, not in memory. A restart loses only in-flight output.
 - Run slow work as async jobs. Never block a request on an agent run, script or clone.

@@ -21,7 +21,7 @@ export class AuthConfig extends Context.Service<
 		readonly github: OAuthClient;
 		readonly google: OAuthClient;
 	}
->()("swarm/auth/AuthConfig") {
+>()("den/auth/AuthConfig") {
 	static readonly layer = Layer.effect(
 		AuthConfig,
 		Effect.gen(function* () {

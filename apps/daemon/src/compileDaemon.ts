@@ -32,13 +32,13 @@ const compile = Effect.fn("compile")(function* (target: keyof typeof rustTargets
 				"build",
 				"--compile",
 				`--target=${target}`,
-				// swarmd reads its settings only from the environment the app gives it, never from
+				// dend reads its settings only from the environment the app gives it, never from
 				// a .env or bunfig.toml that happens to sit in its working directory.
 				"--no-compile-autoload-dotenv",
 				"--no-compile-autoload-bunfig",
 				"src/main.ts",
 				"--outfile",
-				`dist/swarmd-${rustTargets[target]}`,
+				`dist/dend-${rustTargets[target]}`,
 			],
 			{ cwd: `${import.meta.dir}/..`, stdout: "inherit", stderr: "inherit" },
 		),

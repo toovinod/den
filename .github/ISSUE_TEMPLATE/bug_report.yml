@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Swarm does not work as it should.
+description: Something in Den does not work as it should.
 labels: [bug]
 body:
   - type: textarea
@@ -21,7 +21,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Swarm version or commit
+      label: Den version or commit
     validations:
       required: true
   - type: input

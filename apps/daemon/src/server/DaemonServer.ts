@@ -9,7 +9,7 @@ import { DaemonServices } from "./DaemonServices.ts";
 import { HttpRouter, HttpServer } from "effect/http";
 
 // The desktop shell waits for this exact line on stdout to learn the daemon's address.
-const READY_LINE_PREFIX = "SWARM_DAEMON_READY ";
+const READY_LINE_PREFIX = "DEN_DAEMON_READY ";
 
 const RpcServerLayer = RpcServer.layer(DaemonRpcs).pipe(
 	Layer.provide([DaemonRpcHandlers, RpcWebSocketRoute]),

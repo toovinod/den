@@ -7,7 +7,7 @@ import { DaemonConfig } from "../config/DaemonConfig.ts";
 const HangOnShutdown = Layer.effectDiscard(
 	Effect.gen(function* () {
 		yield* Effect.addFinalizer(() => Effect.never);
-		yield* Console.log("SWARM_DAEMON_READY hanging");
+		yield* Console.log("DEN_DAEMON_READY hanging");
 	}),
 );
 

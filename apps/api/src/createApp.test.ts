@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createApp } from "./createApp.ts";
 
-const WEB_ORIGIN = "https://app.swarm.test";
+const WEB_ORIGIN = "https://app.den.test";
 
 const app = createApp({
 	webOrigin: WEB_ORIGIN,

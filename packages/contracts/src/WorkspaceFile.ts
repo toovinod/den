@@ -29,6 +29,6 @@ export class FileReadError extends Schema.TaggedError<FileReadError>()("FileRead
 	path: Schema.String,
 }) {
 	override get message() {
-		return `Swarm could not read ${this.path}. Check its permissions and try again.`;
+		return `Den could not read ${this.path}. Check its permissions and try again.`;
 	}
 }

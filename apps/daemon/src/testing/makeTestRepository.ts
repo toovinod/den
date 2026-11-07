@@ -7,8 +7,8 @@ export const makeTestRepository = Effect.fn("makeTestRepository")(function* (pat
 	const fs = yield* FileSystem.FileSystem;
 	yield* fs.makeDirectory(path, { recursive: true });
 	yield* runGit(path, ["init", "--initial-branch=main"]);
-	yield* runGit(path, ["config", "user.email", "test@swarm.local"]);
-	yield* runGit(path, ["config", "user.name", "Swarm Test"]);
+	yield* runGit(path, ["config", "user.email", "test@den.local"]);
+	yield* runGit(path, ["config", "user.name", "Den Test"]);
 	yield* runGit(path, ["config", "commit.gpgsign", "false"]);
 	yield* fs.writeFileString(join(path, "README.md"), "hello\n");
 	yield* runGit(path, ["add", "."]);

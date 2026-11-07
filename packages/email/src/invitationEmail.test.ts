@@ -22,10 +22,10 @@ describe("invitationEmail", () => {
 			to: "ada@example.com",
 			organizationName: "Acme\nClick here",
 			inviterName: "Grace",
-			acceptUrl: "https://swarm.test/invite?id=abc",
+			acceptUrl: "https://den.test/invite?id=abc",
 			idempotencyKey: "invitation/abc",
 		});
-		expect(email.subject).toBe("Join Acme Click here on Swarm");
-		expect(email.text).toContain("https://swarm.test/invite?id=abc");
+		expect(email.subject).toBe("Join Acme Click here on Den");
+		expect(email.text).toContain("https://den.test/invite?id=abc");
 	});
 });

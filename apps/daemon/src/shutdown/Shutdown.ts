@@ -7,7 +7,7 @@ export type ShutdownReason = typeof ShutdownReason.Type;
 export const ShutdownSettings = Context.Reference<{
 	// Longer than the children's stop grace, so a clean stop always fits inside it.
 	readonly deadline: Duration.Duration;
-}>("swarm/daemon/shutdown/ShutdownSettings", {
+}>("den/daemon/shutdown/ShutdownSettings", {
 	defaultValue: () => ({ deadline: Duration.seconds(8) }),
 });
 
@@ -29,7 +29,7 @@ export class Shutdown extends Context.Service<
 		readonly request: (reason: ShutdownReason) => Effect.Effect<void>;
 		readonly requested: Effect.Effect<ShutdownReason>;
 	}
->()("swarm/daemon/shutdown/Shutdown") {
+>()("den/daemon/shutdown/Shutdown") {
 	static readonly layer = Layer.effect(
 		Shutdown,
 		Effect.gen(function* () {

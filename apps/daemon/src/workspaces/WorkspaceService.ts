@@ -49,7 +49,7 @@ interface ScriptOutput {
 // A slow follower loses old lines rather than growing the daemon's memory.
 const LIVE_LINES = 1000;
 
-export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm/daemon/workspaces/WorkspaceService", {
+export class WorkspaceService extends Context.Service<WorkspaceService>()("den/daemon/workspaces/WorkspaceService", {
 	make: Effect.gen(function* () {
 		const { dataDir } = yield* DaemonConfig;
 		const database = yield* LocalDatabase;
@@ -296,7 +296,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 						yield* removeWorktree({
 							repositoryPath: owner.path,
 							worktreePath: current.path,
-							stashMessage: unsaved.changedFiles.length > 0 ? `swarm-archive/${workspaceId}` : null,
+							stashMessage: unsaved.changedFiles.length > 0 ? `den-archive/${workspaceId}` : null,
 						});
 					} else {
 						// Someone deleted the folder already. Forget it in git and carry on.

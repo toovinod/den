@@ -27,7 +27,7 @@ const childrenOf = (directory: string, files: ReadonlyArray<string>): ReadonlyAr
 	);
 };
 
-export class FileService extends Context.Service<FileService>()("swarm/daemon/files/FileService", {
+export class FileService extends Context.Service<FileService>()("den/daemon/files/FileService", {
 	make: Effect.gen(function* () {
 		const workspaces = yield* WorkspaceService;
 		const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem>();

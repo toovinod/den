@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest something Swarm should do.
+description: Suggest something Den should do.
 labels: [enhancement]
 body:
   - type: textarea

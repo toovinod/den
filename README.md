@@ -1,8 +1,8 @@
-<a href="https://github.com/toovinod/swarm">
-  <img alt="Swarm is the open-source desktop app for running Claude Code and Codex in parallel." src=".github/assets/banner.svg">
+<a href="https://github.com/toovinod/den">
+  <img alt="Den is the open-source desktop app for running Claude Code and Codex in parallel." src=".github/assets/banner.svg">
 </a>
 
-<h3 align="center">Swarm</h3>
+<h3 align="center">Den</h3>
 
 <p align="center">
     The open-source app for running coding agents in parallel.
@@ -17,14 +17,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/toovinod/swarm/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/toovinod/swarm/ci.yml?branch=main&label=CI&logo=github&logoColor=fff" alt="CI" />
+  <a href="https://github.com/toovinod/den/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/toovinod/den/ci.yml?branch=main&label=CI&logo=github&logoColor=fff" alt="CI" />
   </a>
-  <a href="https://github.com/toovinod/swarm/stargazers">
-    <img src="https://img.shields.io/github/stars/toovinod/swarm?style=flat&label=stars&logo=github&color=0bf&logoColor=fff" alt="Stars" />
+  <a href="https://github.com/toovinod/den/stargazers">
+    <img src="https://img.shields.io/github/stars/toovinod/den?style=flat&label=stars&logo=github&color=0bf&logoColor=fff" alt="Stars" />
   </a>
-  <a href="https://github.com/toovinod/swarm/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/toovinod/swarm?label=license&logo=github&color=f80&logoColor=fff" alt="License" />
+  <a href="https://github.com/toovinod/den/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/toovinod/den?label=license&logo=github&color=f80&logoColor=fff" alt="License" />
   </a>
 </p>
 
@@ -32,7 +32,7 @@
 
 ## Introduction
 
-Swarm is the open-source desktop app for running [Claude Code](https://code.claude.com) and [Codex](https://github.com/openai/codex) in parallel.
+Den is the open-source desktop app for running [Claude Code](https://code.claude.com) and [Codex](https://github.com/openai/codex) in parallel.
 
 Every task gets its own workspace: a git worktree on its own branch, or the project folder itself.
 Each workspace runs as many agent sessions as you need, side by side.
@@ -40,7 +40,7 @@ Review the diff, open a terminal, and create, review and merge the pull request 
 
 Your code, chats and terminal output stay on your machine, and your API keys stay in your OS keychain.
 
-> Swarm is in early development and not ready for daily use yet.
+> Den is in early development and not ready for daily use yet.
 
 ## Tech Stack
 
@@ -82,9 +82,9 @@ To work on agents, install [Claude Code](https://code.claude.com) and the [Codex
 
 We love our contributors! Here's how you can contribute:
 
-- [Open an issue](https://github.com/toovinod/swarm/issues) if you believe you've found a bug.
+- [Open an issue](https://github.com/toovinod/den/issues) if you believe you've found a bug.
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md), the rules every change follows.
-- Make a [pull request](https://github.com/toovinod/swarm/pulls) to add features, improve quality of life or fix bugs.
+- Make a [pull request](https://github.com/toovinod/den/pulls) to add features, improve quality of life or fix bugs.
 
 Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
@@ -98,4 +98,4 @@ Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-Swarm is open source under the [MIT License](LICENSE).
+Den is open source under the [MIT License](LICENSE).

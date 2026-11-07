@@ -1,4 +1,4 @@
-# Contributing to Swarm
+# Contributing to Den
 
 Thanks for helping.
 This guide covers how to set up, what a good change looks like and how it gets merged.
@@ -25,17 +25,17 @@ Follow the Local Development section of the [README](README.md).
 | `bun run db:up` / `bun run db:down` | Starts or stops the local Postgres and Redis.                                                           |
 | `bun run db:migrate`                | Applies pending cloud database migrations.                                                              |
 
-| Path                     | What it is                                                   |
-| ------------------------ | ------------------------------------------------------------ |
-| `apps/desktop`           | Tauri shell that starts the daemon and loads the UI          |
-| `apps/web`               | Next.js UI, built as a static export                         |
-| `apps/daemon`            | `swarmd`: local database, git, workspaces and agent adapters |
-| `apps/api`               | Hono API: accounts, organizations and invitations            |
-| `packages/contracts`     | Schemas and RPC definitions shared by the apps               |
-| `packages/auth`          | Better Auth configuration                                    |
-| `packages/db-cloud`      | Postgres schema, migrations and database service             |
-| `packages/email`         | Transactional email through Resend                           |
-| `scripts/sortImports.ts` | Keeps imports ordered from the longest to the shortest       |
+| Path                     | What it is                                                 |
+| ------------------------ | ---------------------------------------------------------- |
+| `apps/desktop`           | Tauri shell that starts the daemon and loads the UI        |
+| `apps/web`               | Next.js UI, built as a static export                       |
+| `apps/daemon`            | `dend`: local database, git, workspaces and agent adapters |
+| `apps/api`               | Hono API: accounts, organizations and invitations          |
+| `packages/contracts`     | Schemas and RPC definitions shared by the apps             |
+| `packages/auth`          | Better Auth configuration                                  |
+| `packages/db-cloud`      | Postgres schema, migrations and database service           |
+| `packages/email`         | Transactional email through Resend                         |
+| `scripts/sortImports.ts` | Keeps imports ordered from the longest to the shortest     |
 
 The repo uses TypeScript 7, the native compiler, which no longer ships the `tsserver` that most editors load.
 Editors that use the workspace TypeScript through `tsserver` show false "Cannot find module" errors.

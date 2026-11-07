@@ -54,7 +54,7 @@ const CODEX_VERSION = codexVersionFile.trim();
 // Releases bundle a pinned codex binary and point this at it.
 export const CodexAdapterConfig = Context.Reference<{
 	readonly executable: string;
-}>("swarm/daemon/agents/codex/CodexAdapterConfig", {
+}>("den/daemon/agents/codex/CodexAdapterConfig", {
 	defaultValue: () => ({ executable: "codex" }),
 });
 
@@ -62,14 +62,14 @@ const capabilities: AgentCapabilities = {
 	resume: true,
 	interrupt: true,
 	fileChangeApprovals: true,
-	// Codex asks MCP questions through elicitation requests, which Swarm declines for now.
+	// Codex asks MCP questions through elicitation requests, which Den declines for now.
 	mcpApprovals: false,
 	steerWhileRunning: true,
 };
 
 const approvalChoices = ["allowOnce", "allowForSession", "deny"] as const;
 
-// Set on every thread so the user's own Codex config cannot turn Swarm's approvals off.
+// Set on every thread so the user's own Codex config cannot turn Den's approvals off.
 const threadPolicy = {
 	approvalPolicy: "on-request",
 	sandbox: "workspace-write",
@@ -131,7 +131,7 @@ const checkVersion = Effect.fn("CodexAdapter.checkVersion")(function* (executabl
 
 const initialize = Effect.fn("CodexAdapter.initialize")(function* (client: CodexRpcClient) {
 	yield* client.request("initialize", {
-		clientInfo: { name: "swarm", title: "Swarm", version: packageJson.version },
+		clientInfo: { name: "den", title: "Den", version: packageJson.version },
 		capabilities: { experimentalApi: false, requestAttestation: false },
 	} satisfies InitializeParams);
 	yield* client.notify("initialized");
@@ -287,10 +287,10 @@ const handleServerRequest = Effect.fnUntraced(function* (
 		}
 		default:
 			// Never leave Codex waiting on a request we cannot answer.
-			yield* client.respondError(request.id, METHOD_NOT_FOUND, `Swarm does not support ${request.method}`);
+			yield* client.respondError(request.id, METHOD_NOT_FOUND, `Den does not support ${request.method}`);
 			return yield* session.emit({
 				type: "error",
-				message: `Codex asked for ${request.method}, which Swarm does not support yet. It was declined.`,
+				message: `Codex asked for ${request.method}, which Den does not support yet. It was declined.`,
 				willRetry: false,
 			});
 	}
@@ -306,7 +306,7 @@ export interface CodexAgentAdapter extends AgentAdapter {
 const LOGIN_TIMEOUT = "10 minutes";
 
 export class CodexAdapter extends Context.Service<CodexAdapter, CodexAgentAdapter>()(
-	"swarm/daemon/agents/codex/CodexAdapter",
+	"den/daemon/agents/codex/CodexAdapter",
 ) {
 	static readonly layer = Layer.effect(
 		CodexAdapter,

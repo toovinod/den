@@ -144,7 +144,7 @@ const authorName = (author: typeof GhAuthor.Type) => author?.login ?? "ghost";
 const MERGE_FLAGS = { squash: "--squash", merge: "--merge", rebase: "--rebase" } as const;
 const REVIEW_FLAGS = { approve: "--approve", requestChanges: "--request-changes", comment: "--comment" } as const;
 
-export class GitService extends Context.Service<GitService>()("swarm/daemon/git/GitService", {
+export class GitService extends Context.Service<GitService>()("den/daemon/git/GitService", {
 	make: Effect.gen(function* () {
 		const workspaces = yield* WorkspaceService;
 		const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem>();

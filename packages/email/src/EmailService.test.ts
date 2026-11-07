@@ -10,7 +10,7 @@ describe("EmailService", () => {
 				to: "ada@example.com",
 				organizationName: "Acme",
 				inviterName: "Grace",
-				acceptUrl: "https://swarm.test/invite/abc",
+				acceptUrl: "https://den.test/invite/abc",
 				idempotencyKey: "invitation/abc",
 			});
 			return yield* Ref.get(yield* SentEmails);
@@ -18,8 +18,8 @@ describe("EmailService", () => {
 
 		expect(sent).toHaveLength(1);
 		expect(sent[0]?.to).toBe("ada@example.com");
-		expect(sent[0]?.subject).toBe("Join Acme on Swarm");
+		expect(sent[0]?.subject).toBe("Join Acme on Den");
 		expect(sent[0]?.text).toContain("Grace invited you to join Acme");
-		expect(sent[0]?.text).toContain("https://swarm.test/invite/abc");
+		expect(sent[0]?.text).toContain("https://den.test/invite/abc");
 	});
 });

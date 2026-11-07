@@ -20,7 +20,7 @@ const startDaemon = (entry: string, dataDir: string) =>
 		const handle = yield* ChildProcess.make("bun", [entry], {
 			cwd: DAEMON_DIR,
 			stdin: Stream.fromQueue(stdin),
-			env: { SWARM_DATA_DIR: dataDir },
+			env: { DEN_DATA_DIR: dataDir },
 			extendEnv: true,
 		});
 		const output = yield* Ref.make<ReadonlyArray<string>>([]);
@@ -31,7 +31,7 @@ const startDaemon = (entry: string, dataDir: string) =>
 			Effect.forkScoped,
 		);
 		yield* Ref.get(output).pipe(
-			Effect.repeat({ while: (lines) => !lines.some((line) => line.startsWith("SWARM_DAEMON_READY")) }),
+			Effect.repeat({ while: (lines) => !lines.some((line) => line.startsWith("DEN_DAEMON_READY")) }),
 			Effect.timeout(Duration.seconds(10)),
 		);
 		return {

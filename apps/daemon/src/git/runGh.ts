@@ -2,7 +2,7 @@ import { GhNotAuthenticatedError, GhNotInstalledError } from "@repo/contracts/Gi
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { Context, Effect, Schema, Stream } from "effect";
 
-export const GhSettings = Context.Reference<{ readonly executable: string }>("swarm/daemon/git/GhSettings", {
+export const GhSettings = Context.Reference<{ readonly executable: string }>("den/daemon/git/GhSettings", {
 	defaultValue: () => ({ executable: "gh" }),
 });
 
@@ -12,7 +12,7 @@ export class GhCommandError extends Schema.TaggedError<GhCommandError>()("GhComm
 	stderr: Schema.String,
 }) {}
 
-// gh keeps and uses its own GitHub login. Swarm never reads or stores that token.
+// gh keeps and uses its own GitHub login. Den never reads or stores that token.
 export const runGh = Effect.fn("runGh")(
 	function* (cwd: string, args: ReadonlyArray<string>) {
 		const { executable } = yield* GhSettings;

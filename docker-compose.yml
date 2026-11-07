@@ -4,15 +4,15 @@ services:
   postgres:
     image: postgres:18.6-alpine
     environment:
-      POSTGRES_USER: swarm
-      POSTGRES_PASSWORD: swarm
-      POSTGRES_DB: swarm
+      POSTGRES_USER: den
+      POSTGRES_PASSWORD: den
+      POSTGRES_DB: den
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - swarm-postgres:/var/lib/postgresql
+      - den-postgres:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U swarm -d swarm"]
+      test: ["CMD-SHELL", "pg_isready -U den -d den"]
       interval: 2s
       timeout: 5s
       retries: 15
@@ -24,7 +24,7 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
-      - swarm-redis:/data
+      - den-redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s
@@ -32,5 +32,5 @@ services:
       retries: 15
 
 volumes:
-  swarm-postgres:
-  swarm-redis:
+  den-postgres:
+  den-redis:

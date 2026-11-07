@@ -12,7 +12,7 @@ export class Auth extends Context.Service<
 	{
 		readonly handler: (request: Request) => Promise<Response>;
 	}
->()("swarm/auth/Auth") {
+>()("den/auth/Auth") {
 	static readonly layer = Layer.effect(
 		Auth,
 		Effect.gen(function* () {

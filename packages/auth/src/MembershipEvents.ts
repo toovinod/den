@@ -29,7 +29,7 @@ export class MembershipEvents extends Context.Service<
 		publish(event: MembershipEvent): Effect.Effect<void>;
 		readonly subscribe: Effect.Effect<PubSub.Subscription<MembershipEvent>, never, Scope.Scope>;
 	}
->()("swarm/auth/MembershipEvents") {
+>()("den/auth/MembershipEvents") {
 	static readonly layer = Layer.effect(
 		MembershipEvents,
 		Effect.gen(function* () {

@@ -109,7 +109,7 @@ export class PushFailedError extends Schema.TaggedError<PushFailedError>()("Push
 	branch: Schema.String,
 }) {
 	override get message() {
-		return `Swarm could not push ${this.branch}. Check your network and git credentials, then try again.`;
+		return `Den could not push ${this.branch}. Check your network and git credentials, then try again.`;
 	}
 }
 
@@ -217,6 +217,6 @@ export class RemoteBranchDeleteError extends Schema.TaggedError<RemoteBranchDele
 	branch: Schema.String,
 }) {
 	override get message() {
-		return `The pull request merged, but Swarm could not delete ${this.branch} on origin. Delete it on GitHub.`;
+		return `The pull request merged, but Den could not delete ${this.branch} on origin. Delete it on GitHub.`;
 	}
 }
