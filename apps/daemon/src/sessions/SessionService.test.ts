@@ -1,6 +1,6 @@
 import { commandWithApproval, TEST_LOGIN_URL, testAgentServices } from "../testing/testAgentServices.ts";
+import { Deferred, Effect, Fiber, FileSystem, Logger, Redacted, Schedule, Schema, Stream } from "effect";
 import { runInTempDir, runServiceTest, type Services, withServices } from "../testing/runServiceTest.ts";
-import { Deferred, Effect, Fiber, FileSystem, Logger, Redacted, Schedule, Stream } from "effect";
 import { makeReplayAdapter, type Recording } from "../agents/replay/ReplayAdapter.ts";
 import type { AgentSessionStatus, AgentKind } from "@repo/contracts/AgentSession";
 import { DATABASE_FILE_NAME, LocalDatabase } from "../database/LocalDatabase.ts";
@@ -11,7 +11,7 @@ import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import { agentSession, sessionEvent } from "../database/schema.ts";
 import type { SessionEvent } from "@repo/contracts/SessionEvent";
 import { ProjectService } from "../projects/ProjectService.ts";
-import type { AgentEvent } from "@repo/contracts/AgentEvent";
+import { AgentEvent } from "@repo/contracts/AgentEvent";
 import { describe, expect, test } from "bun:test";
 import { asc, eq } from "drizzle-orm";
 import { join } from "node:path";
@@ -128,7 +128,7 @@ describe("SessionService", () => {
 				const live = yield* eventsUntil(session.id, -1, "turn.completed").pipe(Effect.forkChild);
 				// Let the subscription register before the turn starts.
 				yield* Effect.sleep("100 millis");
-				yield* sessions.sendMessage(session.id, "run the tests", false);
+				yield* sessions.sendMessage(session.id, "run the tests", [], false);
 				yield* waitForStatus(session.id, "awaitingApproval");
 				yield* sessions.respondToApproval(session.id, "0", "allowOnce");
 				const received = yield* Fiber.join(live);
@@ -139,16 +139,17 @@ describe("SessionService", () => {
 		);
 		expect(result.received.map((stored) => [stored.event.type, stored.sequence])).toEqual([
 			["session.started", 0],
+			["user.message", 1],
 			["message.delta", null],
 			["message.delta", null],
-			["message.completed", 1],
-			["tool.started", 2],
-			["approval.requested", 3],
-			["approval.resolved", 4],
-			["tool.completed", 5],
-			["turn.completed", 6],
+			["message.completed", 2],
+			["tool.started", 3],
+			["approval.requested", 4],
+			["approval.resolved", 5],
+			["tool.completed", 6],
+			["turn.completed", 7],
 		]);
-		expect(result.stored.map((row) => row.sequence)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+		expect(result.stored.map((row) => row.sequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
 		expect(result.stored.some((row) => row.type === "message.delta")).toBe(false);
 		expect(result.row?.nativeSessionId).toBe("thread-replay");
 	});
@@ -163,17 +164,17 @@ describe("SessionService", () => {
 			Effect.gen(function* () {
 				const sessions = yield* SessionService;
 				const session = yield* addSession(tempDir);
-				yield* sessions.sendMessage(session.id, "first", false);
-				yield* waitForStored(session.id, 452);
-				yield* sessions.sendMessage(session.id, "second", false);
+				yield* sessions.sendMessage(session.id, "first", [], false);
+				yield* waitForStored(session.id, 453);
+				yield* sessions.sendMessage(session.id, "second", [], false);
 				return yield* sessions.subscribe(session.id, 10).pipe(
 					Stream.takeUntil((stored) => stored.event.type === "turn.completed" && stored.event.turnId === "second"),
 					Stream.runCollect,
 				);
 			}),
 		);
-		// 1 session.started, then 451 events per turn, starting after the cursor at 10.
-		expect(sequences(received)).toEqual(Array.from({ length: 1 + 451 * 2 - 11 }, (_, index) => index + 11));
+		// 1 session.started, then the user message and 451 agent events per turn, starting after the cursor at 10.
+		expect(sequences(received)).toEqual(Array.from({ length: 1 + 452 * 2 - 11 }, (_, index) => index + 11));
 	});
 
 	test("a subscriber that falls behind gets ResubscribeRequiredError with its last sequence", async () => {
@@ -186,7 +187,7 @@ describe("SessionService", () => {
 			Effect.gen(function* () {
 				const sessions = yield* SessionService;
 				const session = yield* addSession(tempDir);
-				yield* sessions.sendMessage(session.id, "warm", false);
+				yield* sessions.sendMessage(session.id, "warm", [], false);
 				yield* waitForStored(session.id, 3);
 				const firstReceived = yield* Deferred.make<void>();
 				const gate = yield* Deferred.make<void>();
@@ -204,7 +205,7 @@ describe("SessionService", () => {
 				);
 				// A history event has arrived, so the live subscription is already registered.
 				yield* Deferred.await(firstReceived);
-				yield* sessions.sendMessage(session.id, "burst", false);
+				yield* sessions.sendMessage(session.id, "burst", [], false);
 				yield* waitForStored(session.id, 1_504);
 				// Rows are stored before they are published, so give the subscriber's buffer time to fill.
 				yield* Effect.sleep("200 millis");
@@ -229,15 +230,15 @@ describe("SessionService", () => {
 					sessions.create({ workspaceId: workspace.id, agent: "codex", model: "replay", effort: null }),
 				);
 				for (const session of created.slice(0, MAX_RUNNING_SESSIONS)) {
-					yield* sessions.sendMessage(session.id, "run the tests", false);
+					yield* sessions.sendMessage(session.id, "run the tests", [], false);
 					yield* waitForStatus(session.id, "awaitingApproval");
 				}
 				const last = created[MAX_RUNNING_SESSIONS]?.id ?? "";
-				const refused = yield* Effect.flip(sessions.sendMessage(last, "run the tests", false));
+				const refused = yield* Effect.flip(sessions.sendMessage(last, "run the tests", [], false));
 				const first = created[0]?.id ?? "";
 				yield* sessions.respondToApproval(first, "0", "allowOnce");
 				yield* waitForStatus(first, "idle");
-				yield* sessions.sendMessage(last, "run the tests", false);
+				yield* sessions.sendMessage(last, "run the tests", [], false);
 				yield* waitForStatus(last, "awaitingApproval");
 				// The first session's process is gone, so its approval cannot be answered any more.
 				const firstGone = yield* Effect.flip(sessions.respondToApproval(first, "0", "allowOnce"));
@@ -295,7 +296,7 @@ describe("SessionService", () => {
 					Effect.forkChild,
 				);
 				yield* Effect.sleep("100 millis");
-				yield* sessions.sendMessage(session.id, "run the tests", false);
+				yield* sessions.sendMessage(session.id, "run the tests", [], false);
 				yield* waitForStatus(session.id, "awaitingApproval");
 				yield* sessions.respondToApproval(session.id, "0", "allowOnce");
 				return yield* Fiber.join(watched);
@@ -309,10 +310,10 @@ describe("SessionService", () => {
 			Effect.gen(function* () {
 				const sessions = yield* SessionService;
 				const session = yield* addSession(tempDir);
-				yield* sessions.sendMessage(session.id, "run the tests", false);
+				yield* sessions.sendMessage(session.id, "run the tests", [], false);
 				yield* waitForStatus(session.id, "awaitingApproval");
 				yield* sessions.interrupt(session.id);
-				const events = yield* eventsUntil(session.id, 3, "turn.completed");
+				const events = yield* eventsUntil(session.id, 4, "turn.completed");
 				return {
 					events: events.map((stored) => stored.event),
 					status: yield* waitForStatus(session.id, "interrupted"),
@@ -336,12 +337,12 @@ describe("SessionService", () => {
 				Effect.gen(function* () {
 					const sessions = yield* SessionService;
 					const session = yield* addSession(tempDir);
-					yield* sessions.sendMessage(session.id, "run the tests", false);
+					yield* sessions.sendMessage(session.id, "run the tests", [], false);
 					yield* waitForStatus(session.id, "awaitingApproval");
 					yield* sessions.stop(session.id);
 					const afterStop = yield* statusOf(session.id);
 					const events = yield* storedEvents(session.id);
-					yield* sessions.sendMessage(session.id, "go on", false);
+					yield* sessions.sendMessage(session.id, "go on", [], false);
 					yield* waitForStatus(session.id, "awaitingApproval");
 					return { afterStop, lastType: events.at(-1)?.type, workspace: session.workspaceId };
 				}),
@@ -362,7 +363,7 @@ describe("SessionService", () => {
 			Effect.gen(function* () {
 				const sessions = yield* SessionService;
 				const session = yield* addSession(tempDir);
-				yield* sessions.sendMessage(session.id, "run the tests", false);
+				yield* sessions.sendMessage(session.id, "run the tests", [], false);
 				yield* waitForStatus(session.id, "awaitingApproval");
 				yield* Effect.flatMap(WorkspaceService, (workspaces) =>
 					workspaces.archive(session.workspaceId, { force: false }),
@@ -375,6 +376,66 @@ describe("SessionService", () => {
 		);
 		expect(result.status).toBe("interrupted");
 		expect(result.approval._tag).toBe("ApprovalNotFoundError");
+	});
+
+	test("stores sent images privately, records only their ids, and deletes them on archive", async () => {
+		const image = { mediaType: "image/png", base64: Buffer.from("png bytes").toString("base64") } as const;
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const sessions = yield* SessionService;
+				const fs = yield* FileSystem.FileSystem;
+				const session = yield* addSession(tempDir);
+				yield* sessions.sendMessage(session.id, "look", [image], false);
+				const [, stored] = yield* waitForStored(session.id, 2);
+				const event = Schema.decodeUnknownSync(AgentEvent)(stored?.payload);
+				const attachmentId = event.type === "user.message" ? (event.attachments[0]?.id ?? "") : "";
+				const path = join(tempDir, "data", "attachments", session.id, attachmentId);
+				const mode = ((yield* fs.stat(path)).mode & 0o777).toString(8);
+				const served = yield* sessions.getAttachment(session.id, attachmentId);
+				const unknown = yield* Effect.flip(sessions.getAttachment(session.id, "../../swarm.db"));
+				yield* Effect.flatMap(WorkspaceService, (workspaces) =>
+					workspaces.archive(session.workspaceId, { force: false }),
+				);
+				return { event, mode, served, unknown, removed: !(yield* fs.exists(path)) };
+			}),
+		);
+		expect(result.event).toMatchObject({
+			type: "user.message",
+			text: "look",
+			attachments: [{ mediaType: "image/png" }],
+		});
+		expect(JSON.stringify(result.event)).not.toContain(image.base64);
+		expect(result.mode).toBe("600");
+		expect(result.served).toEqual(image);
+		expect(result.unknown._tag).toBe("AttachmentNotFoundError");
+		expect(result.removed).toBe(true);
+	});
+
+	test("refuses images for a model that cannot read them", async () => {
+		const replay = makeReplayAdapter(commandWithApproval);
+		const { models } = await Effect.runPromise(replay.listModels);
+		const codex: AgentAdapter = {
+			...replay,
+			listModels: Effect.succeed({
+				models: models.map((model) => ({ ...model, supportsImages: false })),
+				defaultModel: "replay",
+			}),
+		};
+		const error = await runInTempDir((tempDir) =>
+			withServices(
+				join(tempDir, "data"),
+				testAgentServices({ claude: makeReplayAdapter({ ...commandWithApproval, kind: "claude" }), codex }),
+			)(
+				Effect.gen(function* () {
+					const session = yield* addSession(tempDir);
+					const sessions = yield* SessionService;
+					return yield* Effect.flip(
+						sessions.sendMessage(session.id, "look", [{ mediaType: "image/png", base64: "aGk=" }], false),
+					);
+				}),
+			),
+		);
+		expect(error._tag).toBe("ImagesNotSupportedError");
 	});
 
 	test("stores model and effort and hands changes to the running agent", async () => {
@@ -403,7 +464,7 @@ describe("SessionService", () => {
 						model: "replay",
 						effort: "low",
 					});
-					yield* sessions.sendMessage(session.id, "run the tests", false);
+					yield* sessions.sendMessage(session.id, "run the tests", [], false);
 					return yield* sessions.updateSettings(session.id, { model: "other", effort: "high" });
 				}),
 			),
@@ -418,7 +479,7 @@ describe("SessionService", () => {
 			Effect.gen(function* () {
 				const sessions = yield* SessionService;
 				const session = yield* addSession(tempDir, "claude");
-				return yield* Effect.flip(sessions.sendMessage(session.id, "hi", false));
+				return yield* Effect.flip(sessions.sendMessage(session.id, "hi", [], false));
 			}),
 		);
 		expect(error).toMatchObject({
@@ -474,7 +535,7 @@ describe("SessionService", () => {
 				yield* sessions.setAuthMode("codex", "apiKey");
 				const [, codex] = yield* sessions.listAgents;
 				const session = yield* addSession(tempDir);
-				const needsKey = yield* Effect.flip(sessions.sendMessage(session.id, "hi", false));
+				const needsKey = yield* Effect.flip(sessions.sendMessage(session.id, "hi", [], false));
 				return { claudeRefused, loginRefused, login, codex, session, needsKey };
 			}),
 		);
@@ -506,7 +567,7 @@ describe("SessionService", () => {
 					const sessions = yield* SessionService;
 					yield* sessions.setApiKey("claude", Redacted.make(apiKey));
 					const session = yield* addSession(tempDir, "claude");
-					yield* sessions.sendMessage(session.id, "run the tests", false);
+					yield* sessions.sendMessage(session.id, "run the tests", [], false);
 					yield* waitForStatus(session.id, "awaitingApproval");
 					yield* sessions.respondToApproval(session.id, "0", "allowOnce");
 					yield* waitForStatus(session.id, "idle");

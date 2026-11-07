@@ -4,7 +4,8 @@ import type { IllegalJobTransitionError } from "../jobs/transitionJob.ts";
 import type { CredentialStoreError } from "../agents/CredentialStore.ts";
 import type { GitCommandError, GitSpawnError } from "../git/runGit.ts";
 import type { LocalDatabaseError } from "../database/LocalDatabase.ts";
-import { Effect, Predicate } from "effect";
+import { Effect, type PlatformError, Predicate } from "effect";
+import type { EncodingError } from "effect/encoding";
 
 type InternalFailure =
 	| LocalDatabaseError
@@ -13,7 +14,9 @@ type InternalFailure =
 	| IllegalJobTransitionError
 	| CredentialStoreError
 	| AgentError
-	| ApprovalChoiceError;
+	| ApprovalChoiceError
+	| PlatformError.PlatformError
+	| EncodingError.EncodingError;
 
 const internalTags: ReadonlyArray<InternalFailure["_tag"]> = [
 	"LocalDatabaseError",
@@ -26,6 +29,8 @@ const internalTags: ReadonlyArray<InternalFailure["_tag"]> = [
 	"AgentProtocolError",
 	"CodexVersionMismatchError",
 	"ApprovalChoiceError",
+	"PlatformError",
+	"EncodingError",
 ];
 
 const isInternalFailure = (error: unknown): error is InternalFailure =>

@@ -2,6 +2,7 @@ import type {
 	AgentAuthMode,
 	AgentCapabilities,
 	AgentInfo,
+	ImageMediaType,
 	AgentKind,
 	ApprovalNotFoundError,
 	SessionBusyError,
@@ -77,13 +78,27 @@ export interface SessionSettings {
 	readonly effort: string | null;
 }
 
+export interface UserImage {
+	readonly id: string;
+	readonly mediaType: ImageMediaType;
+	readonly base64: string;
+	// Where the daemon stored it, for agents that read images from disk.
+	readonly path: string;
+}
+
+export interface UserMessage {
+	readonly id: string;
+	readonly text: string;
+	readonly images: ReadonlyArray<UserImage>;
+}
+
 export interface AgentSessionHandle {
 	// Waits until the agent reports its id, which may only happen after the first message.
 	readonly nativeSessionId: Effect.Effect<string, AgentError>;
 	readonly events: Stream.Stream<AgentEvent, AgentError>;
 	// Says whether the text went into the running turn or waits for its own turn.
 	sendMessage(
-		text: string,
+		message: UserMessage,
 		options?: { readonly steer?: boolean },
 	): Effect.Effect<"steered" | "queued", SendMessageError>;
 	respondToApproval(requestId: string, decision: ApprovalDecision): Effect.Effect<void, ApprovalError>;

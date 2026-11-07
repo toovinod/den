@@ -7,7 +7,11 @@ import {
 	type AgentSessionStatus,
 	AgentUnavailableError,
 	ApprovalNotFoundError,
+	AttachmentNotFoundError,
 	AuthModeNotAllowedError,
+	type ImageData,
+	ImageMediaType,
+	ImagesNotSupportedError,
 	ResubscribeRequiredError,
 	SessionLimitReachedError,
 	SessionNotFoundError,
@@ -20,6 +24,7 @@ import type {
 	AgentSessionHandle,
 	SessionSettings,
 	StartSessionInput,
+	UserImage,
 } from "../agents/AgentAdapter.ts";
 import {
 	type Cause,
@@ -27,6 +32,7 @@ import {
 	Deferred,
 	Effect,
 	Exit,
+	FileSystem,
 	Layer,
 	Option,
 	PubSub,
@@ -38,6 +44,7 @@ import {
 	Semaphore,
 	Stream,
 } from "effect";
+import { LocalDatabase, PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE } from "../database/LocalDatabase.ts";
 import { agentSession, project, sessionEvent, setting, workspace } from "../database/schema.ts";
 import { AgentEvent, type ApprovalDecision } from "@repo/contracts/AgentEvent";
 import { WorkspaceNotFoundError } from "@repo/contracts/Workspace";
@@ -45,11 +52,13 @@ import { ClaudeAdapter } from "../agents/claude/ClaudeAdapter.ts";
 import { CodexAdapter } from "../agents/codex/CodexAdapter.ts";
 import { CredentialStore } from "../agents/CredentialStore.ts";
 import { and, asc, eq, gt, inArray, max } from "drizzle-orm";
-import { LocalDatabase } from "../database/LocalDatabase.ts";
 import { SessionEvent } from "@repo/contracts/SessionEvent";
+import { DaemonConfig } from "../config/DaemonConfig.ts";
 import type { SecureRandom } from "effect/crypto";
 import { nowIso } from "../database/nowIso.ts";
 import { newId } from "../database/newId.ts";
+import { Base64 } from "effect/encoding";
+import { join } from "node:path";
 
 // Agent processes are the expensive part, so only they are capped. Sessions are unlimited.
 export const MAX_RUNNING_SESSIONS = 8;
@@ -120,6 +129,7 @@ const toUnavailable = (agent: AgentKind) => (error: AgentError) =>
 	new AgentUnavailableError({ agent, availability: toAvailability(error) });
 
 const decodeEvent = Schema.decodeUnknownEffect(AgentEvent);
+const decodeMediaType = Schema.decodeUnknownOption(ImageMediaType);
 
 export class SessionService extends Context.Service<SessionService>()("swarm/daemon/sessions/SessionService", {
 	make: Effect.gen(function* () {
@@ -128,6 +138,9 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 		const codex = yield* CodexAdapter;
 		const adapters: Record<AgentKind, AgentAdapter> = { claude: yield* ClaudeAdapter, codex };
 		const services = yield* Effect.context<SecureRandom.SecureRandom>();
+		const fs = yield* FileSystem.FileSystem;
+		const { dataDir } = yield* DaemonConfig;
+		const attachmentsDir = (sessionId: string) => join(dataDir, "attachments", sessionId);
 		const events = yield* PubSub.unbounded<Published>();
 		const sessionChanges = yield* PubSub.unbounded<AgentSession>();
 		// Insertion order is least recently used first, which picks the process to stop at the cap.
@@ -381,25 +394,60 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 				return yield* startRuntime(yield* getRow(sessionId));
 			}).pipe(Semaphore.withPermit(processLock));
 
+		const checkImagesSupported = Effect.fnUntraced(function* (sessionId: string) {
+			const row = yield* getRow(sessionId);
+			const { models } = yield* modelsOf(row.agent).pipe(Effect.mapError(toUnavailable(row.agent)));
+			const model = models.find((candidate) => candidate.id === row.model);
+			// An unlisted model is left to the agent, which knows its own models best.
+			if (model?.supportsImages === false) {
+				return yield* new ImagesNotSupportedError({ model: model.label });
+			}
+		});
+
+		// Written to disk before the agent sees them: Codex reads them from there, and history shows them later.
+		const storeImages = Effect.fnUntraced(function* (sessionId: string, images: ReadonlyArray<ImageData>) {
+			if (images.length === 0) return [];
+			const directory = attachmentsDir(sessionId);
+			yield* fs.makeDirectory(directory, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
+			return yield* Effect.forEach(images, ({ mediaType, base64 }) =>
+				Effect.gen(function* () {
+					const id = yield* newId;
+					const path = join(directory, id);
+					const bytes = yield* Effect.fromResult(Base64.decode(base64));
+					yield* fs.writeFile(path, bytes, { mode: PRIVATE_FILE_MODE });
+					return { id, mediaType, base64, path } satisfies UserImage;
+				}),
+			);
+		}, Effect.provide(services));
+
 		const sendMessage = Effect.fn("SessionService.sendMessage")(function* (
 			sessionId: string,
 			text: string,
+			images: ReadonlyArray<ImageData>,
 			steer: boolean,
 		) {
+			if (images.length > 0) yield* checkImagesSupported(sessionId);
 			const runtime = yield* ensureRuntime(sessionId);
 			if (runtimes.get(sessionId) === runtime) {
 				runtimes.delete(sessionId);
 				runtimes.set(sessionId, runtime);
 			}
+			const message = {
+				id: yield* newId.pipe(Effect.provide(services)),
+				text,
+				images: yield* storeImages(sessionId, images),
+			};
 			// Counted before sending, so the turn's own completion can never arrive first.
 			runtime.outstanding++;
 			yield* refreshStatus(runtime);
-			const sent = yield* runtime.handle.sendMessage(text, { steer }).pipe(
+			const sent = yield* runtime.handle.sendMessage(message, { steer }).pipe(
 				Effect.mapError((error) => (error._tag === "SessionBusyError" ? error : toUnavailable(runtime.agent)(error))),
 				Effect.tapError(() =>
-					Effect.suspend(() => {
+					Effect.gen(function* () {
 						runtime.outstanding--;
-						return refreshStatus(runtime);
+						yield* refreshStatus(runtime);
+						// The message was not stored, so nothing will ever ask for its images.
+						yield* Effect.forEach(message.images, ({ path }) => Effect.ignore(fs.remove(path)));
 					}),
 				),
 			);
@@ -441,11 +489,47 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 		}, Semaphore.withPermit(processLock));
 
 		// Archiving a workspace releases every agent process in it.
-		const stopWorkspace = Effect.fn("SessionService.stopWorkspace")(function* (workspaceId: string) {
+		// Stops the workspace's agents and deletes the images its sessions were sent.
+		const archiveWorkspace = Effect.fn("SessionService.archiveWorkspace")(function* (workspaceId: string) {
 			for (const runtime of [...runtimes.values()]) {
 				if (runtime.workspaceId === workspaceId) yield* stopRuntime(runtime);
 			}
+			const sessions = yield* database.query((db) =>
+				db.select({ id: agentSession.id }).from(agentSession).where(eq(agentSession.workspaceId, workspaceId)),
+			);
+			for (const { id } of sessions) {
+				yield* fs.remove(attachmentsDir(id), { recursive: true, force: true });
+			}
 		}, Semaphore.withPermit(processLock));
+
+		const getAttachment = Effect.fn("SessionService.getAttachment")(function* (
+			sessionId: string,
+			attachmentId: string,
+		) {
+			yield* getRow(sessionId);
+			const rows = yield* database.query((db) =>
+				db
+					.select({ payload: sessionEvent.payload })
+					.from(sessionEvent)
+					.where(and(eq(sessionEvent.sessionId, sessionId), eq(sessionEvent.type, "user.message"))),
+			);
+			const messages = yield* Effect.forEach(rows, (row) => Effect.orDie(decodeEvent(row.payload)));
+			// Looking the id up in stored messages also keeps it from naming any other file.
+			const attachment = messages
+				.flatMap((event) => (event.type === "user.message" ? event.attachments : []))
+				.find(({ id }) => id === attachmentId);
+			const mediaType = decodeMediaType(attachment?.mediaType);
+			if (attachment === undefined || Option.isNone(mediaType)) {
+				return yield* new AttachmentNotFoundError({ attachmentId });
+			}
+			const bytes = yield* fs.readFile(join(attachmentsDir(sessionId), attachment.id)).pipe(
+				Effect.catchIf(
+					(error) => error.reason._tag === "NotFound",
+					() => Effect.fail(new AttachmentNotFoundError({ attachmentId })),
+				),
+			);
+			return { mediaType: mediaType.value, base64: Base64.encode(bytes) } satisfies ImageData;
+		});
 
 		const create = Effect.fn("SessionService.create")(function* (input: {
 			readonly workspaceId: string;
@@ -675,7 +759,8 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 			respondToApproval,
 			interrupt,
 			stop,
-			stopWorkspace,
+			archiveWorkspace,
+			getAttachment,
 			subscribe,
 			watch,
 		};

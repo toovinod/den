@@ -113,12 +113,13 @@ describe("DaemonServer", () => {
 			result.events.filter((stored) => stored.sequence !== null).map((stored) => [stored.sequence, stored.event.type]),
 		).toEqual([
 			[0, "session.started"],
-			[1, "message.completed"],
-			[2, "tool.started"],
-			[3, "approval.requested"],
-			[4, "approval.resolved"],
-			[5, "tool.completed"],
-			[6, "turn.completed"],
+			[1, "user.message"],
+			[2, "message.completed"],
+			[3, "tool.started"],
+			[4, "approval.requested"],
+			[5, "approval.resolved"],
+			[6, "tool.completed"],
+			[7, "turn.completed"],
 		]);
 		expect(result.listed).toMatchObject({ agent: "codex", nativeSessionId: "thread-replay" });
 	});

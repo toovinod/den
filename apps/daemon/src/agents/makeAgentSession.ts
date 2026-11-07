@@ -1,7 +1,13 @@
-import { type AgentError, type AgentSessionHandle, ApprovalChoiceError, type SessionSettings } from "./AgentAdapter.ts";
+import {
+	type AgentError,
+	type AgentSessionHandle,
+	ApprovalChoiceError,
+	type SessionSettings,
+	type UserMessage,
+} from "./AgentAdapter.ts";
 import { type AgentCapabilities, ApprovalNotFoundError, SessionBusyError } from "@repo/contracts/AgentSession";
+import { type Cause, Deferred, Effect, Option, Queue, Ref, type Scope, Semaphore, Stream } from "effect";
 import type { AgentEvent, ApprovalDecision, ApprovalOutcome } from "@repo/contracts/AgentEvent";
-import { type Cause, Deferred, Effect, Option, Queue, Ref, type Scope, Stream } from "effect";
 
 // Events wait here until the consumer reads them. A full buffer slows the agent reader
 // down instead of growing memory.
@@ -15,8 +21,8 @@ type RespondToAgent = (outcome: ApprovalOutcome) => Effect.Effect<void, AgentErr
 // What each adapter does to drive its agent. The session below owns everything else:
 // the event buffer, turn queue, pending approvals and the native id.
 export interface TurnDriver {
-	startTurn(text: string): Effect.Effect<void, AgentError>;
-	steerTurn(text: string): Effect.Effect<void, AgentError>;
+	startTurn(message: UserMessage): Effect.Effect<void, AgentError>;
+	steerTurn(message: UserMessage): Effect.Effect<void, AgentError>;
 	readonly interruptTurn: Effect.Effect<void, AgentError>;
 	updateSettings(settings: SessionSettings): Effect.Effect<void, AgentError>;
 }
@@ -35,7 +41,9 @@ export const makeAgentSession = Effect.fnUntraced(function* (capabilities: Agent
 	const events = yield* Queue.bounded<AgentEvent, AgentError | Cause.Done>(EVENT_BUFFER);
 	yield* Effect.addFinalizer(() => Queue.end(events));
 	const nativeId = yield* Deferred.make<string, AgentError>();
-	const inbox = yield* Queue.bounded<string>(MAX_QUEUED_MESSAGES);
+	const inbox = yield* Queue.bounded<UserMessage>(MAX_QUEUED_MESSAGES);
+	// Checking room, storing the message and queueing it happen as one step, so history order matches.
+	const sendLock = yield* Semaphore.make(1);
 	const currentTurn = yield* Ref.make(Option.none<Deferred.Deferred<void>>());
 	const approvals = new Map<
 		string,
@@ -75,11 +83,11 @@ export const makeAgentSession = Effect.fnUntraced(function* (capabilities: Agent
 	const start = (driver: TurnDriver) =>
 		Effect.gen(function* () {
 			yield* Effect.gen(function* () {
-				const text = yield* Queue.take(inbox);
+				const message = yield* Queue.take(inbox);
 				const done = yield* Deferred.make<void>();
 				yield* Ref.set(currentTurn, Option.some(done));
 				// A rejected turn fails only that turn. Process failures still end the session.
-				yield* driver.startTurn(text).pipe(
+				yield* driver.startTurn(message).pipe(
 					Effect.catchTag("AgentProtocolError", (error) =>
 						emit({
 							type: "turn.completed",
@@ -95,20 +103,26 @@ export const makeAgentSession = Effect.fnUntraced(function* (capabilities: Agent
 			return {
 				nativeSessionId: Deferred.await(nativeId),
 				events: Stream.fromQueue(events),
-				sendMessage: (text, options) =>
+				sendMessage: (message, options) =>
 					Effect.gen(function* () {
 						const running = Option.isSome(yield* Ref.get(currentTurn));
-						if (options?.steer && capabilities.steerWhileRunning && running) {
-							yield* driver.steerTurn(text);
+						const steer = options?.steer && capabilities.steerWhileRunning && running;
+						if (!steer && Queue.sizeUnsafe(inbox) >= MAX_QUEUED_MESSAGES) {
+							return yield* new SessionBusyError({ queued: MAX_QUEUED_MESSAGES });
+						}
+						yield* emit({
+							type: "user.message",
+							itemId: message.id,
+							text: message.text,
+							attachments: message.images.map(({ id, mediaType }) => ({ id, mediaType })),
+						});
+						if (steer) {
+							yield* driver.steerTurn(message);
 							return "steered" as const;
 						}
-						if (!Queue.offerUnsafe(inbox, text)) {
-							return yield* new SessionBusyError({
-								queued: MAX_QUEUED_MESSAGES,
-							});
-						}
+						Queue.offerUnsafe(inbox, message);
 						return "queued" as const;
-					}),
+					}).pipe(Semaphore.withPermit(sendLock)),
 				respondToApproval: (requestId, decision) =>
 					Effect.gen(function* () {
 						const approval = approvals.get(requestId);

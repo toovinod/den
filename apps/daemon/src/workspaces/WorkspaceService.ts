@@ -192,7 +192,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 
 		const cancelScripts = Effect.fn("WorkspaceService.cancelScripts")(function* (workspaceId: string, reason: string) {
 			// Agent processes run in the workspace folder, so they stop before it can be removed.
-			yield* sessions.stopWorkspace(workspaceId);
+			yield* sessions.archiveWorkspace(workspaceId);
 			const unfinished = yield* database.query((db) =>
 				db
 					.select({ id: scriptRun.id })

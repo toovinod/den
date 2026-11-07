@@ -1,7 +1,14 @@
-import type { CanUseTool, Options, PermissionResult, PermissionUpdate } from "@anthropic-ai/claude-agent-sdk";
+import type {
+	CanUseTool,
+	Options,
+	PermissionResult,
+	PermissionUpdate,
+	SDKUserMessage,
+} from "@anthropic-ai/claude-agent-sdk";
 import { ClaudeAdapter, ClaudeAdapterConfig, sessionAllowRules } from "./ClaudeAdapter.ts";
 import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
+import { userMessage } from "../../testing/userMessage.ts";
 import { BunServices } from "@effect/platform-bun";
 import { describe, expect, test } from "bun:test";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
@@ -26,6 +33,7 @@ const bashSuggestion: PermissionUpdate = {
 // approval, and "session" adds a permission suggestion so allowForSession is offered.
 const startedWith: Array<Options> = [];
 const settingsChanges: Array<unknown> = [];
+const prompts: Array<SDKUserMessage> = [];
 
 const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 	ClaudeQuery.of({
@@ -35,6 +43,7 @@ const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 			let turn = 0;
 			async function* messages() {
 				for await (const user of prompt) {
+					prompts.push(user);
 					turn++;
 					const text = typeof user.message.content === "string" ? user.message.content : "";
 					if (turn === 1) {
@@ -171,13 +180,14 @@ describe("ClaudeAdapter", () => {
 	test("maps SDK messages and learns the session id from the first turn", async () => {
 		const [id, events] = await runSession((handle) =>
 			Effect.gen(function* () {
-				yield* handle.sendMessage("hi");
+				yield* handle.sendMessage(userMessage("hi"));
 				const id = yield* handle.nativeSessionId;
 				return [id, yield* takeUntil(handle, "turn.completed")] as const;
 			}),
 		);
 		expect(id).toBe("claude-new");
 		expect(events).toEqual([
+			{ type: "user.message", itemId: "message-hi", text: "hi", attachments: [] },
 			{ type: "session.started", nativeSessionId: "claude-new" },
 			{ type: "message.delta", itemId: "msg_1:0", text: "Hi" },
 			{ type: "message.completed", itemId: "msg_1:0", text: "Hi" },
@@ -194,7 +204,7 @@ describe("ClaudeAdapter", () => {
 		const [requested, rest] = await runSession(
 			(handle) =>
 				Effect.gen(function* () {
-					yield* handle.sendMessage("approve for the session");
+					yield* handle.sendMessage(userMessage("approve for the session"));
 					const before = yield* takeUntil(handle, "approval.requested");
 					yield* handle.respondToApproval("toolu_1", "allowForSession");
 					return [before.slice(-2), yield* takeUntil(handle, "turn.completed")];
@@ -248,7 +258,7 @@ describe("ClaudeAdapter", () => {
 	test("rejects allowForSession when the SDK offers no session rule", async () => {
 		const error = await runSession((handle) =>
 			Effect.gen(function* () {
-				yield* handle.sendMessage("approve");
+				yield* handle.sendMessage(userMessage("approve"));
 				yield* takeUntil(handle, "approval.requested");
 				return yield* Effect.flip(handle.respondToApproval("toolu_1", "allowForSession"));
 			}),
@@ -261,7 +271,7 @@ describe("ClaudeAdapter", () => {
 		const events = await runSession(
 			(handle) =>
 				Effect.gen(function* () {
-					yield* handle.sendMessage("approve");
+					yield* handle.sendMessage(userMessage("approve"));
 					yield* takeUntil(handle, "approval.requested");
 					yield* handle.interrupt;
 					return yield* takeUntil(handle, "turn.completed");
@@ -283,7 +293,7 @@ describe("ClaudeAdapter", () => {
 		const id = await runSession(
 			(handle) =>
 				Effect.gen(function* () {
-					yield* handle.sendMessage("hi");
+					yield* handle.sendMessage(userMessage("hi"));
 					return yield* handle.nativeSessionId;
 				}),
 			{ input: { ...newSession, resumeId: "claude-old" } },
@@ -338,5 +348,22 @@ describe("sessionAllowRules", () => {
 		});
 		expect(startedWith.at(-1)?.effort).toBe("high");
 		expect(settingsChanges.slice(-2)).toEqual([{ model: "claude-haiku-5-5" }, { effort: "low" }]);
+	});
+
+	test("sends images as image blocks before the text", async () => {
+		await runSession((handle) =>
+			Effect.gen(function* () {
+				yield* handle.sendMessage({
+					id: "message-1",
+					text: "what is this",
+					images: [{ id: "image-1", mediaType: "image/png", base64: "aGk=", path: "/data/image-1" }],
+				});
+				return yield* takeUntil(handle, "turn.completed");
+			}),
+		);
+		expect(prompts.at(-1)?.message.content).toEqual([
+			{ type: "image", source: { type: "base64", media_type: "image/png", data: "aGk=" } },
+			{ type: "text", text: "what is this" },
+		]);
 	});
 });

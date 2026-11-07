@@ -43,7 +43,18 @@ const ask = (id: number, method: string, params: object) =>
 		send({ id, method, params });
 	});
 
-const runTurn = async (text: string, params: { model?: string; effort?: string | null }) => {
+const runTurn = async (
+	text: string,
+	params: { model?: string; effort?: string | null; input: Array<{ type: string; path?: string }> },
+) => {
+	if (text.includes("images")) {
+		notify("item/completed", {
+			item: { type: "agentMessage", id: "msg-1", text: JSON.stringify(params.input.slice(1)) },
+			threadId,
+			turnId,
+		});
+		return completeTurn("completed");
+	}
 	if (text.includes("settings")) {
 		notify("item/completed", {
 			item: { type: "agentMessage", id: "msg-1", text: `${params.model}/${params.effort}` },

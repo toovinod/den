@@ -15,8 +15,8 @@ export const SessionRpcHandlers = SessionRpcs.toLayer(
 			listSessions: ({ workspaceId }) => sessions.list(workspaceId).pipe(orInternalError("list chats")),
 			renameSession: ({ sessionId, title }) =>
 				sessions.rename(sessionId, title).pipe(orInternalError("rename the chat")),
-			sendMessage: ({ sessionId, text, steer }) =>
-				sessions.sendMessage(sessionId, text, steer).pipe(orInternalError("send the message")),
+			sendMessage: ({ sessionId, text, images, steer }) =>
+				sessions.sendMessage(sessionId, text, images, steer).pipe(orInternalError("send the message")),
 			respondToApproval: ({ sessionId, requestId, decision }) =>
 				sessions.respondToApproval(sessionId, requestId, decision).pipe(orInternalError("answer the approval")),
 			interruptSession: ({ sessionId }) => sessions.interrupt(sessionId).pipe(orInternalError("stop the turn")),
@@ -35,7 +35,8 @@ export const SessionRpcHandlers = SessionRpcs.toLayer(
 			startAgentLogin: ({ agent }) => sessions.startLogin(agent).pipe(orInternalError("start the sign-in")),
 			updateSessionSettings: ({ sessionId, model, effort }) =>
 				sessions.updateSettings(sessionId, { model, effort }).pipe(orInternalError("change the model")),
-			getAttachment: () => Effect.die("getAttachment is not implemented yet"),
+			getAttachment: ({ sessionId, attachmentId }) =>
+				sessions.getAttachment(sessionId, attachmentId).pipe(orInternalError("load the image")),
 		});
 	}),
 );

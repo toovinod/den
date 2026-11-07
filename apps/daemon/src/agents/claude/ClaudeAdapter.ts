@@ -5,6 +5,7 @@ import {
 	AgentProcessError,
 	AgentProtocolError,
 	type StartSessionInput,
+	type UserMessage,
 } from "../AgentAdapter.ts";
 import type {
 	CanUseTool,
@@ -363,18 +364,30 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 					Effect.forkScoped,
 				);
 
-				const sendText = (text: string) =>
+				const sendMessage = ({ text, images }: UserMessage) =>
 					Effect.asVoid(
 						Queue.offer(prompts, {
 							type: "user",
-							message: { role: "user", content: text },
+							message: {
+								role: "user",
+								content:
+									images.length === 0
+										? text
+										: [
+												...images.map(({ mediaType, base64 }) => ({
+													type: "image" as const,
+													source: { type: "base64" as const, media_type: mediaType, data: base64 },
+												})),
+												{ type: "text" as const, text },
+											],
+							},
 							parent_tool_use_id: null,
 						}),
 					);
 
 				return yield* session.start({
-					startTurn: sendText,
-					steerTurn: sendText,
+					startTurn: sendMessage,
+					steerTurn: sendMessage,
 					updateSettings: ({ model, effort }) =>
 						Effect.tryPromise({
 							try: async () => {

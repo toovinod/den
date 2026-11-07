@@ -22,6 +22,7 @@ import {
 	CodexVersionMismatchError,
 	type SessionSettings,
 	type StartSessionInput,
+	type UserMessage,
 } from "../AgentAdapter.ts";
 import { type CodexIncoming, type CodexRpcClient, METHOD_NOT_FOUND, makeCodexRpcClient } from "./codexRpcClient.ts";
 import type { CommandExecutionApprovalDecision } from "./generated/v2/CommandExecutionApprovalDecision.ts";
@@ -41,6 +42,7 @@ import type { TurnSteerParams } from "./generated/v2/TurnSteerParams.ts";
 import type { InitializeParams } from "./generated/InitializeParams.ts";
 import packageJson from "../../../package.json" with { type: "json" };
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import type { UserInput } from "./generated/v2/UserInput.ts";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 
@@ -406,10 +408,14 @@ export class CodexAdapter extends Context.Service<CodexAdapter, CodexAgentAdapte
 					yield* session.setNativeSessionId(thread.id);
 				}).pipe(Effect.catch(session.fail), Effect.forkScoped);
 
-				const textInput = (text: string) => [{ type: "text" as const, text, text_elements: [] }];
+				// Codex reads images from disk, so it gets the stored path rather than the bytes.
+				const toInput = ({ text, images }: UserMessage): Array<UserInput> => [
+					{ type: "text", text, text_elements: [] },
+					...images.map(({ path }) => ({ type: "localImage" as const, path })),
+				];
 
 				return yield* session.start({
-					startTurn: (text) =>
+					startTurn: (message) =>
 						Effect.gen(function* () {
 							const threadId = yield* session.nativeSessionId;
 							const { model, effort } = yield* Ref.get(settings);
@@ -418,12 +424,12 @@ export class CodexAdapter extends Context.Service<CodexAdapter, CodexAgentAdapte
 									threadId,
 									model,
 									effort,
-									input: textInput(text),
+									input: toInput(message),
 								} satisfies TurnStartParams)
 								.pipe(Effect.flatMap(decodeCodex(TurnResponse)));
 							yield* Ref.set(currentTurn, Option.some(turn.id));
 						}),
-					steerTurn: (text) =>
+					steerTurn: (message) =>
 						Effect.gen(function* () {
 							const threadId = yield* session.nativeSessionId;
 							const turnId = yield* Ref.get(currentTurn);
@@ -435,7 +441,7 @@ export class CodexAdapter extends Context.Service<CodexAdapter, CodexAgentAdapte
 							}
 							yield* client.request("turn/steer", {
 								threadId,
-								input: textInput(text),
+								input: toInput(message),
 								expectedTurnId: turnId.value,
 							} satisfies TurnSteerParams);
 						}),
