@@ -15,8 +15,8 @@ import {
 	SessionLimitReachedError,
 	SessionNotFoundError,
 } from "./AgentSession.ts";
+import { WorkspaceArchivedError, WorkspaceNotFoundError } from "./Workspace.ts";
 import { DaemonInternalError } from "./DaemonInternalError.ts";
-import { WorkspaceNotFoundError } from "./Workspace.ts";
 import { ApprovalDecision } from "./AgentEvent.ts";
 import { SessionEvent } from "./SessionEvent.ts";
 import { Rpc, RpcGroup } from "effect/rpc";
@@ -88,6 +88,7 @@ export class SessionRpcs extends RpcGroup.make(
 			SessionBusyError,
 			AgentUnavailableError,
 			ImagesNotSupportedError,
+			WorkspaceArchivedError,
 			DaemonInternalError,
 		]),
 	}),

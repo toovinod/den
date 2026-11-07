@@ -46,8 +46,8 @@ import {
 } from "effect";
 import { LocalDatabase, PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE } from "../database/LocalDatabase.ts";
 import { agentSession, project, sessionEvent, setting, workspace } from "../database/schema.ts";
+import { WorkspaceArchivedError, WorkspaceNotFoundError } from "@repo/contracts/Workspace";
 import { AgentEvent, type ApprovalDecision } from "@repo/contracts/AgentEvent";
-import { WorkspaceNotFoundError } from "@repo/contracts/Workspace";
 import { ClaudeAdapter } from "../agents/claude/ClaudeAdapter.ts";
 import { CodexAdapter } from "../agents/codex/CodexAdapter.ts";
 import { CredentialStore } from "../agents/CredentialStore.ts";
@@ -331,17 +331,21 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 		});
 
 		const startRuntime = Effect.fnUntraced(function* (row: SessionRow) {
-			const auth = yield* authFor(row.agent);
-			yield* makeRoom;
 			const [target] = yield* database.query((db) =>
 				db
-					.select({ path: workspace.path, trusted: project.trusted })
+					.select({ path: workspace.path, status: workspace.status, trusted: project.trusted })
 					.from(workspace)
 					.innerJoin(project, eq(workspace.projectId, project.id))
 					.where(eq(workspace.id, row.workspaceId)),
 			);
 			// The foreign key keeps the workspace while the session exists.
 			if (target === undefined) return yield* Effect.die("The session's workspace is missing");
+			// An archived worktree folder is gone, and an archived in-place workspace should stay quiet.
+			if (target.status === "archived") {
+				return yield* new WorkspaceArchivedError({ workspaceId: row.workspaceId });
+			}
+			const auth = yield* authFor(row.agent);
+			yield* makeRoom;
 			const scope = yield* Scope.make();
 			const handle = yield* adapters[row.agent]
 				.startSession({
@@ -690,22 +694,23 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 			const adapter = adapters[kind];
 			const hasApiKey = Option.isSome(yield* credentials.get(kind));
 			const authMode = yield* authModeOf(kind);
+			// Also run in API key mode: it is what finds a missing or mismatched CLI.
+			const auth = yield* Effect.result(adapter.checkAuth);
 			const listed = yield* Effect.result(modelsOf(kind));
 			if (Result.isFailure(listed)) {
 				yield* Effect.logWarning("Could not list agent models, showing none", listed.failure).pipe(
 					Effect.annotateLogs({ agent: kind }),
 				);
 			}
-			const availability: AgentAvailability = Result.isFailure(listed)
-				? toAvailability(listed.failure)
-				: authMode === "apiKey"
-					? hasApiKey
-						? { status: "ready", account: null }
-						: { status: "needsApiKey" }
-					: yield* adapter.checkAuth.pipe(
-							Effect.map(fromAuthStatus),
-							Effect.catch((error) => Effect.succeed(toAvailability(error))),
-						);
+			const availability: AgentAvailability = Result.isFailure(auth)
+				? toAvailability(auth.failure)
+				: Result.isFailure(listed)
+					? toAvailability(listed.failure)
+					: authMode === "apiKey"
+						? hasApiKey
+							? { status: "ready", account: null }
+							: { status: "needsApiKey" }
+						: fromAuthStatus(auth.success);
 			return new AgentInfo({
 				kind,
 				availability,
@@ -742,7 +747,10 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 		yield* recoverSessions;
 
 		yield* Effect.addFinalizer(() =>
-			Effect.forEach([...runtimes.values()], stopRuntime, { discard: true }).pipe(Semaphore.withPermit(processLock)),
+			// In parallel, so every agent gets the same grace and shutdown stays within its deadline.
+			Effect.forEach([...runtimes.values()], stopRuntime, { concurrency: "unbounded", discard: true }).pipe(
+				Semaphore.withPermit(processLock),
+			),
 		);
 
 		return {

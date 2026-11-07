@@ -28,7 +28,7 @@ import {
 } from "../AgentAdapter.ts";
 import { type CodexIncoming, type CodexRpcClient, METHOD_NOT_FOUND, makeCodexRpcClient } from "./codexRpcClient.ts";
 import type { CommandExecutionApprovalDecision } from "./generated/v2/CommandExecutionApprovalDecision.ts";
-import { Context, Effect, Exit, Layer, Option, Ref, Scope, Stream } from "effect";
+import { Context, Effect, Exit, FiberHandle, Layer, Option, Ref, Scope, Stream } from "effect";
 import type { AgentCapabilities, AgentModel } from "@repo/contracts/AgentSession";
 import type { TurnInterruptParams } from "./generated/v2/TurnInterruptParams.ts";
 import codexVersionFile from "./generated/CODEX_VERSION" with { type: "text" };
@@ -313,7 +313,8 @@ export class CodexAdapter extends Context.Service<CodexAdapter, CodexAgentAdapte
 		Effect.gen(function* () {
 			const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 			const provide = Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner);
-			const layerScope = yield* Effect.scope;
+			// Holds the sign-in waiting for the browser. A new sign-in replaces it and stops its app-server.
+			const pendingLogin = yield* FiberHandle.make();
 
 			// A short-lived app-server for questions outside a session. Closing the scope stops it.
 			const connect = Effect.gen(function* () {
@@ -392,7 +393,7 @@ export class CodexAdapter extends Context.Service<CodexAdapter, CodexAgentAdapte
 					Effect.timeoutOption(LOGIN_TIMEOUT),
 					Effect.catch((error) => Effect.logWarning("Codex sign-in stopped", error)),
 					Effect.ensuring(Scope.close(scope, Exit.void)),
-					Effect.forkIn(layerScope),
+					FiberHandle.run(pendingLogin),
 				);
 				return login.authUrl;
 			}).pipe(provide, Effect.withSpan("CodexAdapter.startLogin"));

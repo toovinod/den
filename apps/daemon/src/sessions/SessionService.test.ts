@@ -1,10 +1,10 @@
+import { type AgentAdapter, AgentNotInstalledError, type StartSessionInput } from "../agents/AgentAdapter.ts";
 import { commandWithApproval, TEST_LOGIN_URL, testAgentServices } from "../testing/testAgentServices.ts";
 import { Deferred, Effect, Fiber, FileSystem, Logger, Redacted, Schedule, Schema, Stream } from "effect";
 import { runInTempDir, runServiceTest, type Services, withServices } from "../testing/runServiceTest.ts";
 import { makeReplayAdapter, type Recording } from "../agents/replay/ReplayAdapter.ts";
 import type { AgentSessionStatus, AgentKind } from "@repo/contracts/AgentSession";
 import { DATABASE_FILE_NAME, LocalDatabase } from "../database/LocalDatabase.ts";
-import type { AgentAdapter, StartSessionInput } from "../agents/AgentAdapter.ts";
 import { MAX_RUNNING_SESSIONS, SessionService } from "./SessionService.ts";
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
@@ -371,11 +371,13 @@ describe("SessionService", () => {
 				return {
 					status: yield* statusOf(session.id),
 					approval: yield* Effect.flip(sessions.respondToApproval(session.id, "0", "allowOnce")),
+					message: yield* Effect.flip(sessions.sendMessage(session.id, "one more thing", [], false)),
 				};
 			}),
 		);
 		expect(result.status).toBe("interrupted");
 		expect(result.approval._tag).toBe("ApprovalNotFoundError");
+		expect(result.message._tag).toBe("WorkspaceArchivedError");
 	});
 
 	test("stores sent images privately, records only their ids, and deletes them on archive", async () => {
@@ -504,6 +506,26 @@ describe("SessionService", () => {
 		]);
 		expect(after[0]?.availability).toEqual({ status: "ready", account: null });
 		expect(after[1]).toMatchObject({ defaultModel: "replay", models: [{ id: "replay", label: "Replay" }] });
+	});
+
+	test("reports a missing CLI even when an API key is stored", async () => {
+		const claude: AgentAdapter = {
+			...makeReplayAdapter({ ...commandWithApproval, kind: "claude" }),
+			checkAuth: Effect.fail(new AgentNotInstalledError({ executable: "claude" })),
+		};
+		const agents = await runInTempDir((tempDir) =>
+			withServices(
+				join(tempDir, "data"),
+				testAgentServices({ claude, codex: makeReplayAdapter(commandWithApproval) }),
+			)(
+				Effect.gen(function* () {
+					const sessions = yield* SessionService;
+					yield* sessions.setApiKey("claude", Redacted.make("sk-ant-test"));
+					return yield* sessions.listAgents;
+				}),
+			),
+		);
+		expect(agents[0]?.availability).toEqual({ status: "notInstalled" });
 	});
 
 	test("asks each agent for its models once per daemon run", async () => {
