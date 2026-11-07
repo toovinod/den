@@ -1,7 +1,6 @@
 import {
 	type AgentAdapter,
 	type AgentAuthStatus,
-	type AgentCapabilities,
 	AgentProcessError,
 	AgentProtocolError,
 	type StartSessionInput,
@@ -17,6 +16,7 @@ import { Config, Context, Deferred, Effect, Layer, Option, Queue, Redacted, Ref,
 import type { ApprovalDecision, ApprovalOutcome, ToolCall } from "@repo/contracts/AgentEvent";
 import { BashInput, ClaudeAuthStatus, ClaudeMessage, FileInput } from "./claudeMessages.ts";
 import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
+import type { AgentCapabilities } from "@repo/contracts/AgentSession";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";

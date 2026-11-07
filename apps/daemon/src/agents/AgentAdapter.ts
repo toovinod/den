@@ -1,8 +1,11 @@
+import type {
+	AgentCapabilities,
+	AgentKind,
+	ApprovalNotFoundError,
+	SessionBusyError,
+} from "@repo/contracts/AgentSession";
 import type { AgentEvent, ApprovalDecision } from "@repo/contracts/AgentEvent";
 import { type Effect, Schema, type Scope, type Stream } from "effect";
-
-export const AgentKind = Schema.Literals(["claude", "codex"]);
-export type AgentKind = typeof AgentKind.Type;
 
 export const StartSessionInput = Schema.Struct({
 	cwd: Schema.String,
@@ -33,14 +36,6 @@ export const AgentAuthStatus = Schema.Union([
 ]);
 export type AgentAuthStatus = typeof AgentAuthStatus.Type;
 
-export interface AgentCapabilities {
-	readonly resume: boolean;
-	readonly interrupt: boolean;
-	readonly fileChangeApprovals: boolean;
-	readonly mcpApprovals: boolean;
-	readonly steerWhileRunning: boolean;
-}
-
 // Retryable: the agent process died or could not be reached, or the session is busy.
 export class AgentProcessError extends Schema.TaggedError<AgentProcessError>()("AgentProcessError", {
 	message: Schema.String,
@@ -60,15 +55,6 @@ export class CodexVersionMismatchError extends Schema.TaggedError<CodexVersionMi
 	"CodexVersionMismatchError",
 	{ expected: Schema.String, actual: Schema.String },
 ) {}
-
-// Retryable: a turn is running and the message queue is full.
-export class SessionBusyError extends Schema.TaggedError<SessionBusyError>()("SessionBusyError", {
-	queued: Schema.Number,
-}) {}
-
-export class ApprovalNotFoundError extends Schema.TaggedError<ApprovalNotFoundError>()("ApprovalNotFoundError", {
-	requestId: Schema.String,
-}) {}
 
 export class ApprovalChoiceError extends Schema.TaggedError<ApprovalChoiceError>()("ApprovalChoiceError", {
 	requestId: Schema.String,

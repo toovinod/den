@@ -1,11 +1,5 @@
-import {
-	type AgentCapabilities,
-	type AgentError,
-	type AgentSessionHandle,
-	ApprovalChoiceError,
-	ApprovalNotFoundError,
-	SessionBusyError,
-} from "./AgentAdapter.ts";
+import { type AgentCapabilities, ApprovalNotFoundError, SessionBusyError } from "@repo/contracts/AgentSession";
+import { type AgentError, type AgentSessionHandle, ApprovalChoiceError } from "./AgentAdapter.ts";
 import type { AgentEvent, ApprovalDecision, ApprovalOutcome } from "@repo/contracts/AgentEvent";
 import { type Cause, Deferred, Effect, Option, Queue, Ref, type Scope, Stream } from "effect";
 

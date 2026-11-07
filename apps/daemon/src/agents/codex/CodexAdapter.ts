@@ -14,7 +14,6 @@ import {
 import {
 	type AgentAdapter,
 	type AgentAuthStatus,
-	type AgentCapabilities,
 	AgentProtocolError,
 	CodexVersionMismatchError,
 	type StartSessionInput,
@@ -32,6 +31,7 @@ import type { TurnStartParams } from "./generated/v2/TurnStartParams.ts";
 import type { TurnSteerParams } from "./generated/v2/TurnSteerParams.ts";
 import type { InitializeParams } from "./generated/InitializeParams.ts";
 import packageJson from "../../../package.json" with { type: "json" };
+import type { AgentCapabilities } from "@repo/contracts/AgentSession";
 import { Context, Effect, Layer, Option, Ref, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { keepOutputTail } from "../keepOutputTail.ts";
