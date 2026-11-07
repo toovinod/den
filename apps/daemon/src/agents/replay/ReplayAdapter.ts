@@ -1,7 +1,8 @@
-import { type AgentAdapter, type AgentCapabilities, AgentKind } from "../AgentAdapter.ts";
+import { type AgentCapabilities, AgentKind } from "@repo/contracts/AgentSession";
 import { AgentEvent, type ApprovalOutcome } from "@repo/contracts/AgentEvent";
 import { Deferred, Effect, FiberHandle, Ref, Schema } from "effect";
 import { makeAgentSession } from "../makeAgentSession.ts";
+import type { AgentAdapter } from "../AgentAdapter.ts";
 
 export const Recording = Schema.Struct({
 	kind: AgentKind,
@@ -23,7 +24,22 @@ const capabilities: AgentCapabilities = {
 export const makeReplayAdapter = (recording: Recording): AgentAdapter => ({
 	kind: recording.kind,
 	capabilities,
+	authModes: recording.kind === "claude" ? ["apiKey"] : ["apiKey", "subscription"],
 	checkAuth: Effect.succeed({ status: "loggedIn", account: null }),
+	listModels: Effect.succeed({
+		models: [
+			{
+				id: "replay",
+				label: "Replay",
+				description: "",
+				efforts: ["low", "high"],
+				defaultEffort: "low",
+				contextWindow: null,
+				supportsImages: true,
+			},
+		],
+		defaultModel: "replay",
+	}),
 	startSession: Effect.fn("ReplayAdapter.startSession")(function* () {
 		const session = yield* makeAgentSession(capabilities);
 		const nextTurn = yield* Ref.make(0);
@@ -63,6 +79,7 @@ export const makeReplayAdapter = (recording: Recording): AgentAdapter => ({
 					yield* FiberHandle.run(playback, Effect.forEach(turn, play, { discard: true }));
 				}),
 			steerTurn: () => Effect.void,
+			updateSettings: () => Effect.void,
 			interruptTurn: Effect.gen(function* () {
 				yield* FiberHandle.clear(playback);
 				const index = (yield* Ref.get(nextTurn)) - 1;

@@ -1,7 +1,14 @@
-import type { CanUseTool, Options, PermissionResult, PermissionUpdate } from "@anthropic-ai/claude-agent-sdk";
+import type {
+	CanUseTool,
+	Options,
+	PermissionResult,
+	PermissionUpdate,
+	SDKUserMessage,
+} from "@anthropic-ai/claude-agent-sdk";
 import { ClaudeAdapter, ClaudeAdapterConfig, sessionAllowRules } from "./ClaudeAdapter.ts";
 import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
+import { userMessage } from "../../testing/userMessage.ts";
 import { BunServices } from "@effect/platform-bun";
 import { describe, expect, test } from "bun:test";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
@@ -10,6 +17,7 @@ import { Effect, Layer, Stream } from "effect";
 const newSession: StartSessionInput = {
 	cwd: "/repo",
 	model: "claude-opus-4-5",
+	effort: null,
 	trustProjectSettings: false,
 	auth: { mode: "subscription" },
 };
@@ -24,6 +32,8 @@ const bashSuggestion: PermissionUpdate = {
 // A scripted stand-in for the SDK's query(). "approve" in a message asks for a Bash
 // approval, and "session" adds a permission suggestion so allowForSession is offered.
 const startedWith: Array<Options> = [];
+const settingsChanges: Array<unknown> = [];
+const prompts: Array<SDKUserMessage> = [];
 
 const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 	ClaudeQuery.of({
@@ -33,6 +43,7 @@ const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 			let turn = 0;
 			async function* messages() {
 				for await (const user of prompt) {
+					prompts.push(user);
 					turn++;
 					const text = typeof user.message.content === "string" ? user.message.content : "";
 					if (turn === 1) {
@@ -61,6 +72,39 @@ const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 						parent_tool_use_id: null,
 						message: { id: "msg_1", content: [{ type: "text", text: "Hi" }] },
 					};
+					if (text.includes("usage")) {
+						yield {
+							type: "assistant",
+							parent_tool_use_id: null,
+							message: {
+								id: "msg_2",
+								model: "claude-opus-5-5",
+								content: [],
+								usage: {
+									input_tokens: 10,
+									output_tokens: 5,
+									cache_creation_input_tokens: 100,
+									cache_read_input_tokens: 1000,
+								},
+							},
+						};
+						yield {
+							type: "rate_limit_event",
+							rate_limit_info: {
+								status: "allowed_warning",
+								resetsAt: 1700000000,
+								rateLimitType: "five_hour",
+								utilization: 0.8,
+							},
+						};
+						yield {
+							type: "result",
+							subtype: "success",
+							uuid: `result-${turn}`,
+							modelUsage: { "claude-opus-5-5": { contextWindow: 200000 } },
+						};
+						continue;
+					}
 					if (text.includes("approve")) {
 						const input = { command: "bun test" };
 						yield {
@@ -113,6 +157,8 @@ const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 			return {
 				messages: messages(),
 				interrupt: async () => resolveInterrupt(),
+				setModel: async (model) => void settingsChanges.push({ model }),
+				setEffort: async (effort) => void settingsChanges.push({ effort }),
 				close: () => {},
 			};
 		},
@@ -167,13 +213,14 @@ describe("ClaudeAdapter", () => {
 	test("maps SDK messages and learns the session id from the first turn", async () => {
 		const [id, events] = await runSession((handle) =>
 			Effect.gen(function* () {
-				yield* handle.sendMessage("hi");
+				yield* handle.sendMessage(userMessage("hi"));
 				const id = yield* handle.nativeSessionId;
 				return [id, yield* takeUntil(handle, "turn.completed")] as const;
 			}),
 		);
 		expect(id).toBe("claude-new");
 		expect(events).toEqual([
+			{ type: "user.message", itemId: "message-hi", text: "hi", attachments: [] },
 			{ type: "session.started", nativeSessionId: "claude-new" },
 			{ type: "message.delta", itemId: "msg_1:0", text: "Hi" },
 			{ type: "message.completed", itemId: "msg_1:0", text: "Hi" },
@@ -190,7 +237,7 @@ describe("ClaudeAdapter", () => {
 		const [requested, rest] = await runSession(
 			(handle) =>
 				Effect.gen(function* () {
-					yield* handle.sendMessage("approve for the session");
+					yield* handle.sendMessage(userMessage("approve for the session"));
 					const before = yield* takeUntil(handle, "approval.requested");
 					yield* handle.respondToApproval("toolu_1", "allowForSession");
 					return [before.slice(-2), yield* takeUntil(handle, "turn.completed")];
@@ -244,7 +291,7 @@ describe("ClaudeAdapter", () => {
 	test("rejects allowForSession when the SDK offers no session rule", async () => {
 		const error = await runSession((handle) =>
 			Effect.gen(function* () {
-				yield* handle.sendMessage("approve");
+				yield* handle.sendMessage(userMessage("approve"));
 				yield* takeUntil(handle, "approval.requested");
 				return yield* Effect.flip(handle.respondToApproval("toolu_1", "allowForSession"));
 			}),
@@ -257,7 +304,7 @@ describe("ClaudeAdapter", () => {
 		const events = await runSession(
 			(handle) =>
 				Effect.gen(function* () {
-					yield* handle.sendMessage("approve");
+					yield* handle.sendMessage(userMessage("approve"));
 					yield* takeUntil(handle, "approval.requested");
 					yield* handle.interrupt;
 					return yield* takeUntil(handle, "turn.completed");
@@ -279,7 +326,7 @@ describe("ClaudeAdapter", () => {
 		const id = await runSession(
 			(handle) =>
 				Effect.gen(function* () {
-					yield* handle.sendMessage("hi");
+					yield* handle.sendMessage(userMessage("hi"));
 					return yield* handle.nativeSessionId;
 				}),
 			{ input: { ...newSession, resumeId: "claude-old" } },
@@ -326,5 +373,49 @@ describe("sessionAllowRules", () => {
 			},
 		]);
 		expect(rules).toEqual([{ ...bashSuggestion, destination: "session" }]);
+	});
+
+	test("passes the effort at start and changes model and effort for later turns", async () => {
+		await runSession((handle) => handle.updateSettings({ model: "claude-haiku-5-5", effort: "low" }), {
+			input: { ...newSession, effort: "high" },
+		});
+		expect(startedWith.at(-1)?.effort).toBe("high");
+		expect(settingsChanges.slice(-2)).toEqual([{ model: "claude-haiku-5-5" }, { effort: "low" }]);
+	});
+
+	test("sends images as image blocks before the text", async () => {
+		await runSession((handle) =>
+			Effect.gen(function* () {
+				yield* handle.sendMessage({
+					id: "message-1",
+					text: "what is this",
+					images: [{ id: "image-1", mediaType: "image/png", base64: "aGk=", path: "/data/image-1" }],
+				});
+				return yield* takeUntil(handle, "turn.completed");
+			}),
+		);
+		expect(prompts.at(-1)?.message.content).toEqual([
+			{ type: "image", source: { type: "base64", media_type: "image/png", data: "aGk=" } },
+			{ type: "text", text: "what is this" },
+		]);
+	});
+
+	test("reports context usage at the end of a turn and plan limits as they arrive", async () => {
+		const events = await runSession((handle) =>
+			Effect.gen(function* () {
+				yield* handle.sendMessage(userMessage("usage"));
+				return yield* takeUntil(handle, "turn.completed");
+			}),
+		);
+		expect(events.filter((event) => event.type === "usage.updated" || event.type === "rateLimit.updated")).toEqual([
+			{
+				type: "rateLimit.updated",
+				window: "5 hours",
+				status: "warning",
+				usedPercent: 80,
+				resetsAt: "2023-11-14T22:13:20.000Z",
+			},
+			{ type: "usage.updated", contextTokens: 1115, contextWindow: 200000 },
+		]);
 	});
 });

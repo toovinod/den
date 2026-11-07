@@ -1,16 +1,40 @@
+import type { AgentError, ApprovalChoiceError } from "../agents/AgentAdapter.ts";
 import { DaemonInternalError } from "@repo/contracts/DaemonInternalError";
 import type { IllegalJobTransitionError } from "../jobs/transitionJob.ts";
+import type { CredentialStoreError } from "../agents/CredentialStore.ts";
 import type { GitCommandError, GitSpawnError } from "../git/runGit.ts";
 import type { LocalDatabaseError } from "../database/LocalDatabase.ts";
-import { Effect, Predicate } from "effect";
+import { Effect, type PlatformError, Predicate } from "effect";
+import type { EncodingError } from "effect/encoding";
 
-type InternalFailure = LocalDatabaseError | GitSpawnError | GitCommandError | IllegalJobTransitionError;
+type InternalFailure =
+	| LocalDatabaseError
+	| GitSpawnError
+	| GitCommandError
+	| IllegalJobTransitionError
+	| CredentialStoreError
+	| AgentError
+	| ApprovalChoiceError
+	| PlatformError.PlatformError
+	| EncodingError.EncodingError;
+
+const internalTags: ReadonlyArray<InternalFailure["_tag"]> = [
+	"LocalDatabaseError",
+	"GitSpawnError",
+	"GitCommandError",
+	"IllegalJobTransitionError",
+	"CredentialStoreError",
+	"AgentProcessError",
+	"AgentNotInstalledError",
+	"AgentProtocolError",
+	"CodexVersionMismatchError",
+	"ApprovalChoiceError",
+	"PlatformError",
+	"EncodingError",
+];
 
 const isInternalFailure = (error: unknown): error is InternalFailure =>
-	Predicate.isTagged(error, "LocalDatabaseError") ||
-	Predicate.isTagged(error, "GitSpawnError") ||
-	Predicate.isTagged(error, "GitCommandError") ||
-	Predicate.isTagged(error, "IllegalJobTransitionError");
+	internalTags.some((tag) => Predicate.isTagged(error, tag));
 
 export const orInternalError =
 	(operation: string) =>

@@ -25,6 +25,23 @@ export const AccountResponse = Schema.Struct({
 	requiresOpenaiAuth: Schema.Boolean,
 });
 
+export const ModelListResponse = Schema.Struct({
+	data: Schema.Array(
+		Schema.Struct({
+			id: Schema.String,
+			displayName: Schema.String,
+			description: Schema.String,
+			supportedReasoningEfforts: Schema.Array(Schema.Struct({ reasoningEffort: Schema.String })),
+			defaultReasoningEffort: Schema.String,
+			inputModalities: Schema.Array(Schema.String),
+			isDefault: Schema.Boolean,
+		}),
+	),
+	nextCursor: Schema.NullOr(Schema.String),
+});
+
+export const LoginResponse = Schema.Struct({ authUrl: Schema.String });
+
 export const AgentMessageDelta = Schema.Struct({
 	itemId: Schema.String,
 	delta: Schema.String,
@@ -79,6 +96,29 @@ export const TurnCompleted = Schema.Struct({
 		id: Schema.String,
 		status: Schema.Literals(["completed", "interrupted", "failed", "inProgress"]),
 		error: Schema.NullOr(Schema.Struct({ message: Schema.String })),
+	}),
+});
+
+export const TokenUsageUpdated = Schema.Struct({
+	tokenUsage: Schema.Struct({
+		last: Schema.Struct({ totalTokens: Schema.Int }),
+		modelContextWindow: Schema.NullOr(Schema.Int),
+	}),
+});
+
+const RateLimitWindow = Schema.NullOr(
+	Schema.Struct({
+		usedPercent: Schema.Number,
+		windowDurationMins: Schema.NullOr(Schema.Number),
+		resetsAt: Schema.NullOr(Schema.Number),
+	}),
+);
+
+export const RateLimitsUpdated = Schema.Struct({
+	rateLimits: Schema.Struct({
+		primary: RateLimitWindow,
+		secondary: RateLimitWindow,
+		rateLimitReachedType: Schema.optionalKey(Schema.NullOr(Schema.String)),
 	}),
 });
 

@@ -153,6 +153,14 @@ export class AttachmentNotFoundError extends Schema.TaggedError<AttachmentNotFou
 	}
 }
 
+export class ImagesNotSupportedError extends Schema.TaggedError<ImagesNotSupportedError>()("ImagesNotSupportedError", {
+	model: Schema.String,
+}) {
+	override get message() {
+		return `${this.model} cannot read images. Pick another model or send text only.`;
+	}
+}
+
 export class AuthModeNotAllowedError extends Schema.TaggedError<AuthModeNotAllowedError>()("AuthModeNotAllowedError", {
 	agent: AgentKind,
 	mode: AgentAuthMode,

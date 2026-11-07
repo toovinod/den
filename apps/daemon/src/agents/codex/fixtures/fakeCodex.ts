@@ -43,7 +43,63 @@ const ask = (id: number, method: string, params: object) =>
 		send({ id, method, params });
 	});
 
-const runTurn = async (text: string) => {
+const runTurn = async (
+	text: string,
+	params: { model?: string; effort?: string | null; input: Array<{ type: string; path?: string }> },
+) => {
+	if (text.includes("images")) {
+		notify("item/completed", {
+			item: { type: "agentMessage", id: "msg-1", text: JSON.stringify(params.input.slice(1)) },
+			threadId,
+			turnId,
+		});
+		return completeTurn("completed");
+	}
+	if (text.includes("usage")) {
+		notify("thread/tokenUsage/updated", {
+			threadId,
+			turnId,
+			tokenUsage: {
+				total: {
+					totalTokens: 9000,
+					inputTokens: 0,
+					cachedInputTokens: 0,
+					cacheWriteInputTokens: 0,
+					outputTokens: 0,
+					reasoningOutputTokens: 0,
+				},
+				last: {
+					totalTokens: 1200,
+					inputTokens: 0,
+					cachedInputTokens: 0,
+					cacheWriteInputTokens: 0,
+					outputTokens: 0,
+					reasoningOutputTokens: 0,
+				},
+				modelContextWindow: 272000,
+			},
+		});
+		notify("account/rateLimits/updated", {
+			rateLimits: {
+				limitId: null,
+				limitName: null,
+				primary: { usedPercent: 42, windowDurationMins: 300, resetsAt: 1700000000 },
+				secondary: { usedPercent: 100, windowDurationMins: 10080, resetsAt: null },
+				credits: null,
+				planType: null,
+				rateLimitReachedType: null,
+			},
+		});
+		return completeTurn("completed");
+	}
+	if (text.includes("settings")) {
+		notify("item/completed", {
+			item: { type: "agentMessage", id: "msg-1", text: `${params.model}/${params.effort}` },
+			threadId,
+			turnId,
+		});
+		return completeTurn("completed");
+	}
 	if (text.includes("approve")) {
 		notify("item/started", { item: command, threadId, turnId });
 		const answer = await ask(100, "item/commandExecution/requestApproval", {
@@ -125,6 +181,47 @@ const serve = async () => {
 					},
 				});
 				break;
+			case "account/login/start":
+				send({
+					id: message.id,
+					result: { type: "chatgpt", loginId: "login-1", authUrl: "https://auth.example/login" },
+				});
+				setTimeout(() => notify("account/login/completed", { loginId: "login-1", success: true, error: null }), 50);
+				break;
+			case "model/list":
+				send({
+					id: message.id,
+					result: message.params.cursor
+						? {
+								data: [
+									{
+										id: "gpt-later",
+										displayName: "GPT Later",
+										description: "A test model",
+										supportedReasoningEfforts: [{ reasoningEffort: "low" }, { reasoningEffort: "high" }],
+										defaultReasoningEffort: "low",
+										inputModalities: ["text"],
+										isDefault: false,
+									},
+								],
+								nextCursor: null,
+							}
+						: {
+								data: [
+									{
+										id: "gpt-first",
+										displayName: "GPT First",
+										description: "A test model",
+										supportedReasoningEfforts: [{ reasoningEffort: "low" }, { reasoningEffort: "high" }],
+										defaultReasoningEffort: "low",
+										inputModalities: ["text", "image"],
+										isDefault: true,
+									},
+								],
+								nextCursor: "page-2",
+							},
+				});
+				break;
 			case "thread/start":
 			case "thread/resume":
 				if (!hasSwarmPolicy(message.params)) {
@@ -145,7 +242,7 @@ const serve = async () => {
 				break;
 			case "turn/start":
 				send({ id: message.id, result: { turn: { id: turnId } } });
-				void runTurn(message.params.input[0].text);
+				void runTurn(message.params.input[0].text, message.params);
 				break;
 			case "turn/interrupt":
 				send({ id: message.id, result: {} });

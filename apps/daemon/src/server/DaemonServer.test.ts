@@ -1,9 +1,10 @@
 import { TEST_TOKEN, testDaemonConfig } from "../testing/testDaemonConfig.ts";
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
+import { testAgentServices } from "../testing/testAgentServices.ts";
 import packageJson from "../../package.json" with { type: "json" };
 import { DaemonClient } from "@repo/contracts/DaemonClient";
+import { Effect, FileSystem, Layer, Stream } from "effect";
 import { BunServices } from "@effect/platform-bun";
-import { Effect, FileSystem, Layer } from "effect";
 import { describe, expect, test } from "bun:test";
 import { DaemonServer } from "./DaemonServer.ts";
 import { HttpServer } from "effect/http";
@@ -18,7 +19,9 @@ const runWithDaemon = <A, E>(
 		return yield* Effect.gen(function* () {
 			const { address } = yield* HttpServer.HttpServer;
 			return yield* program(HttpServer.formatAddress(address), tempDir);
-		}).pipe(Effect.provide(DaemonServer.pipe(Layer.provide(testDaemonConfig(join(tempDir, "data"))))));
+		}).pipe(
+			Effect.provide(DaemonServer.pipe(Layer.provide([testDaemonConfig(join(tempDir, "data")), testAgentServices()]))),
+		);
 	}).pipe(Effect.scoped, Effect.provide(BunServices.layer), Effect.runPromise);
 
 const withClient = (baseUrl: string) =>
@@ -78,5 +81,46 @@ describe("DaemonServer", () => {
 		);
 		expect(error._tag).toBe("NotAGitRepositoryError");
 		expect(error.message).toContain("is not a git repository");
+	});
+
+	test("runs a session turn with an approval over RPC", async () => {
+		const result = await runWithDaemon((baseUrl, tempDir) =>
+			Effect.gen(function* () {
+				const repositoryPath = yield* makeTestRepository(join(tempDir, "repo"));
+				const client = yield* DaemonClient;
+				const project = yield* client.addProject({ path: repositoryPath });
+				const workspace = yield* client.createWorkspace({ kind: "inPlace", projectId: project.id });
+				const session = yield* client.createSession({
+					workspaceId: workspace.id,
+					agent: "codex",
+					model: "replay",
+					effort: null,
+				});
+				const eventsUntil = (afterSequence: number, type: string) =>
+					client.subscribeSession({ sessionId: session.id, afterSequence }).pipe(
+						Stream.takeUntil((stored) => stored.event.type === type),
+						Stream.runCollect,
+					);
+				yield* client.sendMessage({ sessionId: session.id, text: "run the tests", images: [], steer: false });
+				const beforeApproval = yield* eventsUntil(-1, "approval.requested");
+				yield* client.respondToApproval({ sessionId: session.id, requestId: "0", decision: "allowOnce" });
+				const afterApproval = yield* eventsUntil(beforeApproval.at(-1)?.sequence ?? -1, "turn.completed");
+				const [listed] = yield* client.listSessions({ workspaceId: workspace.id });
+				return { events: [...beforeApproval, ...afterApproval], listed };
+			}).pipe(withClient(baseUrl)),
+		);
+		expect(
+			result.events.filter((stored) => stored.sequence !== null).map((stored) => [stored.sequence, stored.event.type]),
+		).toEqual([
+			[0, "session.started"],
+			[1, "user.message"],
+			[2, "message.completed"],
+			[3, "tool.started"],
+			[4, "approval.requested"],
+			[5, "approval.resolved"],
+			[6, "tool.completed"],
+			[7, "turn.completed"],
+		]);
+		expect(result.listed).toMatchObject({ agent: "codex", nativeSessionId: "thread-replay" });
 	});
 });

@@ -1,6 +1,7 @@
 import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
 import { CodexAdapter, CodexAdapterConfig } from "./CodexAdapter.ts";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
+import { userMessage } from "../../testing/userMessage.ts";
 import { BunServices } from "@effect/platform-bun";
 import { describe, expect, test } from "bun:test";
 import { Effect, Stream } from "effect";
@@ -9,6 +10,7 @@ const fakeCodex = `${import.meta.dir}/fixtures/fakeCodex.ts`;
 const newSession: StartSessionInput = {
 	cwd: import.meta.dir,
 	model: "gpt-5",
+	effort: null,
 	trustProjectSettings: false,
 	auth: { mode: "subscription" },
 };
@@ -46,14 +48,50 @@ describe("CodexAdapter", () => {
 		expect(status).toEqual({ status: "loggedIn", account: "dev@example.com" });
 	});
 
+	test("starts the ChatGPT sign-in and returns its URL", async () => {
+		const url = await runWithCodex(Effect.flatMap(CodexAdapter, (codex) => codex.startLogin));
+		expect(url).toBe("https://auth.example/login");
+	});
+
+	test("lists models from every model/list page", async () => {
+		const models = await runWithCodex(Effect.flatMap(CodexAdapter, (codex) => codex.listModels));
+		expect(models).toEqual({
+			models: [
+				{
+					id: "gpt-first",
+					label: "GPT First",
+					description: "A test model",
+					efforts: ["low", "high"],
+					defaultEffort: "low",
+					contextWindow: null,
+					supportsImages: true,
+				},
+				{
+					id: "gpt-later",
+					label: "GPT Later",
+					description: "A test model",
+					efforts: ["low", "high"],
+					defaultEffort: "low",
+					contextWindow: null,
+					supportsImages: false,
+				},
+			],
+			defaultModel: "gpt-first",
+		});
+	});
+
 	test("streams a turn with deltas", async () => {
 		const events = await runSession((handle) =>
 			Effect.gen(function* () {
-				yield* handle.sendMessage("hi");
+				yield* handle.sendMessage(userMessage("hi"));
 				return yield* takeUntil(handle, "turn.completed");
 			}),
 		);
-		expect(events).toEqual([
+		expect(events.filter((event) => event.type === "user.message")).toEqual([
+			{ type: "user.message", itemId: "message-hi", text: "hi", attachments: [] },
+		]);
+		// The thread starts alongside the first message, so their events may come in either order.
+		expect(events.filter((event) => event.type !== "user.message")).toEqual([
 			{ type: "session.started", nativeSessionId: "thread-new" },
 			{ type: "message.delta", itemId: "msg-1", text: "Hel" },
 			{ type: "message.delta", itemId: "msg-1", text: "lo" },
@@ -69,7 +107,7 @@ describe("CodexAdapter", () => {
 	test("round-trips a command approval", async () => {
 		const [requested, rest] = await runSession((handle) =>
 			Effect.gen(function* () {
-				yield* handle.sendMessage("approve this");
+				yield* handle.sendMessage(userMessage("approve this"));
 				const before = yield* takeUntil(handle, "approval.requested");
 				yield* handle.respondToApproval("100", "allowOnce");
 				return [before.at(-1), yield* takeUntil(handle, "turn.completed")];
@@ -104,7 +142,7 @@ describe("CodexAdapter", () => {
 	test("interrupt cancels a pending approval, then interrupts the turn", async () => {
 		const events = await runSession((handle) =>
 			Effect.gen(function* () {
-				yield* handle.sendMessage("approve this");
+				yield* handle.sendMessage(userMessage("approve this"));
 				yield* takeUntil(handle, "approval.requested");
 				yield* handle.interrupt;
 				return yield* takeUntil(handle, "turn.completed");
@@ -131,17 +169,18 @@ describe("CodexAdapter", () => {
 	test("declines unsupported server requests with method not found", async () => {
 		const events = await runSession((handle) =>
 			Effect.gen(function* () {
-				yield* handle.sendMessage("ask me");
+				yield* handle.sendMessage(userMessage("ask me"));
 				return yield* takeUntil(handle, "turn.completed");
 			}),
 		);
-		expect(events.map((event) => event.type)).toEqual([
+		const agentEvents = events.filter((event) => event.type !== "user.message");
+		expect(agentEvents.map((event) => event.type)).toEqual([
 			"session.started",
 			"error",
 			"message.completed",
 			"turn.completed",
 		]);
-		expect(events[2]).toMatchObject({ text: "error -32601" });
+		expect(agentEvents[2]).toMatchObject({ text: "error -32601" });
 	});
 
 	test("fails when the installed version differs from the generated types", async () => {
@@ -155,5 +194,54 @@ describe("CodexAdapter", () => {
 	test("reports a missing executable as not installed", async () => {
 		const error = await runWithCodex(Effect.flip(checkAuth), "/nonexistent/codex");
 		expect(error._tag).toBe("AgentNotInstalledError");
+	});
+
+	test("sends the current model and effort with every turn", async () => {
+		const texts = await runSession((handle) =>
+			Effect.gen(function* () {
+				yield* handle.sendMessage(userMessage("settings"));
+				const first = yield* takeUntil(handle, "turn.completed");
+				yield* handle.updateSettings({ model: "gpt-later", effort: "high" });
+				yield* handle.sendMessage(userMessage("settings"));
+				const second = yield* takeUntil(handle, "turn.completed");
+				return [...first, ...second].flatMap((event) => (event.type === "message.completed" ? [event.text] : []));
+			}),
+		);
+		expect(texts).toEqual(["gpt-5/null", "gpt-later/high"]);
+	});
+
+	test("passes images as local files", async () => {
+		const events = await runSession((handle) =>
+			Effect.gen(function* () {
+				yield* handle.sendMessage({
+					id: "message-1",
+					text: "images",
+					images: [{ id: "image-1", mediaType: "image/png", base64: "aGk=", path: "/data/image-1" }],
+				});
+				return yield* takeUntil(handle, "turn.completed");
+			}),
+		);
+		const reply = events.find((event) => event.type === "message.completed");
+		expect(reply).toMatchObject({ text: JSON.stringify([{ type: "localImage", path: "/data/image-1" }]) });
+	});
+
+	test("reports context usage and plan limits with readable windows", async () => {
+		const events = await runSession((handle) =>
+			Effect.gen(function* () {
+				yield* handle.sendMessage(userMessage("usage"));
+				return yield* takeUntil(handle, "turn.completed");
+			}),
+		);
+		expect(events.filter((event) => event.type === "usage.updated" || event.type === "rateLimit.updated")).toEqual([
+			{ type: "usage.updated", contextTokens: 1200, contextWindow: 272000 },
+			{
+				type: "rateLimit.updated",
+				window: "5 hours",
+				status: "allowed",
+				usedPercent: 42,
+				resetsAt: "2023-11-14T22:13:20.000Z",
+			},
+			{ type: "rateLimit.updated", window: "7 days", status: "rejected", usedPercent: 100, resetsAt: null },
+		]);
 	});
 });

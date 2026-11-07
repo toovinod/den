@@ -52,6 +52,15 @@ const UserBlock = Schema.Union([
 
 const parentToolUseId = Schema.NullOr(Schema.String);
 
+const tokenCount = Schema.optionalKey(Schema.NullOr(Schema.Int));
+
+const Usage = Schema.Struct({
+	input_tokens: Schema.Int,
+	output_tokens: Schema.Int,
+	cache_creation_input_tokens: tokenCount,
+	cache_read_input_tokens: tokenCount,
+});
+
 export const ClaudeMessage = Schema.Union([
 	Schema.Struct({
 		type: Schema.Literal("system"),
@@ -68,7 +77,9 @@ export const ClaudeMessage = Schema.Union([
 		parent_tool_use_id: parentToolUseId,
 		message: Schema.Struct({
 			id: Schema.String,
+			model: Schema.optionalKey(Schema.String),
 			content: Schema.Array(AssistantBlock),
+			usage: Schema.optionalKey(Usage),
 		}),
 	}),
 	Schema.Struct({
@@ -83,6 +94,16 @@ export const ClaudeMessage = Schema.Union([
 		subtype: Schema.String,
 		uuid: Schema.String,
 		errors: Schema.optionalKey(Schema.Array(Schema.String)),
+		modelUsage: Schema.optionalKey(Schema.Record(Schema.String, Schema.Struct({ contextWindow: Schema.Int }))),
+	}),
+	Schema.Struct({
+		type: Schema.Literal("rate_limit_event"),
+		rate_limit_info: Schema.Struct({
+			status: Schema.Literals(["allowed", "allowed_warning", "rejected"]),
+			resetsAt: Schema.optionalKey(Schema.Number),
+			rateLimitType: Schema.optionalKey(Schema.String),
+			utilization: Schema.optionalKey(Schema.Number),
+		}),
 	}),
 	Other,
 ]);

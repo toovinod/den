@@ -6,34 +6,46 @@ import {
 	ErrorNotification,
 	FileChangeApprovalParams,
 	ItemNotification,
+	LoginResponse,
+	ModelListResponse,
+	RateLimitsUpdated,
 	type ThreadItem,
 	ThreadResponse,
+	TokenUsageUpdated,
 	TurnCompleted,
 	TurnResponse,
 } from "./codexProtocol.ts";
 import {
 	type AgentAdapter,
 	type AgentAuthStatus,
-	type AgentCapabilities,
+	type AgentError,
+	type AgentModels,
 	AgentProtocolError,
 	CodexVersionMismatchError,
+	type SessionSettings,
 	type StartSessionInput,
+	type UserMessage,
 } from "../AgentAdapter.ts";
 import { type CodexIncoming, type CodexRpcClient, METHOD_NOT_FOUND, makeCodexRpcClient } from "./codexRpcClient.ts";
 import type { CommandExecutionApprovalDecision } from "./generated/v2/CommandExecutionApprovalDecision.ts";
+import { Context, Effect, Exit, Layer, Option, Ref, Scope, Stream } from "effect";
+import type { AgentCapabilities, AgentModel } from "@repo/contracts/AgentSession";
 import type { TurnInterruptParams } from "./generated/v2/TurnInterruptParams.ts";
 import codexVersionFile from "./generated/CODEX_VERSION" with { type: "text" };
+import type { LoginAccountParams } from "./generated/v2/LoginAccountParams.ts";
 import type { ThreadResumeParams } from "./generated/v2/ThreadResumeParams.ts";
 import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
 import type { ThreadStartParams } from "./generated/v2/ThreadStartParams.ts";
 import type { ApprovalOutcome, ToolCall } from "@repo/contracts/AgentEvent";
 import type { GetAccountParams } from "./generated/v2/GetAccountParams.ts";
+import type { ModelListParams } from "./generated/v2/ModelListParams.ts";
 import type { TurnStartParams } from "./generated/v2/TurnStartParams.ts";
 import type { TurnSteerParams } from "./generated/v2/TurnSteerParams.ts";
 import type { InitializeParams } from "./generated/InitializeParams.ts";
 import packageJson from "../../../package.json" with { type: "json" };
-import { Context, Effect, Layer, Option, Ref, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import type { UserInput } from "./generated/v2/UserInput.ts";
+import { epochSecondsToIso } from "../epochSecondsToIso.ts";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 
@@ -132,6 +144,13 @@ const appServer = (executable: string, cwd?: string, env?: ChildProcess.CommandO
 		extendEnv: true,
 	});
 
+// Codex sends window lengths in minutes, like 300 for five hours.
+const describeWindow = (minutes: number) => {
+	const [amount, unit] =
+		minutes % 1440 === 0 ? [minutes / 1440, "day"] : minutes % 60 === 0 ? [minutes / 60, "hour"] : [minutes, "minute"];
+	return `${amount} ${unit}${amount === 1 ? "" : "s"}`;
+};
+
 const handleNotification = Effect.fnUntraced(function* (
 	session: AgentSession,
 	currentTurn: Ref.Ref<Option.Option<string>>,
@@ -193,6 +212,30 @@ const handleNotification = Effect.fnUntraced(function* (
 							: { status: "completed" },
 			});
 		}
+		case "thread/tokenUsage/updated": {
+			const { tokenUsage } = yield* decodeCodex(TokenUsageUpdated)(params);
+			return yield* session.emit({
+				type: "usage.updated",
+				contextTokens: tokenUsage.last.totalTokens,
+				contextWindow: tokenUsage.modelContextWindow,
+			});
+		}
+		case "account/rateLimits/updated": {
+			const { rateLimits } = yield* decodeCodex(RateLimitsUpdated)(params);
+			const reached = (rateLimits.rateLimitReachedType ?? null) !== null;
+			for (const window of [rateLimits.primary, rateLimits.secondary]) {
+				if (window === null) continue;
+				// Codex reports no warning level, so a window is either open or used up.
+				yield* session.emit({
+					type: "rateLimit.updated",
+					window: window.windowDurationMins === null ? "Usage limit" : describeWindow(window.windowDurationMins),
+					status: reached || window.usedPercent >= 100 ? "rejected" : "allowed",
+					usedPercent: window.usedPercent,
+					resetsAt: window.resetsAt === null ? null : epochSecondsToIso(window.resetsAt),
+				});
+			}
+			return;
+		}
 		case "error": {
 			const { error, willRetry } = yield* decodeCodex(ErrorNotification)(params);
 			return yield* session.emit({
@@ -253,7 +296,16 @@ const handleServerRequest = Effect.fnUntraced(function* (
 	}
 });
 
-export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
+// Codex runs its own ChatGPT sign-in, which Claude has no equivalent for.
+export interface CodexAgentAdapter extends AgentAdapter {
+	// Returns the URL to open. Codex stores the tokens itself when the user finishes.
+	readonly startLogin: Effect.Effect<string, AgentError>;
+}
+
+// Codex waits on its local callback server until the user finishes in the browser.
+const LOGIN_TIMEOUT = "10 minutes";
+
+export class CodexAdapter extends Context.Service<CodexAdapter, CodexAgentAdapter>()(
 	"swarm/daemon/agents/codex/CodexAdapter",
 ) {
 	static readonly layer = Layer.effect(
@@ -261,12 +313,19 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 		Effect.gen(function* () {
 			const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 			const provide = Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner);
+			const layerScope = yield* Effect.scope;
 
-			const checkAuth = Effect.gen(function* () {
+			// A short-lived app-server for questions outside a session. Closing the scope stops it.
+			const connect = Effect.gen(function* () {
 				const { executable } = yield* CodexAdapterConfig;
 				yield* checkVersion(executable);
 				const client = yield* makeCodexRpcClient(appServer(executable));
 				yield* initialize(client);
+				return client;
+			});
+
+			const checkAuth = Effect.gen(function* () {
+				const client = yield* connect;
 				const { account, requiresOpenaiAuth } = yield* client
 					.request("account/read", {
 						refreshToken: false,
@@ -284,11 +343,67 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 				return status;
 			}).pipe(Effect.scoped, provide, Effect.withSpan("CodexAdapter.checkAuth"));
 
+			// The installed Codex knows which models the account can use, so the list comes from it.
+			const listModels = Effect.gen(function* () {
+				const client = yield* connect;
+				const models: Array<AgentModel> = [];
+				let defaultModel = "";
+				let cursor: string | null = null;
+				do {
+					const page: typeof ModelListResponse.Type = yield* client
+						.request("model/list", { cursor } satisfies ModelListParams)
+						.pipe(Effect.flatMap(decodeCodex(ModelListResponse)));
+					for (const model of page.data) {
+						// model/list has no context window. Codex reports it per thread in its token usage instead.
+						models.push({
+							id: model.id,
+							label: model.displayName,
+							description: model.description,
+							efforts: model.supportedReasoningEfforts.map((option) => option.reasoningEffort),
+							defaultEffort: model.defaultReasoningEffort,
+							contextWindow: null,
+							supportsImages: model.inputModalities.includes("image"),
+						});
+						if (model.isDefault) defaultModel = model.id;
+					}
+					cursor = page.nextCursor;
+				} while (cursor !== null);
+				return { models, defaultModel: defaultModel || (models[0]?.id ?? "") } satisfies AgentModels;
+			}).pipe(Effect.scoped, provide, Effect.withSpan("CodexAdapter.listModels"));
+
+			const startLogin = Effect.gen(function* () {
+				const scope = yield* Scope.make();
+				const login = yield* Effect.gen(function* () {
+					const client = yield* connect;
+					const { authUrl } = yield* client
+						.request("account/login/start", { type: "chatgpt" } satisfies LoginAccountParams)
+						.pipe(Effect.flatMap(decodeCodex(LoginResponse)));
+					return { client, authUrl };
+				}).pipe(
+					Scope.provide(scope),
+					Effect.onError(() => Scope.close(scope, Exit.void)),
+				);
+				// The app-server must outlive this call, or the browser sign-in has nothing to return to.
+				yield* login.client.incoming.pipe(
+					Stream.takeUntil(
+						(message) => message._tag === "notification" && message.method === "account/login/completed",
+					),
+					Stream.runDrain,
+					Effect.timeoutOption(LOGIN_TIMEOUT),
+					Effect.catch((error) => Effect.logWarning("Codex sign-in stopped", error)),
+					Effect.ensuring(Scope.close(scope, Exit.void)),
+					Effect.forkIn(layerScope),
+				);
+				return login.authUrl;
+			}).pipe(provide, Effect.withSpan("CodexAdapter.startLogin"));
+
 			const startSession = Effect.fn("CodexAdapter.startSession")(function* (input: StartSessionInput) {
 				const { executable } = yield* CodexAdapterConfig;
 				yield* checkVersion(executable);
 				const session = yield* makeAgentSession(capabilities);
 				const currentTurn = yield* Ref.make(Option.none<string>());
+				// Sent with every turn, so a change applies from the next one.
+				const settings = yield* Ref.make<SessionSettings>({ model: input.model, effort: input.effort });
 				const client = yield* makeCodexRpcClient(
 					appServer(
 						executable,
@@ -327,21 +442,28 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 					yield* session.setNativeSessionId(thread.id);
 				}).pipe(Effect.catch(session.fail), Effect.forkScoped);
 
-				const textInput = (text: string) => [{ type: "text" as const, text, text_elements: [] }];
+				// Codex reads images from disk, so it gets the stored path rather than the bytes.
+				const toInput = ({ text, images }: UserMessage): Array<UserInput> => [
+					{ type: "text", text, text_elements: [] },
+					...images.map(({ path }) => ({ type: "localImage" as const, path })),
+				];
 
 				return yield* session.start({
-					startTurn: (text) =>
+					startTurn: (message) =>
 						Effect.gen(function* () {
 							const threadId = yield* session.nativeSessionId;
+							const { model, effort } = yield* Ref.get(settings);
 							const { turn } = yield* client
 								.request("turn/start", {
 									threadId,
-									input: textInput(text),
+									model,
+									effort,
+									input: toInput(message),
 								} satisfies TurnStartParams)
 								.pipe(Effect.flatMap(decodeCodex(TurnResponse)));
 							yield* Ref.set(currentTurn, Option.some(turn.id));
 						}),
-					steerTurn: (text) =>
+					steerTurn: (message) =>
 						Effect.gen(function* () {
 							const threadId = yield* session.nativeSessionId;
 							const turnId = yield* Ref.get(currentTurn);
@@ -353,10 +475,11 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 							}
 							yield* client.request("turn/steer", {
 								threadId,
-								input: textInput(text),
+								input: toInput(message),
 								expectedTurnId: turnId.value,
 							} satisfies TurnSteerParams);
 						}),
+					updateSettings: (next) => Ref.set(settings, next),
 					interruptTurn: Effect.gen(function* () {
 						const threadId = yield* session.nativeSessionId;
 						const turnId = yield* Ref.get(currentTurn);
@@ -372,7 +495,10 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 			return CodexAdapter.of({
 				kind: "codex",
 				capabilities,
+				authModes: ["apiKey", "subscription"],
 				checkAuth,
+				listModels,
+				startLogin,
 				startSession,
 			});
 		}),

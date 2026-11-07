@@ -3,6 +3,7 @@ import { makeReplayAdapter, Recording } from "./ReplayAdapter.ts";
 import { MAX_QUEUED_MESSAGES } from "../makeAgentSession.ts";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
 import type { AgentSessionHandle } from "../AgentAdapter.ts";
+import { userMessage } from "../../testing/userMessage.ts";
 import { describe, expect, test } from "bun:test";
 import { Effect, Schema, Stream } from "effect";
 
@@ -10,6 +11,7 @@ const recording = Schema.decodeUnknownSync(Recording)(recordingJson);
 const input = {
 	cwd: "/repo",
 	model: "gpt-5",
+	effort: null,
 	trustProjectSettings: false,
 	auth: { mode: "subscription" },
 } as const;
@@ -31,7 +33,7 @@ describe("ReplayAdapter", () => {
 		const events = await runSession((handle) =>
 			Effect.gen(function* () {
 				expect(yield* handle.nativeSessionId).toBe("thread-replay");
-				yield* handle.sendMessage("run the tests");
+				yield* handle.sendMessage(userMessage("run the tests"));
 				const beforeApproval = yield* takeUntil(handle, "approval.requested");
 				yield* handle.respondToApproval("0", "allowOnce");
 				const afterApproval = yield* takeUntil(handle, "turn.completed");
@@ -40,6 +42,7 @@ describe("ReplayAdapter", () => {
 		);
 		expect(events).toEqual([
 			"session.started",
+			"user.message",
 			"message.delta",
 			"message.delta",
 			"message.completed",
@@ -54,7 +57,7 @@ describe("ReplayAdapter", () => {
 	test("rejects an approval id that is not pending", async () => {
 		const error = await runSession((handle) =>
 			Effect.gen(function* () {
-				yield* handle.sendMessage("run the tests");
+				yield* handle.sendMessage(userMessage("run the tests"));
 				yield* takeUntil(handle, "approval.requested");
 				return yield* Effect.flip(handle.respondToApproval("missing", "deny"));
 			}),
@@ -65,12 +68,12 @@ describe("ReplayAdapter", () => {
 	test("queues messages during a turn and fails when the queue is full", async () => {
 		const error = await runSession((handle) =>
 			Effect.gen(function* () {
-				yield* handle.sendMessage("run the tests");
+				yield* handle.sendMessage(userMessage("run the tests"));
 				yield* takeUntil(handle, "approval.requested");
 				for (let queued = 0; queued < MAX_QUEUED_MESSAGES; queued++) {
-					yield* handle.sendMessage(`follow-up ${queued}`);
+					yield* handle.sendMessage(userMessage(`follow-up ${queued}`));
 				}
-				return yield* Effect.flip(handle.sendMessage("one too many"));
+				return yield* Effect.flip(handle.sendMessage(userMessage("one too many")));
 			}),
 		);
 		expect(error._tag).toBe("SessionBusyError");
@@ -79,7 +82,7 @@ describe("ReplayAdapter", () => {
 	test("interrupt cancels the pending approval, then stops the turn", async () => {
 		const events = await runSession((handle) =>
 			Effect.gen(function* () {
-				yield* handle.sendMessage("run the tests");
+				yield* handle.sendMessage(userMessage("run the tests"));
 				yield* takeUntil(handle, "approval.requested");
 				yield* handle.interrupt;
 				return yield* takeUntil(handle, "turn.completed");

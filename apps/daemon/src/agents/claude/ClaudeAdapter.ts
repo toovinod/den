@@ -1,10 +1,11 @@
 import {
 	type AgentAdapter,
 	type AgentAuthStatus,
-	type AgentCapabilities,
+	type AgentModels,
 	AgentProcessError,
 	AgentProtocolError,
 	type StartSessionInput,
+	type UserMessage,
 } from "../AgentAdapter.ts";
 import type {
 	CanUseTool,
@@ -16,8 +17,10 @@ import type {
 import { Config, Context, Deferred, Effect, Layer, Option, Queue, Redacted, Ref, Schema, Stream } from "effect";
 import type { ApprovalDecision, ApprovalOutcome, ToolCall } from "@repo/contracts/AgentEvent";
 import { BashInput, ClaudeAuthStatus, ClaudeMessage, FileInput } from "./claudeMessages.ts";
+import type { AgentCapabilities, AgentModel } from "@repo/contracts/AgentSession";
 import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { epochSecondsToIso } from "../epochSecondsToIso.ts";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
@@ -38,6 +41,32 @@ const capabilities: AgentCapabilities = {
 	mcpApprovals: true,
 	// The SDK folds a message sent mid-turn into the running turn.
 	steerWhileRunning: true,
+};
+
+// supportedModels() needs a running query, so the list is fixed here. The efforts are the SDK's
+// EffortLevel values, and the context window is only known from a turn's usage.
+const ClaudeEffort = Schema.Literals(["low", "medium", "high", "xhigh", "max"]);
+const decodeEffort = (effort: string | null) =>
+	effort === null ? Option.none() : Schema.decodeUnknownOption(ClaudeEffort)(effort);
+
+const claudeModel = (id: string, label: string): AgentModel => ({
+	id,
+	label,
+	description: "",
+	efforts: ClaudeEffort.literals,
+	defaultEffort: null,
+	contextWindow: null,
+	supportsImages: true,
+});
+
+const models: AgentModels = {
+	models: [
+		claudeModel("claude-opus-5-5", "Claude Opus 5.5"),
+		claudeModel("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+		claudeModel("claude-haiku-5-5", "Claude Haiku 5.5"),
+		claudeModel("claude-fable-5-1", "Claude Fable 5.1"),
+	],
+	defaultModel: "claude-opus-5-5",
 };
 
 // The SDK replaces the whole child environment when `env` is set, so API key mode passes
@@ -116,6 +145,15 @@ const toPermissionResult = (
 	}
 };
 
+const windowNames: Record<string, string> = {
+	five_hour: "5 hours",
+	seven_day: "7 days",
+	seven_day_opus: "7 days (Opus)",
+	seven_day_sonnet: "7 days (Sonnet)",
+	seven_day_overage_included: "7 days (with extra usage)",
+	overage: "Extra usage",
+};
+
 const toolResultText = (
 	content: string | ReadonlyArray<{ readonly type: string; readonly text?: string }> | undefined,
 ) => {
@@ -130,6 +168,8 @@ const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
 	const finishedBlocks = yield* Ref.make({ messageId: "", count: 0 });
 	const tools = new Map<string, ToolCall>();
 	const interrupting = yield* Ref.make(false);
+	// The context after the turn is what its last model call read and wrote.
+	const lastUsage = yield* Ref.make(Option.none<{ readonly model: string; readonly contextTokens: number }>());
 
 	const handle = Effect.fnUntraced(function* (message: ClaudeMessage) {
 		// Subagent frames belong to the Task tool call that started them.
@@ -158,7 +198,15 @@ const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
 			}
 			case "assistant": {
 				if (!("message" in message) || !("id" in message.message)) return;
-				const { id, content } = message.message;
+				const { id, content, model, usage } = message.message;
+				if (usage !== undefined) {
+					const contextTokens =
+						usage.input_tokens +
+						(usage.cache_creation_input_tokens ?? 0) +
+						(usage.cache_read_input_tokens ?? 0) +
+						usage.output_tokens;
+					yield* Ref.set(lastUsage, Option.some({ model: model ?? "", contextTokens }));
+				}
 				const previous = yield* Ref.get(finishedBlocks);
 				let index = previous.messageId === id ? previous.count : 0;
 				for (const block of content) {
@@ -204,6 +252,14 @@ const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
 			}
 			case "result": {
 				if (!("uuid" in message)) return;
+				const usage = yield* Ref.getAndSet(lastUsage, Option.none());
+				if (Option.isSome(usage)) {
+					yield* session.emit({
+						type: "usage.updated",
+						contextTokens: usage.value.contextTokens,
+						contextWindow: message.modelUsage?.[usage.value.model]?.contextWindow ?? null,
+					});
+				}
 				const interrupted = yield* Ref.getAndSet(interrupting, false);
 				return yield* session.emit({
 					type: "turn.completed",
@@ -216,6 +272,18 @@ const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
 									status: "failed",
 									message: message.errors?.join("; ") || message.subtype,
 								},
+				});
+			}
+			case "rate_limit_event": {
+				if (!("rate_limit_info" in message)) return;
+				const { status, resetsAt, rateLimitType, utilization } = message.rate_limit_info;
+				return yield* session.emit({
+					type: "rateLimit.updated",
+					window: (rateLimitType && windowNames[rateLimitType]) ?? "Usage limit",
+					status: status === "allowed_warning" ? "warning" : status,
+					// The SDK reports utilization as a fraction of the window.
+					usedPercent: utilization === undefined ? null : utilization * 100,
+					resetsAt: resetsAt === undefined ? null : epochSecondsToIso(resetsAt),
 				});
 			}
 			default:
@@ -294,6 +362,7 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 					// Never inherit a mode such as bypassPermissions from a settings file.
 					permissionMode: "default",
 					settingSources: input.trustProjectSettings ? ["user", "project", "local"] : ["user"],
+					...Option.match(decodeEffort(input.effort), { onNone: () => ({}), onSome: (effort) => ({ effort }) }),
 					...(input.resumeId === undefined ? {} : { resume: input.resumeId }),
 					...(executablePath === undefined ? {} : { pathToClaudeCodeExecutable: executablePath }),
 					...(input.auth.mode === "apiKey"
@@ -335,18 +404,38 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 					Effect.forkScoped,
 				);
 
-				const sendText = (text: string) =>
+				const sendMessage = ({ text, images }: UserMessage) =>
 					Effect.asVoid(
 						Queue.offer(prompts, {
 							type: "user",
-							message: { role: "user", content: text },
+							message: {
+								role: "user",
+								content:
+									images.length === 0
+										? text
+										: [
+												...images.map(({ mediaType, base64 }) => ({
+													type: "image" as const,
+													source: { type: "base64" as const, media_type: mediaType, data: base64 },
+												})),
+												{ type: "text" as const, text },
+											],
+							},
 							parent_tool_use_id: null,
 						}),
 					);
 
 				return yield* session.start({
-					startTurn: sendText,
-					steerTurn: sendText,
+					startTurn: sendMessage,
+					steerTurn: sendMessage,
+					updateSettings: ({ model, effort }) =>
+						Effect.tryPromise({
+							try: async () => {
+								await run.setModel(model);
+								await run.setEffort(Option.getOrNull(decodeEffort(effort)));
+							},
+							catch: (cause) => new AgentProcessError({ message: "Could not change the model.", cause }),
+						}),
 					interruptTurn: Effect.gen(function* () {
 						yield* Ref.set(interrupting, true);
 						yield* Effect.tryPromise({
@@ -364,7 +453,10 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 			return ClaudeAdapter.of({
 				kind: "claude",
 				capabilities,
+				// claude.ai subscriptions stay off in third-party apps until Anthropic approves it (architecture 2.1).
+				authModes: ["apiKey"],
 				checkAuth,
+				listModels: Effect.succeed(models),
 				startSession,
 			});
 		}),
