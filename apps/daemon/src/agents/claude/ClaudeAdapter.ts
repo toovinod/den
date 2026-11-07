@@ -18,7 +18,10 @@ import { Config, Context, Deferred, Effect, Layer, Option, Queue, Redacted, Ref,
 import type { ApprovalDecision, ApprovalOutcome, ToolCall } from "@repo/contracts/AgentEvent";
 import { BashInput, ClaudeAuthStatus, ClaudeMessage, FileInput } from "./claudeMessages.ts";
 import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
+import { stopProcessGroup } from "../../processes/stopProcessGroup.ts";
+import { ProcessRegistry } from "../../processes/ProcessRegistry.ts";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { spawnInProcessGroup } from "./spawnInProcessGroup.ts";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
@@ -235,6 +238,7 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 		Effect.gen(function* () {
 			const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 			const claudeQuery = yield* ClaudeQuery;
+			const registry = yield* ProcessRegistry;
 
 			const checkAuth = Effect.gen(function* () {
 				const { executable } = yield* ClaudeAdapterConfig;
@@ -265,6 +269,7 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 				const { handle, interrupting } = yield* makeMessageHandler(session);
 				const context = yield* Effect.context();
 				const runPromise = Effect.runPromiseWith(context);
+				let claudePid: number | undefined;
 
 				const canUseTool: CanUseTool = (toolName, toolInput, request) =>
 					runPromise(
@@ -301,6 +306,12 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 					settingSources: input.trustProjectSettings ? ["user", "project", "local"] : ["user"],
 					...(input.resumeId === undefined ? {} : { resume: input.resumeId }),
 					pathToClaudeCodeExecutable: executablePath,
+					spawnClaudeCodeProcess: (spawnOptions) => {
+						const child = spawnInProcessGroup(spawnOptions);
+						claudePid = child.pid;
+						if (child.pid !== undefined) Effect.runForkWith(context)(registry.add(child.pid));
+						return child;
+					},
 					...(input.auth.mode === "apiKey"
 						? {
 								// An optional plain string cannot fail to decode, so a ConfigError here is a defect.
@@ -316,7 +327,14 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 							options,
 						}),
 					),
-					(run) => Effect.sync(() => run.close()),
+					(run) =>
+						Effect.gen(function* () {
+							// Closing ends claude's stdin. Its process group then gets the usual stop signal and grace.
+							run.close();
+							if (claudePid === undefined) return;
+							yield* stopProcessGroup(claudePid);
+							yield* registry.remove(claudePid);
+						}),
 				);
 
 				yield* Stream.fromAsyncIterable(

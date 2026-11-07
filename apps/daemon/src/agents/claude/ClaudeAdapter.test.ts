@@ -1,6 +1,7 @@
 import type { CanUseTool, Options, PermissionResult, PermissionUpdate } from "@anthropic-ai/claude-agent-sdk";
 import { ClaudeAdapter, ClaudeAdapterConfig, sessionAllowRules } from "./ClaudeAdapter.ts";
 import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
+import { testProcessRegistry } from "../../testing/testProcessRegistry.ts";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
 import { BunServices } from "@effect/platform-bun";
 import { describe, expect, test } from "bun:test";
@@ -129,6 +130,7 @@ const runWithClaude = <A, E>(
 		Effect.provide(
 			ClaudeAdapter.layer.pipe(
 				Layer.provide(Layer.succeed(ClaudeQuery, makeFakeQuery(permissions))),
+				Layer.provide(testProcessRegistry),
 				Layer.provide(BunServices.layer),
 			),
 		),
