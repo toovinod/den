@@ -415,6 +415,7 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 			readonly workspaceId: string;
 			readonly agent: AgentKind;
 			readonly model: string;
+			readonly effort: string | null;
 		}) {
 			const found = yield* database.query((db) =>
 				db.$count(workspace, and(eq(workspace.id, input.workspaceId), eq(workspace.status, "active"))),
@@ -565,6 +566,8 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 				kind,
 				availability,
 				capabilities: adapter.capabilities,
+				authModes: kind === "claude" ? ["apiKey"] : ["apiKey", "subscription"],
+				authMode: authModeFor(kind, hasApiKey),
 				...(Result.isSuccess(listed) ? listed.success : { models: [], defaultModel: "" }),
 			});
 		});

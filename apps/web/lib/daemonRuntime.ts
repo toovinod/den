@@ -22,7 +22,7 @@ const DaemonClientFromShell = Layer.unwrap(
 	}),
 );
 
-export const daemonRuntime = ManagedRuntime.make(DaemonClientFromShell);
+const daemonRuntime = ManagedRuntime.make(DaemonClientFromShell);
 
 export const fetchDaemonVersion = () =>
 	daemonRuntime.runPromise(

@@ -30,6 +30,10 @@ export const SessionRpcHandlers = SessionRpcs.toLayer(
 						),
 					),
 			watchSessions: () => sessions.watch,
+			setAgentAuthMode: () => Effect.die("setAgentAuthMode is not implemented yet"),
+			startAgentLogin: () => Effect.die("startAgentLogin is not implemented yet"),
+			updateSessionSettings: () => Effect.die("updateSessionSettings is not implemented yet"),
+			getAttachment: () => Effect.die("getAttachment is not implemented yet"),
 		});
 	}),
 );

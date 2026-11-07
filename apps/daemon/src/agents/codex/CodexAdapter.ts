@@ -40,7 +40,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 
-export const CODEX_VERSION = codexVersionFile.trim();
+const CODEX_VERSION = codexVersionFile.trim();
 
 // Releases bundle a pinned codex binary and point this at it.
 export const CodexAdapterConfig = Context.Reference<{
@@ -304,7 +304,15 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 						.request("model/list", { cursor } satisfies ModelListParams)
 						.pipe(Effect.flatMap(decodeCodex(ModelListResponse)));
 					for (const model of page.data) {
-						models.push({ id: model.id, label: model.displayName });
+						models.push({
+							id: model.id,
+							label: model.displayName,
+							description: "",
+							efforts: [],
+							defaultEffort: null,
+							contextWindow: null,
+							supportsImages: false,
+						});
 						if (model.isDefault) defaultModel = model.id;
 					}
 					cursor = page.nextCursor;

@@ -5,8 +5,8 @@
 	"scripts": {
 		"build": "turbo run build",
 		"dev": "turbo run dev",
-		"lint": "biome check . && bun packages/import-order/src/main.ts",
-		"format": "bun packages/import-order/src/main.ts --write && biome check --write .",
+		"lint": "biome check . && bun scripts/sortImports.ts",
+		"format": "bun scripts/sortImports.ts --write && biome check --write .",
 		"check-types": "turbo run check-types",
 		"prepare": "husky",
 		"setup": "bun install && bun run db:up && bun run db:migrate",

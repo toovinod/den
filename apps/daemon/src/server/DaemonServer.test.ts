@@ -90,13 +90,18 @@ describe("DaemonServer", () => {
 				const client = yield* DaemonClient;
 				const project = yield* client.addProject({ path: repositoryPath });
 				const workspace = yield* client.createWorkspace({ kind: "inPlace", projectId: project.id });
-				const session = yield* client.createSession({ workspaceId: workspace.id, agent: "codex", model: "replay" });
+				const session = yield* client.createSession({
+					workspaceId: workspace.id,
+					agent: "codex",
+					model: "replay",
+					effort: null,
+				});
 				const eventsUntil = (afterSequence: number, type: string) =>
 					client.subscribeSession({ sessionId: session.id, afterSequence }).pipe(
 						Stream.takeUntil((stored) => stored.event.type === type),
 						Stream.runCollect,
 					);
-				yield* client.sendMessage({ sessionId: session.id, text: "run the tests", steer: false });
+				yield* client.sendMessage({ sessionId: session.id, text: "run the tests", images: [], steer: false });
 				const beforeApproval = yield* eventsUntil(-1, "approval.requested");
 				yield* client.respondToApproval({ sessionId: session.id, requestId: "0", decision: "allowOnce" });
 				const afterApproval = yield* eventsUntil(beforeApproval.at(-1)?.sequence ?? -1, "turn.completed");

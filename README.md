@@ -47,17 +47,17 @@ bun run setup
 
 ## Repository layout
 
-| Path                    | What it is                                                   |
-| ----------------------- | ------------------------------------------------------------ |
-| `apps/desktop`          | Tauri shell that starts the daemon and loads the UI          |
-| `apps/web`              | Next.js UI, built as a static export                         |
-| `apps/daemon`           | `swarmd`: local database, git, workspaces and agent adapters |
-| `apps/api`              | Hono API: accounts, organizations and invitations            |
-| `packages/contracts`    | Schemas and RPC definitions shared by the apps               |
-| `packages/auth`         | Better Auth configuration                                    |
-| `packages/db-cloud`     | Postgres schema, migrations and database service             |
-| `packages/email`        | Transactional email through Resend                           |
-| `packages/import-order` | Keeps imports ordered from the longest to the shortest       |
+| Path                     | What it is                                                   |
+| ------------------------ | ------------------------------------------------------------ |
+| `apps/desktop`           | Tauri shell that starts the daemon and loads the UI          |
+| `apps/web`               | Next.js UI, built as a static export                         |
+| `apps/daemon`            | `swarmd`: local database, git, workspaces and agent adapters |
+| `apps/api`               | Hono API: accounts, organizations and invitations            |
+| `packages/contracts`     | Schemas and RPC definitions shared by the apps               |
+| `packages/auth`          | Better Auth configuration                                    |
+| `packages/db-cloud`      | Postgres schema, migrations and database service             |
+| `packages/email`         | Transactional email through Resend                           |
+| `scripts/sortImports.ts` | Keeps imports ordered from the longest to the shortest       |
 
 ## Contributing
 

@@ -50,8 +50,24 @@ describe("CodexAdapter", () => {
 		const models = await runWithCodex(Effect.flatMap(CodexAdapter, (codex) => codex.listModels));
 		expect(models).toEqual({
 			models: [
-				{ id: "gpt-first", label: "GPT First" },
-				{ id: "gpt-later", label: "GPT Later" },
+				{
+					id: "gpt-first",
+					label: "GPT First",
+					description: "",
+					efforts: [],
+					defaultEffort: null,
+					contextWindow: null,
+					supportsImages: false,
+				},
+				{
+					id: "gpt-later",
+					label: "GPT Later",
+					description: "",
+					efforts: [],
+					defaultEffort: null,
+					contextWindow: null,
+					supportsImages: false,
+				},
 			],
 			defaultModel: "gpt-first",
 		});

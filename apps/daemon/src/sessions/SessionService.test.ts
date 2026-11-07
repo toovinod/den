@@ -27,7 +27,7 @@ const addWorkspace = Effect.fn("addWorkspace")(function* (tempDir: string) {
 const addSession = Effect.fn("addSession")(function* (tempDir: string, agent: AgentKind = "codex") {
 	const workspace = yield* addWorkspace(tempDir);
 	const sessions = yield* SessionService;
-	return yield* sessions.create({ workspaceId: workspace.id, agent, model: "replay" });
+	return yield* sessions.create({ workspaceId: workspace.id, agent, model: "replay", effort: null });
 });
 
 const statusOf = (sessionId: string) =>
@@ -107,9 +107,9 @@ describe("SessionService", () => {
 			Effect.gen(function* () {
 				const workspace = yield* addWorkspace(tempDir);
 				const service = yield* SessionService;
-				yield* service.create({ workspaceId: workspace.id, agent: "claude", model: "claude-opus-5-5" });
-				yield* service.create({ workspaceId: workspace.id, agent: "codex", model: "gpt-first" });
-				yield* service.create({ workspaceId: workspace.id, agent: "codex", model: "gpt-first" });
+				yield* service.create({ workspaceId: workspace.id, agent: "claude", model: "claude-opus-5-5", effort: null });
+				yield* service.create({ workspaceId: workspace.id, agent: "codex", model: "gpt-first", effort: null });
+				yield* service.create({ workspaceId: workspace.id, agent: "codex", model: "gpt-first", effort: null });
 				return yield* service.list(workspace.id);
 			}),
 		);
@@ -226,7 +226,7 @@ describe("SessionService", () => {
 				const sessions = yield* SessionService;
 				const workspace = yield* addWorkspace(tempDir);
 				const created = yield* Effect.forEach(Array.from({ length: MAX_RUNNING_SESSIONS + 1 }), () =>
-					sessions.create({ workspaceId: workspace.id, agent: "codex", model: "replay" }),
+					sessions.create({ workspaceId: workspace.id, agent: "codex", model: "replay", effort: null }),
 				);
 				for (const session of created.slice(0, MAX_RUNNING_SESSIONS)) {
 					yield* sessions.sendMessage(session.id, "run the tests", false);
@@ -259,7 +259,12 @@ describe("SessionService", () => {
 						const workspace = yield* addWorkspace(tempDir);
 						const ids = [];
 						for (const status of ["running", "awaitingApproval", "idle"] as const) {
-							const session = yield* sessions.create({ workspaceId: workspace.id, agent: "codex", model: "replay" });
+							const session = yield* sessions.create({
+								workspaceId: workspace.id,
+								agent: "codex",
+								model: "replay",
+								effort: null,
+							});
 							yield* database.query((db) =>
 								db.update(agentSession).set({ status }).where(eq(agentSession.id, session.id)),
 							);
