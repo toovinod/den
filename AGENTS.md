@@ -126,6 +126,20 @@ Follow Effect's own guide, [`LLMS.md`](https://github.com/Effect-TS/effect/blob/
 - Automations we build are agents designed as loops with evals. Measure them on real runs before trusting them, then improve from the results.
 - Memory is a product feature. Cap buffers like terminal scrollback and streamed output, stream instead of loading whole files, and release everything when a workspace closes.
 
+## States, retries and fallbacks
+
+- Every job (setup and run scripts, clones, pushes, sandbox provisioning, queued cloud work) has one status union: `pending`, `processing`, `completed`, `failed`, `deadLetter`.
+- A job's row stores `status`, `attempts`, `lastError` and timestamps. Each transition is one write, so after a restart we know exactly where every job stopped.
+- Each state machine has one `transition` function that allows only legal moves, with a test per move. Never set a status anywhere else.
+- Classify every tagged error as retryable (network, timeout, rate limit, busy database) or permanent (bad input, auth, missing file).
+- A retryable failure puts the job back to `pending` with `attempts + 1` and `lastError`. Retry with `Schedule.exponential` and `Schedule.jittered`, capped by attempts. BullMQ jobs use `attempts` with exponential `backoff`.
+- When attempts run out the job moves to `deadLetter`. Dead-letter jobs are never retried automatically: the UI lists them and the user retries or discards them.
+- A permanent failure goes straight to `failed`.
+- On startup, jobs still in `processing` were cut off by the restart. Treat that as a retryable failure.
+- Agent sessions are not jobs. They keep their own union: `idle`, `running`, `awaitingApproval`, `interrupted`, `failed`.
+- A fallback must return a correct alternative and log that it was used, for example reading the default branch from `origin/HEAD` and then from `git config init.defaultBranch`. Never swallow an error just to keep going.
+- Errors shown to users say what failed and what to do next. Raw causes go to logs, never to the UI.
+
 ## Data
 
 - SQLite holds what happens on the user's machine: projects, workspaces, agent sessions and their events.
