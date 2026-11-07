@@ -32,7 +32,6 @@ const bashSuggestion: PermissionUpdate = {
 
 // A scripted stand-in for the SDK's query(). "approve" in a message asks for a Bash
 // approval, and "session" adds a permission suggestion so allowForSession is offered.
-// Every options object the fake was started with, newest last.
 const startedWith: Array<Options> = [];
 
 const makeFakeQuery = (permissions: Array<PermissionResult>) =>

@@ -9,7 +9,6 @@ import { makeTestRepository } from "../testing/makeTestRepository.ts";
 import { TEST_TOKEN, testDaemonConfig } from "../testing/testDaemonConfig.ts";
 import { DaemonServer } from "./DaemonServer.ts";
 
-// Starts a daemon with its data dir in a fresh temp folder, which is removed afterwards.
 const runWithDaemon = <A, E>(
 	program: (
 		baseUrl: string,

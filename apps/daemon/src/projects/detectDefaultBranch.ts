@@ -8,7 +8,6 @@ const readGit = (cwd: string, args: ReadonlyArray<string>) =>
 		Effect.catchTag("GitCommandError", () => Effect.succeed("")),
 	);
 
-// Tries origin/HEAD, then init.defaultBranch, then the checked-out branch, logging each fallback.
 export const detectDefaultBranch = Effect.fn("detectDefaultBranch")(
 	function* (repositoryPath: string) {
 		const originHead = yield* readGit(repositoryPath, [

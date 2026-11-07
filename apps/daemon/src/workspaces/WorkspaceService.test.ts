@@ -16,7 +16,6 @@ import {
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import { WorkspaceService } from "./WorkspaceService.ts";
 
-// A repository added as a project, with an optional setup script.
 const addProject = Effect.fn("addProject")(function* (
 	tempDir: string,
 	setupScript: string | null = null,

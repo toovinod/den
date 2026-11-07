@@ -15,7 +15,6 @@ const AppLayer = Auth.layer.pipe(
 	),
 );
 
-// Hono is the framework edge: the one place the API turns Effect services into promises.
 const runtime = ManagedRuntime.make(AppLayer);
 
 const { app, port } = await runtime.runPromise(

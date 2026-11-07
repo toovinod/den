@@ -99,7 +99,6 @@ export const FileInput = Schema.Union([
 	Schema.Struct({ notebook_path: Schema.String }),
 ]);
 
-// `claude auth status --json`. Only the login state and a display label are read.
 export const ClaudeAuthStatus = Schema.Struct({
 	loggedIn: Schema.Boolean,
 	authMethod: Schema.optionalKey(Schema.String),

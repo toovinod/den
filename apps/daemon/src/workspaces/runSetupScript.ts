@@ -52,7 +52,6 @@ class ScriptRetryScheduled extends Schema.TaggedError<ScriptRetryScheduled>()(
 	{},
 ) {}
 
-// Applies one job event to a scriptRun row in one guarded write. `exitCode` rides along when known.
 export const applyScriptRunEvent = Effect.fn("applyScriptRunEvent")(function* (
 	scriptRunId: string,
 	event: JobEvent,
@@ -130,7 +129,6 @@ const executeScript = Effect.fn("executeScript")(
 		),
 );
 
-// Runs a pending setup script to the end: completed, failed, or deadLetter after retries.
 // Every status change goes through applyScriptRunEvent, so a restart knows where it stopped.
 export const runSetupScript = Effect.fn("runSetupScript")(
 	function* (run: {

@@ -65,7 +65,6 @@ export class EmailService extends Context.Service<
 	);
 }
 
-// Holds every email the test layer "sent", so tests can assert on them.
 export class SentEmails extends Context.Service<
 	SentEmails,
 	Ref.Ref<ReadonlyArray<EmailMessage>>

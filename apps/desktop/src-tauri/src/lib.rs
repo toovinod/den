@@ -22,7 +22,6 @@ struct Daemon {
   child: Mutex<Option<CommandChild>>,
 }
 
-// The UI calls this once on load. It waits until the daemon has announced its address.
 #[tauri::command]
 async fn daemon_connection(daemon: State<'_, Daemon>) -> Result<DaemonConnection, String> {
   let mut connection = daemon.connection.clone();

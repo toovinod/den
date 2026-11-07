@@ -15,8 +15,6 @@ import {
 	uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
-// IDs are UUIDv7 text and times are ISO strings, written by the services.
-
 export const project = sqliteTable(
 	"project",
 	{
@@ -87,7 +85,6 @@ export const sessionEvent = sqliteTable(
 		// Per session, monotonic and gapless for stored events.
 		sequence: integer().notNull(),
 		type: text().notNull(),
-		// Trimmed JSON. Decode it with Schema when reading.
 		payload: text({ mode: "json" }).notNull(),
 		createdAt: text().notNull(),
 	},

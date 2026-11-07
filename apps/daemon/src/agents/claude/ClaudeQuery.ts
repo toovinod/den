@@ -13,7 +13,6 @@ export interface ClaudeQueryRun {
 	close(): void;
 }
 
-// The Agent SDK's `query()` behind a service, so tests can replace it.
 export class ClaudeQuery extends Context.Service<
 	ClaudeQuery,
 	{

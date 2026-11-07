@@ -15,7 +15,6 @@ export class GitCommandError extends Schema.TaggedError<GitCommandError>()(
 	},
 ) {}
 
-// Runs `git <args>` in `cwd` and returns stdout without trailing whitespace.
 // Leading whitespace is kept because `git status --porcelain` lines start with a space.
 export const runGit = Effect.fn("runGit")(
 	function* (cwd: string, args: ReadonlyArray<string>) {

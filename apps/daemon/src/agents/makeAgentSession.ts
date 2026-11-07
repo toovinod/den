@@ -52,9 +52,7 @@ export interface AgentSession {
 	): Effect.Effect<void>;
 	setNativeSessionId(id: string): Effect.Effect<void>;
 	readonly nativeSessionId: Effect.Effect<string, AgentError>;
-	// Ends the session with a fatal error: the event stream and the native id fail.
 	fail(error: AgentError): Effect.Effect<void>;
-	// Ends the event stream normally, for when the agent process exits.
 	readonly end: Effect.Effect<void>;
 	start(
 		driver: TurnDriver,

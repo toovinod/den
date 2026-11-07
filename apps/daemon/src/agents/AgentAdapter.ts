@@ -23,7 +23,6 @@ export const StartSessionInput = Schema.Struct({
 });
 export type StartSessionInput = typeof StartSessionInput.Type;
 
-// The native CLI's login state. Swarm never reads the credentials behind it.
 export const AgentAuthStatus = Schema.Union([
 	Schema.Struct({
 		status: Schema.Literal("loggedIn"),
@@ -48,19 +47,16 @@ export class AgentProcessError extends Schema.TaggedError<AgentProcessError>()(
 	{ message: Schema.String, cause: Schema.Defect() },
 ) {}
 
-// Permanent: the agent CLI is not installed at the configured path.
 export class AgentNotInstalledError extends Schema.TaggedError<AgentNotInstalledError>()(
 	"AgentNotInstalledError",
 	{ executable: Schema.String },
 ) {}
 
-// Permanent: the agent sent something we cannot decode, or rejected a request.
 export class AgentProtocolError extends Schema.TaggedError<AgentProtocolError>()(
 	"AgentProtocolError",
 	{ message: Schema.String, cause: Schema.Defect() },
 ) {}
 
-// Permanent: the installed Codex differs from the one our protocol types were generated from.
 export class CodexVersionMismatchError extends Schema.TaggedError<CodexVersionMismatchError>()(
 	"CodexVersionMismatchError",
 	{ expected: Schema.String, actual: Schema.String },
@@ -72,13 +68,11 @@ export class SessionBusyError extends Schema.TaggedError<SessionBusyError>()(
 	{ queued: Schema.Number },
 ) {}
 
-// Permanent: no pending approval has this id.
 export class ApprovalNotFoundError extends Schema.TaggedError<ApprovalNotFoundError>()(
 	"ApprovalNotFoundError",
 	{ requestId: Schema.String },
 ) {}
 
-// Permanent: the decision is not one of the request's choices.
 export class ApprovalChoiceError extends Schema.TaggedError<ApprovalChoiceError>()(
 	"ApprovalChoiceError",
 	{ requestId: Schema.String, decision: Schema.String },
@@ -109,8 +103,6 @@ export interface AgentSessionHandle {
 	// Waits until the agent reports its id, which may only happen after the first message.
 	readonly nativeSessionId: Effect.Effect<string, AgentError>;
 	readonly events: Stream.Stream<AgentEvent, AgentError>;
-	// Runs one turn at a time. Later messages queue, or steer the running turn when asked
-	// and the adapter supports it.
 	sendMessage(
 		text: string,
 		options?: { readonly steer?: boolean },

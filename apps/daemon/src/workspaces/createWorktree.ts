@@ -5,7 +5,6 @@ import {
 import { Effect } from "effect";
 import { runGit } from "../git/runGit.ts";
 
-// Creates `branch` from `baseBranch` and checks it out in a new folder at `worktreePath`.
 export const createWorktree = Effect.fn("createWorktree")(function* (options: {
 	readonly repositoryPath: string;
 	readonly worktreePath: string;

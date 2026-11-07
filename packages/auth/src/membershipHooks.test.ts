@@ -37,7 +37,6 @@ const invitation = {
 	createdAt: epoch,
 };
 
-// Runs one Better Auth hook against a real MembershipEvents service and returns what it published.
 const publishedBy = (
 	callHook: (hooks: ReturnType<typeof membershipHooks>) => Promise<void>,
 ) =>

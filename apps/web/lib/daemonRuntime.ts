@@ -2,7 +2,6 @@ import { DaemonClient } from "@repo/contracts/DaemonClient";
 import { invoke } from "@tauri-apps/api/core";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 
-// What the Tauri shell hands the UI after it spawns the daemon sidecar.
 const DaemonConnection = Schema.Struct({
 	url: Schema.String,
 	token: Schema.String,

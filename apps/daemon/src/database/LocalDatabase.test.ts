@@ -83,7 +83,6 @@ describe("LocalDatabase", () => {
 			Effect.gen(function* () {
 				const fs = yield* FileSystem.FileSystem;
 				const freshDir = join(tempDir, "fresh");
-				// An existing folder that is too open gets tightened.
 				const openDir = join(tempDir, "open");
 				yield* fs.makeDirectory(openDir, { mode: 0o755 });
 				yield* fs.chmod(openDir, 0o755);

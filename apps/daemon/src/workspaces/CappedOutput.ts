@@ -3,7 +3,6 @@ const encoder = new TextEncoder();
 export const OUTPUT_MAX_BYTES = 64 * 1024;
 export const OUTPUT_MAX_LINES = 2000;
 
-// Keeps the last lines of a script's output, within both a byte and a line budget.
 // Raw output never goes to the database, and this is all we hold in memory.
 export class CappedOutput {
 	private readonly lines: Array<{ text: string; bytes: number }> = [];

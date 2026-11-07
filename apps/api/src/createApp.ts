@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 export interface CreateAppInput {
-	// The only origin allowed to call the API with cookies: the static web app.
 	readonly webOrigin: string;
 	readonly authHandler: (request: Request) => Promise<Response>;
 }

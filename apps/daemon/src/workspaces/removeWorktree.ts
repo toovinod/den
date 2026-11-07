@@ -2,7 +2,6 @@ import { WorktreeRemoveError } from "@repo/contracts/Workspace";
 import { Effect } from "effect";
 import { runGit } from "../git/runGit.ts";
 
-// What archiving would lose if the folder went away now.
 export const findUnsavedWork = Effect.fn("findUnsavedWork")(function* (
 	worktreePath: string,
 	baseBranch: string,

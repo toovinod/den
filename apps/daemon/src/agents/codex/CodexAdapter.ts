@@ -42,7 +42,6 @@ import type { TurnInterruptParams } from "./generated/v2/TurnInterruptParams.ts"
 import type { TurnStartParams } from "./generated/v2/TurnStartParams.ts";
 import type { TurnSteerParams } from "./generated/v2/TurnSteerParams.ts";
 
-// The Codex version the protocol types in ./generated were generated from.
 export const CODEX_VERSION = codexVersionFile.trim();
 
 // Releases bundle a pinned codex binary and point this at it.

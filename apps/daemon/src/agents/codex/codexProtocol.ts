@@ -73,7 +73,6 @@ export const ThreadItem = Schema.Union([
 		status: Status,
 		error: Schema.NullOr(Schema.Struct({ message: Schema.String })),
 	}),
-	// Reasoning, plans, web searches and the rest are not shown as tools yet.
 	Schema.Struct({ type: Schema.String, id: Schema.String }),
 ]);
 export type ThreadItem = typeof ThreadItem.Type;

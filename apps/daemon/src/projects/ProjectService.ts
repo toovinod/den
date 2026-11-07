@@ -18,7 +18,6 @@ import { project, workspace } from "../database/schema.ts";
 import { runGit } from "../git/runGit.ts";
 import { detectDefaultBranch } from "./detectDefaultBranch.ts";
 
-// A blank script means "no script".
 const normalizeScript = (script: string | null) => script?.trim() || null;
 
 export class ProjectService extends Context.Service<ProjectService>()(
@@ -103,7 +102,6 @@ export class ProjectService extends Context.Service<ProjectService>()(
 								),
 							);
 							if (found > 0 && activeWorkspaces === 0) {
-								// Archived workspaces cascade with the project.
 								yield* tx.delete(project).where(eq(project.id, projectId));
 							}
 							return { found, activeWorkspaces };

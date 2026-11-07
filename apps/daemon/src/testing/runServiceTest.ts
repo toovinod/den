@@ -13,7 +13,6 @@ type Services =
 	| WorkspaceService
 	| BunServices.BunServices;
 
-// Runs `program` against the real services, as one daemon lifetime over `dataDir`.
 export const withServices =
 	(dataDir: string) =>
 	<A, E>(program: Effect.Effect<A, E, Services>) =>
@@ -23,7 +22,6 @@ export const withServices =
 			),
 		);
 
-// Gives `program` a temp folder, removed afterwards, and runs it as a promise.
 export const runInTempDir = <A, E>(
 	program: (tempDir: string) => Effect.Effect<A, E, BunServices.BunServices>,
 ) =>
@@ -32,7 +30,6 @@ export const runInTempDir = <A, E>(
 		return yield* program(yield* fs.makeTempDirectoryScoped());
 	}).pipe(Effect.scoped, Effect.provide(BunServices.layer), Effect.runPromise);
 
-// The common case: one daemon lifetime with its data dir inside the temp folder.
 export const runServiceTest = <A, E>(
 	program: (tempDir: string) => Effect.Effect<A, E, Services>,
 ) =>
@@ -40,7 +37,6 @@ export const runServiceTest = <A, E>(
 		withServices(join(tempDir, "data"))(program(tempDir)),
 	);
 
-// Polls until the workspace's latest script run reaches a final status.
 export const waitForScriptRun = (workspaceId: string) =>
 	Effect.flatMap(WorkspaceService, (workspaces) =>
 		workspaces.listScriptRuns(workspaceId),

@@ -15,13 +15,11 @@ import {
 } from "./Workspace.ts";
 
 export const CreateWorkspaceInput = Schema.Union([
-	// A new branch and folder under the data dir. The setup script runs there.
 	Schema.Struct({
 		kind: Schema.Literal("worktree"),
 		projectId: Schema.String,
 		name: WorkspaceName,
 	}),
-	// The project folder itself, on whatever branch it has checked out.
 	Schema.Struct({
 		kind: Schema.Literal("inPlace"),
 		projectId: Schema.String,

@@ -1,7 +1,6 @@
 import type { OrganizationOptions } from "better-auth/plugins";
 import type { MembershipEvent } from "./MembershipEvents.ts";
 
-// Maps Better Auth's organization callbacks to our membership events.
 export const membershipHooks = (
 	publish: (event: MembershipEvent) => Promise<void>,
 ) =>

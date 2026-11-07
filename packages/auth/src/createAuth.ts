@@ -9,7 +9,6 @@ import type { AuthConfig } from "./AuthConfig.ts";
 import type { MembershipEvent } from "./MembershipEvents.ts";
 import { membershipHooks } from "./membershipHooks.ts";
 
-// The only client allowed to start the device flow: the Swarm desktop app.
 export const DESKTOP_CLIENT_ID = "swarm-desktop";
 
 export interface CreateAuthInput {

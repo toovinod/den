@@ -7,7 +7,6 @@ import {
 } from "../AgentAdapter.ts";
 import { makeAgentSession } from "../makeAgentSession.ts";
 
-// A recorded session: each sendMessage plays the next turn's events in order.
 export const Recording = Schema.Struct({
 	kind: AgentKind,
 	nativeSessionId: Schema.String,
@@ -23,7 +22,6 @@ const capabilities: AgentCapabilities = {
 	steerWhileRunning: false,
 };
 
-// Plays recorded events so later layers can be tested without real agent CLIs.
 // Approval requests pause playback until they are answered. The session core emits
 // session.started and approval.resolved itself, so recorded copies of those are skipped.
 export const makeReplayAdapter = (recording: Recording): AgentAdapter => ({

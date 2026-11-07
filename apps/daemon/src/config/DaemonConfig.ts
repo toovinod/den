@@ -7,7 +7,6 @@ export class DaemonConfig extends Context.Service<
 	{
 		readonly port: number;
 		readonly token: Redacted.Redacted<string>;
-		// Holds the SQLite file and the worktrees folder.
 		readonly dataDir: string;
 	}
 >()("swarm/daemon/config/DaemonConfig") {

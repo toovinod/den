@@ -15,10 +15,8 @@ export type JobEvent =
 			readonly error: string;
 			readonly maxAttempts: number;
 	  }
-	// The owner went away (for example the workspace was archived).
 	| { readonly _tag: "Cancelled"; readonly reason: string };
 
-// The columns one transition writes. Timestamps not listed keep their value.
 export interface JobUpdate {
 	readonly status: JobStatus;
 	readonly attempts: number;

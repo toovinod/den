@@ -14,9 +14,7 @@ const oauthClient = (prefix: string) =>
 export class AuthConfig extends Context.Service<
 	AuthConfig,
 	{
-		// Public URL of the API that serves Better Auth, for example https://api.swarm.dev.
 		readonly baseUrl: string;
-		// Origin of the static web app that hosts sign-in, device approval and invite pages.
 		readonly webOrigin: string;
 		readonly secret: Redacted.Redacted<string>;
 		readonly databaseUrl: Redacted.Redacted<string>;

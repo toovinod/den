@@ -48,7 +48,6 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()(
 			// One fiber per running script, interrupted when its workspace is archived
 			// and when the daemon stops.
 			const runningScripts = yield* FiberMap.make<string>();
-			// Captured output per script run. Only the capped tail, and only in memory.
 			const outputs = new Map<string, CappedOutput>();
 
 			const startSetupScript = (
@@ -70,7 +69,6 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()(
 				);
 			};
 
-			// Inserts the workspace (and its setup run) unless an active workspace already has the path.
 			const insertWorkspace = (
 				row: WorkspaceRow,
 				setupRun: ScriptRunRow | null,
@@ -221,7 +219,6 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()(
 					)
 					.pipe(Effect.map((rows) => rows.map((row) => new Workspace(row))));
 
-			// Stops and fails the scripts still running in a workspace that is going away.
 			const cancelScripts = Effect.fn("WorkspaceService.cancelScripts")(
 				function* (workspaceId: string, reason: string) {
 					const unfinished = yield* database.query((db) =>

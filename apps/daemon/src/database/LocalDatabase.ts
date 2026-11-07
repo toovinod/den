@@ -28,7 +28,6 @@ export class LocalDatabaseError extends Schema.TaggedError<LocalDatabaseError>()
 
 export const DATABASE_FILE_NAME = "swarm.db";
 
-// Chats, paths and scripts are private to the user who runs the daemon.
 export const PRIVATE_DIRECTORY_MODE = 0o700;
 export const PRIVATE_FILE_MODE = 0o600;
 
@@ -47,7 +46,6 @@ const restrictDatabaseFiles = Effect.gen(function* () {
 export class LocalDatabase extends Context.Service<
 	LocalDatabase,
 	{
-		// Runs Drizzle queries (or a transaction) and maps driver failures to LocalDatabaseError.
 		// Domain checks return values from `run` and fail outside it, so `run` only fails with driver errors.
 		readonly query: <A>(
 			run: (db: LocalDrizzle) => Effect.Effect<A, DriverError>,

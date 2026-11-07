@@ -10,7 +10,6 @@ import { MembershipEvents } from "./MembershipEvents.ts";
 export class Auth extends Context.Service<
 	Auth,
 	{
-		// Better Auth's fetch handler, mounted by the API at /api/auth/*.
 		readonly handler: (request: Request) => Promise<Response>;
 	}
 >()("swarm/auth/Auth") {

@@ -10,7 +10,6 @@ export const ApprovalDecision = Schema.Literals([
 ]);
 export type ApprovalDecision = typeof ApprovalDecision.Type;
 
-// How an approval ended: a user decision, or cancelled because the turn was interrupted.
 export const ApprovalOutcome = Schema.Union([
 	ApprovalDecision,
 	Schema.Literal("cancelled"),
@@ -80,7 +79,6 @@ export const AgentEvent = Schema.Union([
 		itemId: Schema.String,
 		tool: ToolCall,
 		status: Schema.Literals(["completed", "failed", "declined"]),
-		// Trimmed to the tail the adapter keeps, never the whole output.
 		output: Schema.NullOr(Schema.String),
 	}),
 	Schema.Struct({

@@ -16,7 +16,6 @@ const isInternalFailure = (error: unknown): error is InternalFailure =>
 	Predicate.isTagged(error, "GitCommandError") ||
 	Predicate.isTagged(error, "IllegalJobTransitionError");
 
-// Logs the raw cause and hands the UI a DaemonInternalError that says what failed.
 export const orInternalError =
 	(operation: string) =>
 	<A, E, R>(
