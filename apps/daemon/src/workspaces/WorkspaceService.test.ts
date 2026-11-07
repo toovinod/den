@@ -394,4 +394,17 @@ describe("WorkspaceService", () => {
 		expect(result.folderExists).toBe(false);
 		expect(result.branchExists).toBe(false);
 	});
+
+	test("archiving the same workspace from several calls at once archives it once", async () => {
+		const results = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const project = yield* addProject(tempDir);
+				const workspaces = yield* WorkspaceService;
+				const created = yield* workspaces.create({ kind: "worktree", projectId: project.id, name: "feature" });
+				const archive = workspaces.archive(created.id, { force: false });
+				return yield* Effect.all([archive, archive, archive, archive], { concurrency: "unbounded" });
+			}),
+		);
+		expect(results.map((archived) => archived.status)).toEqual(["archived", "archived", "archived", "archived"]);
+	});
 });

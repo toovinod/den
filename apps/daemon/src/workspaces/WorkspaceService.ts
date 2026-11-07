@@ -6,10 +6,10 @@ import {
 } from "@repo/contracts/Workspace";
 import { discardWorktree, findUnsavedWork, removeWorktree } from "./removeWorktree.ts";
 import { LocalDatabase, PRIVATE_DIRECTORY_MODE } from "../database/LocalDatabase.ts";
+import { Context, Effect, FiberMap, FileSystem, Layer, Semaphore } from "effect";
 import { applyScriptRunEvent, runSetupScript } from "./runSetupScript.ts";
 import type { CreateWorkspaceInput } from "@repo/contracts/WorkspaceRpcs";
 import { ScriptRun, ScriptRunOutput } from "@repo/contracts/ScriptRun";
-import { Context, Effect, FiberMap, FileSystem, Layer } from "effect";
 import { project, scriptRun, workspace } from "../database/schema.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
@@ -41,6 +41,8 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 		// One fiber per running script, interrupted when its workspace is archived
 		// and when the daemon stops.
 		const runningScripts = yield* FiberMap.make<string>();
+		// Archiving runs git on the worktree folder, so two archives at once could both try to remove it.
+		const archiveLock = yield* Semaphore.make(1);
 		const outputs = new Map<string, CappedOutput>();
 
 		const startSetupScript = (scriptRunId: string, script: string, cwd: string) => {
@@ -199,56 +201,59 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 			}
 		}, Effect.provide(services));
 
-		const archive = Effect.fn("WorkspaceService.archive")(function* (
-			workspaceId: string,
-			options: { readonly force: boolean },
-		) {
-			const current = yield* get(workspaceId);
-			if (current.status === "archived") {
-				return current;
-			}
-			if (current.kind === "worktree") {
-				// The foreign key keeps the project while it has workspaces.
-				const owner = yield* projects.get(current.projectId).pipe(Effect.catchTag("ProjectNotFoundError", Effect.die));
-				if (yield* fs.exists(current.path).pipe(Effect.orDie)) {
-					const unsaved = yield* findUnsavedWork(current.path, current.baseBranch);
-					const hasUnsaved = unsaved.changedFiles.length > 0 || unsaved.unpushedCommits > 0;
-					if (hasUnsaved && !options.force) {
-						return yield* new WorkspaceHasUnsavedWorkError({
-							workspaceId,
-							...unsaved,
-						});
-					}
-					yield* cancelScripts(workspaceId, "The workspace was archived.");
-					yield* removeWorktree({
-						repositoryPath: owner.path,
-						worktreePath: current.path,
-						stashMessage: unsaved.changedFiles.length > 0 ? `swarm-archive/${workspaceId}` : null,
-					});
-				} else {
-					// Someone deleted the folder already. Forget it in git and carry on.
-					yield* Effect.logWarning("Worktree folder is missing, pruning it").pipe(
-						Effect.annotateLogs({ workspaceId, path: current.path }),
-					);
-					yield* cancelScripts(workspaceId, "The workspace was archived.");
-					yield* runGit(owner.path, ["worktree", "prune"]);
+		const archive = Effect.fn("WorkspaceService.archive")(
+			function* (workspaceId: string, options: { readonly force: boolean }) {
+				const current = yield* get(workspaceId);
+				if (current.status === "archived") {
+					return current;
 				}
-			} else {
-				// In place: the folder is the project itself, so nothing is removed.
-				yield* cancelScripts(workspaceId, "The workspace was archived.");
-			}
+				if (current.kind === "worktree") {
+					// The foreign key keeps the project while it has workspaces.
+					const owner = yield* projects
+						.get(current.projectId)
+						.pipe(Effect.catchTag("ProjectNotFoundError", Effect.die));
+					if (yield* fs.exists(current.path).pipe(Effect.orDie)) {
+						const unsaved = yield* findUnsavedWork(current.path, current.baseBranch);
+						const hasUnsaved = unsaved.changedFiles.length > 0 || unsaved.unpushedCommits > 0;
+						if (hasUnsaved && !options.force) {
+							return yield* new WorkspaceHasUnsavedWorkError({
+								workspaceId,
+								...unsaved,
+							});
+						}
+						yield* cancelScripts(workspaceId, "The workspace was archived.");
+						yield* removeWorktree({
+							repositoryPath: owner.path,
+							worktreePath: current.path,
+							stashMessage: unsaved.changedFiles.length > 0 ? `swarm-archive/${workspaceId}` : null,
+						});
+					} else {
+						// Someone deleted the folder already. Forget it in git and carry on.
+						yield* Effect.logWarning("Worktree folder is missing, pruning it").pipe(
+							Effect.annotateLogs({ workspaceId, path: current.path }),
+						);
+						yield* cancelScripts(workspaceId, "The workspace was archived.");
+						yield* runGit(owner.path, ["worktree", "prune"]);
+					}
+				} else {
+					// In place: the folder is the project itself, so nothing is removed.
+					yield* cancelScripts(workspaceId, "The workspace was archived.");
+				}
 
-			const archivedAt = yield* nowIso;
-			yield* database.query((db) =>
-				db.update(workspace).set({ status: "archived", archivedAt }).where(eq(workspace.id, workspaceId)),
-			);
-			const runs = yield* listScriptRuns(workspaceId);
-			for (const run of runs) {
-				outputs.delete(run.id);
-			}
-			yield* Effect.logInfo("Archived workspace").pipe(Effect.annotateLogs({ workspaceId }));
-			return yield* get(workspaceId);
-		}, Effect.provide(services));
+				const archivedAt = yield* nowIso;
+				yield* database.query((db) =>
+					db.update(workspace).set({ status: "archived", archivedAt }).where(eq(workspace.id, workspaceId)),
+				);
+				const runs = yield* listScriptRuns(workspaceId);
+				for (const run of runs) {
+					outputs.delete(run.id);
+				}
+				yield* Effect.logInfo("Archived workspace").pipe(Effect.annotateLogs({ workspaceId }));
+				return yield* get(workspaceId);
+			},
+			Semaphore.withPermit(archiveLock),
+			Effect.provide(services),
+		);
 
 		const listScriptRuns = (workspaceId: string) =>
 			database
