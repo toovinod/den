@@ -220,6 +220,15 @@ A release spike comes right after the current merge and before milestone 5:
    - Every child process dies when the app quits or crashes.
 3. Run one real agent turn per agent in the packaged app.
 
+The spike ran on 2026-11-07. Results, evidence and open items are in [packaging-spike.md](packaging-spike.md).
+It changed these decisions:
+
+- `swarmd` exits when its stdin closes, which section 3.1 asked for. Until the `shutdown` RPC exists, quitting closes stdin instead of killing the daemon.
+- The Claude adapter runs the user's own `claude` from PATH. Swarm does not embed or extract the SDK's bundled CLI.
+- The shell starts `swarmd` with the PATH of the user's login shell, because an app opened from Finder cannot otherwise find `claude`, `codex` or `node`.
+- Terminals spawn with `detached: true` and are stopped by signalling their process group.
+- A crash of `swarmd` itself still leaves some children running. That stays open.
+
 ## 14. Memory and privacy
 
 - **Caps by bytes and lines.**
