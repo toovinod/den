@@ -9,7 +9,7 @@ import { nowIso } from "../database/nowIso.ts";
 import { and, eq } from "drizzle-orm";
 
 // Permanent: the script ran and failed. Retrying would only repeat it, so the user decides.
-export class ScriptExitError extends Schema.TaggedError<ScriptExitError>()("ScriptExitError", {
+class ScriptExitError extends Schema.TaggedError<ScriptExitError>()("ScriptExitError", {
 	exitCode: Schema.Int,
 }) {
 	override get message() {
@@ -18,7 +18,7 @@ export class ScriptExitError extends Schema.TaggedError<ScriptExitError>()("Scri
 }
 
 // Retryable: a hung network install or a slow machine may pass next time.
-export class ScriptTimeoutError extends Schema.TaggedError<ScriptTimeoutError>()("ScriptTimeoutError", {
+class ScriptTimeoutError extends Schema.TaggedError<ScriptTimeoutError>()("ScriptTimeoutError", {
 	timeout: Schema.String,
 }) {
 	override get message() {
@@ -27,7 +27,7 @@ export class ScriptTimeoutError extends Schema.TaggedError<ScriptTimeoutError>()
 }
 
 // Retryable: the shell could not start, usually from a transient limit like too many open files.
-export class ScriptSpawnError extends Schema.TaggedError<ScriptSpawnError>()("ScriptSpawnError", {
+class ScriptSpawnError extends Schema.TaggedError<ScriptSpawnError>()("ScriptSpawnError", {
 	cause: Schema.Defect(),
 }) {
 	override get message() {

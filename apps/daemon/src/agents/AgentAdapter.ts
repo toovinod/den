@@ -77,13 +77,8 @@ export class ApprovalChoiceError extends Schema.TaggedError<ApprovalChoiceError>
 
 export type AgentError = AgentProcessError | AgentNotInstalledError | AgentProtocolError | CodexVersionMismatchError;
 
-export type SendMessageError = AgentError | SessionBusyError;
-export type ApprovalError = AgentError | ApprovalNotFoundError | ApprovalChoiceError;
-
-const retryableTags: ReadonlySet<string> = new Set(["AgentProcessError", "SessionBusyError"]);
-
-export const isRetryableAgentError = (error: SendMessageError | ApprovalError): boolean =>
-	retryableTags.has(error._tag);
+type SendMessageError = AgentError | SessionBusyError;
+type ApprovalError = AgentError | ApprovalNotFoundError | ApprovalChoiceError;
 
 export interface AgentSessionHandle {
 	// Waits until the agent reports its id, which may only happen after the first message.
