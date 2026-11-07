@@ -23,8 +23,8 @@ Do not swap any of these without a discussion first.
 | Runtime, package manager, tests, bundler | Bun only. Never Node.js, npm, pnpm or yarn.                               |
 | Monorepo                                 | Turborepo with Bun workspaces                                             |
 | Language                                 | TypeScript, strict                                                        |
-| Effects, errors, services                | Effect                                                                    |
-| Validation                               | Effect Schema. Never Zod in our code.                                     |
+| Effects, errors, services                | Effect 4                                                                  |
+| Validation                               | `Schema` from `effect`. Never Zod in our code.                            |
 | UI                                       | Next.js                                                                   |
 | API                                      | Hono                                                                      |
 | Databases                                | Drizzle with SQLite (`bun:sqlite`) locally and Neon Postgres in the cloud |
@@ -43,7 +43,7 @@ Do not swap any of these without a discussion first.
 
 - A name says what the code does: `sendEmail.ts`, `createWorktree.ts`. Never `utils.ts`, `helpers.ts`, `misc/` or `common/`.
 - Files and source folders use camelCase: `sendEmail.ts`, `agentAdapters/`. Never snake_case or kebab-case.
-- React component files use PascalCase and match their export: `WorkspaceList.tsx`.
+- A file whose main export is a component or class (Effect service, error, schema class) uses PascalCase and matches it: `WorkspaceList.tsx`, `WorktreeManager.ts`.
 - Package folders use kebab-case to match their npm name (`packages/db-local`), because npm names must be lowercase.
 - Framework-reserved files keep the framework's names: `page.tsx`, `layout.tsx`, `route.ts`.
 - Tests sit next to the code they test: `createWorktree.test.ts`.
@@ -61,15 +61,58 @@ Do not swap any of these without a discussion first.
 
 ## Effect
 
-- Every side effect (files, processes, network, database, clock) is an `Effect`. Pure logic stays a plain function.
-- Errors are values. Define a `Data.TaggedError` per failure and handle it with `Effect.catchTag`.
-- No `throw` and no `try`/`catch` in app code. Wrap promises with `Effect.tryPromise` and map them to a tagged error.
-- Dependencies are services provided through `Layer`. No module-level singletons or globals.
-- Decode every external input with Effect Schema at the boundary: HTTP bodies, agent CLI output, env vars, files, JSON columns. Inside the boundary, trust the types.
-- Read configuration through Effect `Config`, never from `process.env` or `Bun.env` directly.
-- Acquire processes, PTYs, watchers and connections with `Effect.acquireRelease` so they are always released.
-- Log with `Effect.log*` and trace with `Effect.withSpan`. No `console.log` in committed code.
-- Check the installed Effect version's docs before using an API you have not seen in this repo.
+We use Effect 4.
+Its APIs differ from Effect 3, so never copy v3 code (`Context.Tag`, `Effect.Service`, `Data.TaggedError`, `Effect.catchAll`).
+Follow Effect's own guide, [`LLMS.md`](https://github.com/Effect-TS/effect/blob/main/LLMS.md), and the installed source in `node_modules/effect`.
+
+### Where Effect runs
+
+- The daemon, the API and every shared package are written in Effect. Pure logic stays a plain function.
+- React components stay plain React. They reach Effect code only through the app's `ManagedRuntime`.
+
+### Writing effects
+
+- Write inline code with `Effect.gen`.
+- Write reusable functions with `Effect.fn("functionName")`, where the name matches the function. Use `Effect.fnUntraced` on hot paths and small internal helpers.
+- Never write a function that only wraps and returns `Effect.gen`.
+- Add behavior with combinators: `.pipe(...)` on effects, extra arguments to `Effect.fn`. Never call `.pipe` on an `Effect.fn`.
+- Raise an error with `return yield* new SomeError(...)`, so TypeScript knows the code stops there.
+
+### Errors
+
+- Define one `Schema.TaggedError` class per failure, named for what failed: `WorktreeCreateError`.
+- Handle errors with `Effect.catchTag` or `Effect.catchTags`. Use `Effect.catch` only as a last fallback.
+- No `throw` and no `try`/`catch`. Wrap promise APIs with `Effect.tryPromise({ try, catch })` and map the failure to a tagged error.
+- Keep an unexpected underlying error in a `Schema.Defect()` field named `cause`.
+
+### Services and layers
+
+- Put behavior in services: `class Name extends Context.Service<Name, Interface>()("swarm/<package>/<path>/Name")`.
+- Give each service a `static readonly layer` built with `Layer.effect`, and return the implementation with `Name.of({...})`.
+- Compose layers with `Layer.provide` and `Layer.provideMerge`. No module-level singletons or globals.
+- Use `Context.Reference` for settings and flags that have a default value.
+
+### Validation, config and time
+
+- All validation and domain modeling uses `Schema`. Decode untrusted input at the boundary: HTTP bodies, agent CLI output, files, env vars, JSON columns. Inside the boundary, trust the types.
+- Never hand-write parsing or type checks. Runtime guards come from `Predicate`, never home-made helpers like `isRecord`.
+- Read configuration with `Config` and secrets with `Config.Redacted`. Never read `process.env` or `Bun.env` directly.
+- The one exception is `NEXT_PUBLIC_*` variables in Next.js browser code, which Next.js inlines from `process.env` at build time.
+- Use `DateTime` and `Clock` for time. Never `Date` or `Date.now`.
+
+### Resources and concurrency
+
+- Acquire processes, PTYs, watchers and connections with `Effect.acquireRelease`, scoped to the workspace or session that owns them.
+- Run background loops as `Layer.effectDiscard` with `Effect.forkScoped`.
+- Use `PubSub` for in-process events, `Stream` for data over time and `Schedule` for retries and polling.
+- Spawn commands such as `git`, `gh` and the agent CLIs with the `effect/process` modules.
+
+### Running and observing
+
+- Start each process with `BunRuntime.runMain` from `@effect/platform-bun`, launching the main layer with `Layer.launch`.
+- At framework edges (Hono handlers, Next.js server code), build one `ManagedRuntime` from the app layer and call `runtime.runPromise` there, nowhere else.
+- Log with `Effect.log*` and `Effect.annotateLogs`. No `console.log` in committed code.
+- Spans come from `Effect.fn` names and `Effect.withSpan`. Export telemetry with the Otlp modules in `effect/observability`.
 
 ## Agents and jobs
 
@@ -107,7 +150,8 @@ Never hand-edit these. Regenerate them with their tool:
 - Use `bun test`. Test behavior through public functions, not internals.
 - A bug fix starts with a failing test that reproduces the bug.
 - New behavior ships with tests for the main path and the edge cases that matter.
-- Unit tests never touch the network or real agent CLIs. Provide test layers instead.
+- Unit tests never touch the network or real agent CLIs. Provide test layers in place of real services.
+- Run an effect in a test with `Effect.runPromise`, after providing its layers.
 
 ## Gates
 
