@@ -15,6 +15,12 @@ The coding rules are in [AGENTS.md](AGENTS.md), and the design is in [docs/archi
 Follow the Development section of the [README](README.md).
 `bun run setup` starts Postgres and Redis in Docker and applies the migrations, and the API applies new migrations every time it starts in development.
 
+The repo uses TypeScript 7, the native compiler, which no longer ships the `tsserver` that most editors load.
+Editors that use the workspace TypeScript through `tsserver` show false "Cannot find module" errors.
+
+- **Zed:** install the "TypeScript Language Server" extension. The repo's `.zed/settings.json` already selects it and pins TypeScript 7.0.2.
+- **VS Code:** install the "TypeScript (Native Preview)" extension.
+
 ## Making a change
 
 1. Branch from `main`.
