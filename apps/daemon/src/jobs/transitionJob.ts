@@ -37,9 +37,7 @@ export const transitionJob = (
 	event: JobEvent,
 	now: string,
 ): Result.Result<JobUpdate, IllegalJobTransitionError> => {
-	const illegal = Result.fail(
-		new IllegalJobTransitionError({ from: job.status, event: event._tag }),
-	);
+	const illegal = Result.fail(new IllegalJobTransitionError({ from: job.status, event: event._tag }));
 	switch (event._tag) {
 		case "Started":
 			return job.status === "pending"

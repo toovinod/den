@@ -3,9 +3,7 @@ import type { OrganizationOptions } from "better-auth/plugins";
 import { Option, Schema } from "effect";
 import type { MembershipEvent } from "./MembershipEvents.ts";
 
-export const membershipHooks = (
-	publish: (event: MembershipEvent) => Promise<void>,
-) =>
+export const membershipHooks = (publish: (event: MembershipEvent) => Promise<void>) =>
 	({
 		afterRemoveMember: ({ member }) =>
 			publish({
@@ -39,9 +37,7 @@ const decodeLeftMember = Schema.decodeUnknownOption(LeftMember);
 
 // Leaving an org deletes the member without calling afterRemoveMember, so it is
 // caught here. The endpoint returns the removed member on success and an error otherwise.
-export const leaveOrganizationHook = (
-	publish: (event: MembershipEvent) => Promise<void>,
-) =>
+export const leaveOrganizationHook = (publish: (event: MembershipEvent) => Promise<void>) =>
 	createAuthMiddleware(async (ctx) => {
 		if (ctx.path !== "/organization/leave") return;
 		const member = decodeLeftMember(ctx.context.returned);

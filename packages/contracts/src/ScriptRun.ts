@@ -18,9 +18,7 @@ export class ScriptRun extends Schema.Class<ScriptRun>("ScriptRun")({
 	finishedAt: Schema.NullOr(Schema.String),
 }) {}
 
-export class ScriptRunOutput extends Schema.Class<ScriptRunOutput>(
-	"ScriptRunOutput",
-)({
+export class ScriptRunOutput extends Schema.Class<ScriptRunOutput>("ScriptRunOutput")({
 	scriptRunId: Schema.String,
 	// The capped tail captured while this daemon was running. Empty after a restart.
 	output: Schema.String,

@@ -14,10 +14,7 @@ export class CappedOutput {
 		const entry = { text, bytes: encoder.encode(text).length + 1 };
 		this.lines.push(entry);
 		this.bytes += entry.bytes;
-		while (
-			this.lines.length > OUTPUT_MAX_LINES ||
-			this.bytes > OUTPUT_MAX_BYTES + 1
-		) {
+		while (this.lines.length > OUTPUT_MAX_LINES || this.bytes > OUTPUT_MAX_BYTES + 1) {
 			const dropped = this.lines.shift();
 			this.bytes -= dropped?.bytes ?? 0;
 		}

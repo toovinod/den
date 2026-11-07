@@ -32,8 +32,7 @@ export class Auth extends Context.Service<
 				config,
 				database: drizzle({ client, relations: authRelations }),
 				sendInvitation: (input) => runPromise(email.sendInvitation(input)),
-				publishMembershipEvent: (event) =>
-					runPromise(membershipEvents.publish(event)),
+				publishMembershipEvent: (event) => runPromise(membershipEvents.publish(event)),
 			});
 			return Auth.of({ handler: auth.handler });
 		}),

@@ -4,39 +4,32 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
 import { nowIso } from "../database/nowIso.ts";
 import { scriptRun } from "../database/schema.ts";
-import {
-	IllegalJobTransitionError,
-	type JobEvent,
-	transitionJob,
-} from "../jobs/transitionJob.ts";
+import { IllegalJobTransitionError, type JobEvent, transitionJob } from "../jobs/transitionJob.ts";
 import type { CappedOutput } from "./CappedOutput.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 
 // Permanent: the script ran and failed. Retrying would only repeat it, so the user decides.
-export class ScriptExitError extends Schema.TaggedError<ScriptExitError>()(
-	"ScriptExitError",
-	{ exitCode: Schema.Int },
-) {
+export class ScriptExitError extends Schema.TaggedError<ScriptExitError>()("ScriptExitError", {
+	exitCode: Schema.Int,
+}) {
 	override get message() {
 		return `The setup script exited with code ${this.exitCode}.`;
 	}
 }
 
 // Retryable: a hung network install or a slow machine may pass next time.
-export class ScriptTimeoutError extends Schema.TaggedError<ScriptTimeoutError>()(
-	"ScriptTimeoutError",
-	{ timeout: Schema.String },
-) {
+export class ScriptTimeoutError extends Schema.TaggedError<ScriptTimeoutError>()("ScriptTimeoutError", {
+	timeout: Schema.String,
+}) {
 	override get message() {
 		return `The setup script did not finish within ${this.timeout}.`;
 	}
 }
 
 // Retryable: the shell could not start, usually from a transient limit like too many open files.
-export class ScriptSpawnError extends Schema.TaggedError<ScriptSpawnError>()(
-	"ScriptSpawnError",
-	{ cause: Schema.Defect() },
-) {
+export class ScriptSpawnError extends Schema.TaggedError<ScriptSpawnError>()("ScriptSpawnError", {
+	cause: Schema.Defect(),
+}) {
 	override get message() {
 		return "The setup script could not be started.";
 	}
@@ -47,10 +40,7 @@ type ScriptError = ScriptExitError | ScriptTimeoutError | ScriptSpawnError;
 const isRetryable = (error: ScriptError) => error._tag !== "ScriptExitError";
 
 // Signals Effect.retry that the run went back to pending and should run again.
-class ScriptRetryScheduled extends Schema.TaggedError<ScriptRetryScheduled>()(
-	"ScriptRetryScheduled",
-	{},
-) {}
+class ScriptRetryScheduled extends Schema.TaggedError<ScriptRetryScheduled>()("ScriptRetryScheduled", {}) {}
 
 export const applyScriptRunEvent = Effect.fn("applyScriptRunEvent")(function* (
 	scriptRunId: string,
@@ -75,17 +65,8 @@ export const applyScriptRunEvent = Effect.fn("applyScriptRunEvent")(function* (
 				}
 				yield* tx
 					.update(scriptRun)
-					.set(
-						exitCode === undefined
-							? result.success
-							: { ...result.success, exitCode },
-					)
-					.where(
-						and(
-							eq(scriptRun.id, scriptRunId),
-							eq(scriptRun.status, row.status),
-						),
-					);
+					.set(exitCode === undefined ? result.success : { ...result.success, exitCode })
+					.where(and(eq(scriptRun.id, scriptRunId), eq(scriptRun.status, row.status)));
 				return { _tag: "Applied", update: result.success } as const;
 			}),
 		),
@@ -107,9 +88,7 @@ export const applyScriptRunEvent = Effect.fn("applyScriptRunEvent")(function* (
 const executeScript = Effect.fn("executeScript")(
 	function* (script: string, cwd: string, output: CappedOutput) {
 		const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-		const handle = yield* spawner.spawn(
-			ChildProcess.make(script, { cwd, shell: true }),
-		);
+		const handle = yield* spawner.spawn(ChildProcess.make(script, { cwd, shell: true }));
 		yield* handle.all.pipe(
 			Stream.decodeText(),
 			Stream.splitLines,
@@ -121,12 +100,7 @@ const executeScript = Effect.fn("executeScript")(
 		}
 	},
 	Effect.scoped,
-	(effect) =>
-		effect.pipe(
-			Effect.catchTag("PlatformError", (cause) =>
-				Effect.fail(new ScriptSpawnError({ cause })),
-			),
-		),
+	(effect) => effect.pipe(Effect.catchTag("PlatformError", (cause) => Effect.fail(new ScriptSpawnError({ cause })))),
 );
 
 // Every status change goes through applyScriptRunEvent, so a restart knows where it stopped.
@@ -180,13 +154,10 @@ export const runSetupScript = Effect.fn("runSetupScript")(
 
 		yield* attempt.pipe(
 			Effect.retry({
-				schedule: Schedule.exponential(settings.retryBaseDelay).pipe(
-					Schedule.jittered,
-				),
+				schedule: Schedule.exponential(settings.retryBaseDelay).pipe(Schedule.jittered),
 				while: (error) => error._tag === "ScriptRetryScheduled",
 			}),
 		);
 	},
-	(effect, run) =>
-		effect.pipe(Effect.annotateLogs({ scriptRunId: run.scriptRunId })),
+	(effect, run) => effect.pipe(Effect.annotateLogs({ scriptRunId: run.scriptRunId })),
 );

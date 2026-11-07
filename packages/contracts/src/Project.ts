@@ -19,10 +19,9 @@ export class ProjectFolderNotFoundError extends Schema.TaggedError<ProjectFolder
 	}
 }
 
-export class NotAGitRepositoryError extends Schema.TaggedError<NotAGitRepositoryError>()(
-	"NotAGitRepositoryError",
-	{ path: Schema.String },
-) {
+export class NotAGitRepositoryError extends Schema.TaggedError<NotAGitRepositoryError>()("NotAGitRepositoryError", {
+	path: Schema.String,
+}) {
 	override get message() {
 		return `${this.path} is not a git repository. Run \`git init\` there or pick a folder inside a repository.`;
 	}
@@ -46,10 +45,9 @@ export class ProjectAlreadyAddedError extends Schema.TaggedError<ProjectAlreadyA
 	}
 }
 
-export class ProjectNotFoundError extends Schema.TaggedError<ProjectNotFoundError>()(
-	"ProjectNotFoundError",
-	{ projectId: Schema.String },
-) {
+export class ProjectNotFoundError extends Schema.TaggedError<ProjectNotFoundError>()("ProjectNotFoundError", {
+	projectId: Schema.String,
+}) {
 	override get message() {
 		return "This project no longer exists. Refresh the project list.";
 	}

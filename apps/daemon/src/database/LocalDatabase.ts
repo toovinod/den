@@ -17,14 +17,11 @@ const isRetryableDriverError = (error: DriverError) => {
 	return sqlError instanceof SqlError && sqlError.isRetryable;
 };
 
-export class LocalDatabaseError extends Schema.TaggedError<LocalDatabaseError>()(
-	"LocalDatabaseError",
-	{
-		// A busy or locked database is retryable. Everything else is permanent.
-		retryable: Schema.Boolean,
-		cause: Schema.Defect(),
-	},
-) {}
+export class LocalDatabaseError extends Schema.TaggedError<LocalDatabaseError>()("LocalDatabaseError", {
+	// A busy or locked database is retryable. Everything else is permanent.
+	retryable: Schema.Boolean,
+	cause: Schema.Defect(),
+}) {}
 
 export const DATABASE_FILE_NAME = "swarm.db";
 

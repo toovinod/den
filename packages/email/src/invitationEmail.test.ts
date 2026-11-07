@@ -3,16 +3,12 @@ import { invitationEmail, plainName } from "./invitationEmail.ts";
 
 describe("plainName", () => {
 	test("removes line breaks and control characters", () => {
-		expect(plainName("Acme\r\nBcc: evil@example.com")).toBe(
-			"Acme Bcc: evil@example.com",
-		);
+		expect(plainName("Acme\r\nBcc: evil@example.com")).toBe("Acme Bcc: evil@example.com");
 		expect(plainName("Ac\u0000me‮")).toBe("Ac me");
 	});
 
 	test("removes URL schemes so names cannot pose as links", () => {
-		expect(plainName("Visit https://evil.example now")).toBe(
-			"Visit evil.example now",
-		);
+		expect(plainName("Visit https://evil.example now")).toBe("Visit evil.example now");
 	});
 
 	test("caps the length", () => {

@@ -26,12 +26,7 @@ import {
 	TurnCompleted,
 	TurnResponse,
 } from "./codexProtocol.ts";
-import {
-	type CodexIncoming,
-	type CodexRpcClient,
-	METHOD_NOT_FOUND,
-	makeCodexRpcClient,
-} from "./codexRpcClient.ts";
+import { type CodexIncoming, type CodexRpcClient, METHOD_NOT_FOUND, makeCodexRpcClient } from "./codexRpcClient.ts";
 import codexVersionFile from "./generated/CODEX_VERSION" with { type: "text" };
 import type { InitializeParams } from "./generated/InitializeParams.ts";
 import type { CommandExecutionApprovalDecision } from "./generated/v2/CommandExecutionApprovalDecision.ts";
@@ -78,9 +73,7 @@ const codexDecisions = {
 const toToolCall = (item: ThreadItem): ToolCall | undefined => {
 	switch (item.type) {
 		case "commandExecution":
-			return "command" in item
-				? { kind: "command", command: item.command, cwd: item.cwd }
-				: undefined;
+			return "command" in item ? { kind: "command", command: item.command, cwd: item.cwd } : undefined;
 		case "fileChange":
 			return "changes" in item
 				? {
@@ -93,18 +86,14 @@ const toToolCall = (item: ThreadItem): ToolCall | undefined => {
 					}
 				: undefined;
 		case "mcpToolCall":
-			return "server" in item
-				? { kind: "mcpCall", server: item.server, tool: item.tool }
-				: undefined;
+			return "server" in item ? { kind: "mcpCall", server: item.server, tool: item.tool } : undefined;
 		default:
 			return undefined;
 	}
 };
 
 const toolStatus = (item: ThreadItem) =>
-	"status" in item && (item.status === "failed" || item.status === "declined")
-		? item.status
-		: "completed";
+	"status" in item && (item.status === "failed" || item.status === "declined") ? item.status : "completed";
 
 const toolOutput = (item: ThreadItem) => {
 	if ("aggregatedOutput" in item && item.aggregatedOutput !== null) {
@@ -113,17 +102,11 @@ const toolOutput = (item: ThreadItem) => {
 	return "error" in item && item.error !== null ? item.error.message : null;
 };
 
-const checkVersion = Effect.fn("CodexAdapter.checkVersion")(function* (
-	executable: string,
-) {
+const checkVersion = Effect.fn("CodexAdapter.checkVersion")(function* (executable: string) {
 	const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 	const output = yield* spawner
 		.string(ChildProcess.make(executable, ["--version"]))
-		.pipe(
-			Effect.mapError(
-				toAgentError(executable, "Could not run codex --version."),
-			),
-		);
+		.pipe(Effect.mapError(toAgentError(executable, "Could not run codex --version.")));
 	// `codex --version` prints "codex-cli <version>".
 	const actual = output.trim().split(" ").at(-1) ?? "";
 	if (actual !== CODEX_VERSION) {
@@ -134,9 +117,7 @@ const checkVersion = Effect.fn("CodexAdapter.checkVersion")(function* (
 	}
 });
 
-const initialize = Effect.fn("CodexAdapter.initialize")(function* (
-	client: CodexRpcClient,
-) {
+const initialize = Effect.fn("CodexAdapter.initialize")(function* (client: CodexRpcClient) {
 	yield* client.request("initialize", {
 		clientInfo: { name: "swarm", title: "Swarm", version: packageJson.version },
 		capabilities: { experimentalApi: false, requestAttestation: false },
@@ -144,11 +125,7 @@ const initialize = Effect.fn("CodexAdapter.initialize")(function* (
 	yield* client.notify("initialized");
 });
 
-const appServer = (
-	executable: string,
-	cwd?: string,
-	env?: ChildProcess.CommandOptions["env"],
-) =>
+const appServer = (executable: string, cwd?: string, env?: ChildProcess.CommandOptions["env"]) =>
 	ChildProcess.make(executable, ["app-server"], {
 		...(cwd === undefined ? {} : { cwd }),
 		...(env === undefined ? {} : { env }),
@@ -217,8 +194,7 @@ const handleNotification = Effect.fnUntraced(function* (
 			});
 		}
 		case "error": {
-			const { error, willRetry } =
-				yield* decodeCodex(ErrorNotification)(params);
+			const { error, willRetry } = yield* decodeCodex(ErrorNotification)(params);
 			return yield* session.emit({
 				type: "error",
 				message: error.message,
@@ -226,9 +202,7 @@ const handleNotification = Effect.fnUntraced(function* (
 			});
 		}
 		default:
-			return yield* Effect.logDebug("Ignoring Codex notification").pipe(
-				Effect.annotateLogs({ method }),
-			);
+			return yield* Effect.logDebug("Ignoring Codex notification").pipe(Effect.annotateLogs({ method }));
 	}
 });
 
@@ -237,8 +211,7 @@ const handleServerRequest = Effect.fnUntraced(function* (
 	client: CodexRpcClient,
 	request: Extract<CodexIncoming, { _tag: "request" }>,
 ) {
-	const respond = (outcome: ApprovalOutcome) =>
-		client.respond(request.id, { decision: codexDecisions[outcome] });
+	const respond = (outcome: ApprovalOutcome) => client.respond(request.id, { decision: codexDecisions[outcome] });
 	const requestId = `${request.id}`;
 	switch (request.method) {
 		case "item/commandExecution/requestApproval": {
@@ -256,17 +229,13 @@ const handleServerRequest = Effect.fnUntraced(function* (
 			);
 		}
 		case "item/fileChange/requestApproval": {
-			const params = yield* decodeCodex(FileChangeApprovalParams)(
-				request.params,
-			);
+			const params = yield* decodeCodex(FileChangeApprovalParams)(request.params);
 			return yield* session.requestApproval(
 				{
 					requestId,
 					itemId: params.itemId,
 					kind: "fileChange",
-					summary: params.grantRoot
-						? `Allow writes under ${params.grantRoot}`
-						: "Apply file changes",
+					summary: params.grantRoot ? `Allow writes under ${params.grantRoot}` : "Apply file changes",
 					reason: params.reason ?? null,
 					choices: approvalChoices,
 				},
@@ -275,11 +244,7 @@ const handleServerRequest = Effect.fnUntraced(function* (
 		}
 		default:
 			// Never leave Codex waiting on a request we cannot answer.
-			yield* client.respondError(
-				request.id,
-				METHOD_NOT_FOUND,
-				`Swarm does not support ${request.method}`,
-			);
+			yield* client.respondError(request.id, METHOD_NOT_FOUND, `Swarm does not support ${request.method}`);
 			return yield* session.emit({
 				type: "error",
 				message: `Codex asked for ${request.method}, which Swarm does not support yet. It was declined.`,
@@ -295,10 +260,7 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 		CodexAdapter,
 		Effect.gen(function* () {
 			const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-			const provide = Effect.provideService(
-				ChildProcessSpawner.ChildProcessSpawner,
-				spawner,
-			);
+			const provide = Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner);
 
 			const checkAuth = Effect.gen(function* () {
 				const { executable } = yield* CodexAdapterConfig;
@@ -320,15 +282,9 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 								account: "email" in account ? account.email : account.type,
 							};
 				return status;
-			}).pipe(
-				Effect.scoped,
-				provide,
-				Effect.withSpan("CodexAdapter.checkAuth"),
-			);
+			}).pipe(Effect.scoped, provide, Effect.withSpan("CodexAdapter.checkAuth"));
 
-			const startSession = Effect.fn("CodexAdapter.startSession")(function* (
-				input: StartSessionInput,
-			) {
+			const startSession = Effect.fn("CodexAdapter.startSession")(function* (input: StartSessionInput) {
 				const { executable } = yield* CodexAdapterConfig;
 				yield* checkVersion(executable);
 				const session = yield* makeAgentSession(capabilities);
@@ -337,21 +293,14 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 					appServer(
 						executable,
 						input.cwd,
-						input.auth.mode === "apiKey"
-							? { OPENAI_API_KEY: input.auth.apiKey }
-							: undefined,
+						input.auth.mode === "apiKey" ? { OPENAI_API_KEY: input.auth.apiKey } : undefined,
 					),
 				);
 
 				yield* client.incoming.pipe(
 					Stream.runForEach((message) =>
 						message._tag === "notification"
-							? handleNotification(
-									session,
-									currentTurn,
-									message.method,
-									message.params,
-								)
+							? handleNotification(session, currentTurn, message.method, message.params)
 							: handleServerRequest(session, client, message),
 					),
 					Effect.andThen(session.end),
@@ -378,9 +327,7 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 					yield* session.setNativeSessionId(thread.id);
 				}).pipe(Effect.catch(session.fail), Effect.forkScoped);
 
-				const textInput = (text: string) => [
-					{ type: "text" as const, text, text_elements: [] },
-				];
+				const textInput = (text: string) => [{ type: "text" as const, text, text_elements: [] }];
 
 				return yield* session.start({
 					startTurn: (text) =>
@@ -400,8 +347,7 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 							const turnId = yield* Ref.get(currentTurn);
 							if (Option.isNone(turnId)) {
 								return yield* new AgentProtocolError({
-									message:
-										"Codex has not started the turn yet, so it cannot be steered.",
+									message: "Codex has not started the turn yet, so it cannot be steered.",
 									cause: null,
 								});
 							}

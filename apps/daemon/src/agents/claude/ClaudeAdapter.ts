@@ -5,24 +5,8 @@ import type {
 	PermissionUpdate,
 	SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import type {
-	ApprovalDecision,
-	ApprovalOutcome,
-	ToolCall,
-} from "@repo/contracts/AgentEvent";
-import {
-	Config,
-	Context,
-	Deferred,
-	Effect,
-	Layer,
-	Option,
-	Queue,
-	Redacted,
-	Ref,
-	Schema,
-	Stream,
-} from "effect";
+import type { ApprovalDecision, ApprovalOutcome, ToolCall } from "@repo/contracts/AgentEvent";
+import { Config, Context, Deferred, Effect, Layer, Option, Queue, Redacted, Ref, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import {
 	type AgentAdapter,
@@ -36,12 +20,7 @@ import { keepOutputTail } from "../keepOutputTail.ts";
 import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
 import { toAgentError } from "../toAgentError.ts";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
-import {
-	BashInput,
-	ClaudeAuthStatus,
-	ClaudeMessage,
-	FileInput,
-} from "./claudeMessages.ts";
+import { BashInput, ClaudeAuthStatus, ClaudeMessage, FileInput } from "./claudeMessages.ts";
 
 // Inside a `bun build --compile` binary the SDK cannot find its bundled CLI, so releases
 // extract it and set this path. Unset, the SDK uses its bundled CLI and `checkAuth`
@@ -63,19 +42,9 @@ const capabilities: AgentCapabilities = {
 
 // The SDK replaces the whole child environment when `env` is set, so API key mode passes
 // these through explicitly. Subscription mode leaves `env` unset and inherits everything.
-const inheritedVariables = [
-	"PATH",
-	"HOME",
-	"USER",
-	"SHELL",
-	"TMPDIR",
-	"LANG",
-	"TERM",
-];
+const inheritedVariables = ["PATH", "HOME", "USER", "SHELL", "TMPDIR", "LANG", "TERM"];
 
-const apiKeyEnvironment = Effect.fnUntraced(function* (
-	apiKey: Redacted.Redacted<string>,
-) {
+const apiKeyEnvironment = Effect.fnUntraced(function* (apiKey: Redacted.Redacted<string>) {
 	const env: Record<string, string> = {};
 	for (const name of inheritedVariables) {
 		const value = yield* Config.option(Config.String(name));
@@ -97,16 +66,11 @@ const toToolCall = (name: string, input: unknown): ToolCall => {
 	if (fileTools.has(name)) {
 		const file = Schema.decodeUnknownOption(FileInput)(input);
 		if (Option.isSome(file)) {
-			const path =
-				"file_path" in file.value
-					? file.value.file_path
-					: file.value.notebook_path;
+			const path = "file_path" in file.value ? file.value.file_path : file.value.notebook_path;
 			// The SDK sends edit arguments, not a diff, so the diff stays empty.
 			return {
 				kind: "fileChange",
-				changes: [
-					{ path, kind: name === "Write" ? "add" : "update", diff: "" },
-				],
+				changes: [{ path, kind: name === "Write" ? "add" : "update", diff: "" }],
 			};
 		}
 	}
@@ -120,9 +84,7 @@ const toToolCall = (name: string, input: unknown): ToolCall => {
 
 // "Allow for session" may only add allow rules for this session. Suggestions that switch
 // the permission mode, add directories, replace rules or write a settings file are dropped.
-export const sessionAllowRules = (
-	suggestions: ReadonlyArray<PermissionUpdate>,
-): ReadonlyArray<PermissionUpdate> =>
+export const sessionAllowRules = (suggestions: ReadonlyArray<PermissionUpdate>): ReadonlyArray<PermissionUpdate> =>
 	suggestions.flatMap((suggestion) =>
 		suggestion.type === "addRules" && suggestion.behavior === "allow"
 			? [{ ...suggestion, destination: "session" }]
@@ -155,16 +117,11 @@ const toPermissionResult = (
 };
 
 const toolResultText = (
-	content:
-		| string
-		| ReadonlyArray<{ readonly type: string; readonly text?: string }>
-		| undefined,
+	content: string | ReadonlyArray<{ readonly type: string; readonly text?: string }> | undefined,
 ) => {
 	if (content === undefined) return null;
 	if (typeof content === "string") return keepOutputTail(content);
-	return keepOutputTail(
-		content.map((part) => ("text" in part ? part.text : "")).join("\n"),
-	);
+	return keepOutputTail(content.map((part) => ("text" in part ? part.text : "")).join("\n"));
 };
 
 const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
@@ -176,8 +133,7 @@ const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
 
 	const handle = Effect.fnUntraced(function* (message: ClaudeMessage) {
 		// Subagent frames belong to the Task tool call that started them.
-		if ("parent_tool_use_id" in message && message.parent_tool_use_id !== null)
-			return;
+		if ("parent_tool_use_id" in message && message.parent_tool_use_id !== null) return;
 		switch (message.type) {
 			case "system":
 				if ("session_id" in message) {
@@ -263,19 +219,16 @@ const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
 				});
 			}
 			default:
-				return yield* Effect.logDebug("Ignoring Claude message").pipe(
-					Effect.annotateLogs({ type: message.type }),
-				);
+				return yield* Effect.logDebug("Ignoring Claude message").pipe(Effect.annotateLogs({ type: message.type }));
 		}
 	});
 
 	return { handle, interrupting };
 });
 
-export class ClaudeAdapter extends Context.Service<
-	ClaudeAdapter,
-	AgentAdapter
->()("swarm/daemon/agents/claude/ClaudeAdapter") {
+export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>()(
+	"swarm/daemon/agents/claude/ClaudeAdapter",
+) {
 	static readonly layer = Layer.effect(
 		ClaudeAdapter,
 		Effect.gen(function* () {
@@ -287,14 +240,8 @@ export class ClaudeAdapter extends Context.Service<
 				const executable = executablePath ?? "claude";
 				const output = yield* spawner
 					.string(ChildProcess.make(executable, ["auth", "status", "--json"]))
-					.pipe(
-						Effect.mapError(
-							toAgentError(executable, "Could not run claude auth status."),
-						),
-					);
-				const decoded = Schema.decodeUnknownOption(
-					Schema.fromJsonString(ClaudeAuthStatus),
-				)(output);
+					.pipe(Effect.mapError(toAgentError(executable, "Could not run claude auth status.")));
+				const decoded = Schema.decodeUnknownOption(Schema.fromJsonString(ClaudeAuthStatus))(output);
 				if (Option.isNone(decoded)) {
 					yield* Effect.logWarning("Could not read claude auth status output");
 					return { status: "unknown" } satisfies AgentAuthStatus;
@@ -306,9 +253,7 @@ export class ClaudeAdapter extends Context.Service<
 				return status;
 			}).pipe(Effect.withSpan("ClaudeAdapter.checkAuth"));
 
-			const startSession = Effect.fn("ClaudeAdapter.startSession")(function* (
-				input: StartSessionInput,
-			) {
+			const startSession = Effect.fn("ClaudeAdapter.startSession")(function* (input: StartSessionInput) {
 				const { executablePath } = yield* ClaudeAdapterConfig;
 				const session = yield* makeAgentSession(capabilities);
 				const prompts = yield* Queue.unbounded<SDKUserMessage>();
@@ -348,13 +293,9 @@ export class ClaudeAdapter extends Context.Service<
 					canUseTool,
 					// Never inherit a mode such as bypassPermissions from a settings file.
 					permissionMode: "default",
-					settingSources: input.trustProjectSettings
-						? ["user", "project", "local"]
-						: ["user"],
+					settingSources: input.trustProjectSettings ? ["user", "project", "local"] : ["user"],
 					...(input.resumeId === undefined ? {} : { resume: input.resumeId }),
-					...(executablePath === undefined
-						? {}
-						: { pathToClaudeCodeExecutable: executablePath }),
+					...(executablePath === undefined ? {} : { pathToClaudeCodeExecutable: executablePath }),
 					...(input.auth.mode === "apiKey"
 						? {
 								// An optional plain string cannot fail to decode, so a ConfigError here is a defect.
@@ -375,8 +316,7 @@ export class ClaudeAdapter extends Context.Service<
 
 				yield* Stream.fromAsyncIterable(
 					run.messages,
-					(cause) =>
-						new AgentProcessError({ message: "Claude Code stopped.", cause }),
+					(cause) => new AgentProcessError({ message: "Claude Code stopped.", cause }),
 				).pipe(
 					Stream.mapEffect((message) =>
 						Schema.decodeUnknownEffect(ClaudeMessage)(message).pipe(

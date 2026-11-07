@@ -1,19 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import type {
-	CanUseTool,
-	Options,
-	PermissionResult,
-	PermissionUpdate,
-} from "@anthropic-ai/claude-agent-sdk";
+import type { CanUseTool, Options, PermissionResult, PermissionUpdate } from "@anthropic-ai/claude-agent-sdk";
 import { BunServices } from "@effect/platform-bun";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
 import { Effect, Layer, Stream } from "effect";
 import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
-import {
-	ClaudeAdapter,
-	ClaudeAdapterConfig,
-	sessionAllowRules,
-} from "./ClaudeAdapter.ts";
+import { ClaudeAdapter, ClaudeAdapterConfig, sessionAllowRules } from "./ClaudeAdapter.ts";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
 
 const newSession: StartSessionInput = {
@@ -43,10 +34,7 @@ const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 			async function* messages() {
 				for await (const user of prompt) {
 					turn++;
-					const text =
-						typeof user.message.content === "string"
-							? user.message.content
-							: "";
+					const text = typeof user.message.content === "string" ? user.message.content : "";
 					if (turn === 1) {
 						yield {
 							type: "system",
@@ -80,9 +68,7 @@ const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 							parent_tool_use_id: null,
 							message: {
 								id: "msg_1",
-								content: [
-									{ type: "tool_use", id: "toolu_1", name: "Bash", input },
-								],
+								content: [{ type: "tool_use", id: "toolu_1", name: "Bash", input }],
 							},
 						};
 						const interrupted = new Promise<void>((resolve) => {
@@ -95,11 +81,7 @@ const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 							title: "Run bun test",
 							suggestions: text.includes("session") ? [bashSuggestion] : [],
 						};
-						const permission = await options.canUseTool?.(
-							"Bash",
-							input,
-							request,
-						);
+						const permission = await options.canUseTool?.("Bash", input, request);
 						if (!permission) return;
 						permissions.push(permission);
 						if (permission.behavior === "deny" && permission.interrupt) {
@@ -136,10 +118,7 @@ const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 		},
 	});
 
-const runWithClaude = <A, E>(
-	program: Effect.Effect<A, E, ClaudeAdapter>,
-	permissions: Array<PermissionResult> = [],
-) =>
+const runWithClaude = <A, E>(program: Effect.Effect<A, E, ClaudeAdapter>, permissions: Array<PermissionResult> = []) =>
 	program.pipe(
 		Effect.provide(
 			ClaudeAdapter.layer.pipe(
@@ -163,9 +142,7 @@ const runSession = <A, E>(
 	runWithClaude(
 		Effect.gen(function* () {
 			const claude = yield* ClaudeAdapter;
-			return yield* program(
-				yield* claude.startSession(options.input ?? newSession),
-			);
+			return yield* program(yield* claude.startSession(options.input ?? newSession));
 		}).pipe(Effect.scoped),
 		options.permissions,
 	);
@@ -269,9 +246,7 @@ describe("ClaudeAdapter", () => {
 			Effect.gen(function* () {
 				yield* handle.sendMessage("approve");
 				yield* takeUntil(handle, "approval.requested");
-				return yield* Effect.flip(
-					handle.respondToApproval("toolu_1", "allowForSession"),
-				);
+				return yield* Effect.flip(handle.respondToApproval("toolu_1", "allowForSession"));
 			}),
 		);
 		expect(error._tag).toBe("ApprovalChoiceError");
@@ -322,11 +297,7 @@ describe("ClaudeAdapter", () => {
 		await runSession(() => Effect.void, {
 			input: { ...newSession, trustProjectSettings: true },
 		});
-		expect(startedWith.at(-1)?.settingSources).toEqual([
-			"user",
-			"project",
-			"local",
-		]);
+		expect(startedWith.at(-1)?.settingSources).toEqual(["user", "project", "local"]);
 		expect(startedWith.at(-1)?.permissionMode).toBe("default");
 	});
 });

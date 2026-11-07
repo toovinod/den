@@ -10,10 +10,7 @@ import { TEST_TOKEN, testDaemonConfig } from "../testing/testDaemonConfig.ts";
 import { DaemonServer } from "./DaemonServer.ts";
 
 const runWithDaemon = <A, E>(
-	program: (
-		baseUrl: string,
-		tempDir: string,
-	) => Effect.Effect<A, E, BunServices.BunServices>,
+	program: (baseUrl: string, tempDir: string) => Effect.Effect<A, E, BunServices.BunServices>,
 ) =>
 	Effect.gen(function* () {
 		const fs = yield* FileSystem.FileSystem;
@@ -21,32 +18,18 @@ const runWithDaemon = <A, E>(
 		return yield* Effect.gen(function* () {
 			const { address } = yield* HttpServer.HttpServer;
 			return yield* program(HttpServer.formatAddress(address), tempDir);
-		}).pipe(
-			Effect.provide(
-				DaemonServer.pipe(
-					Layer.provide(testDaemonConfig(join(tempDir, "data"))),
-				),
-			),
-		);
+		}).pipe(Effect.provide(DaemonServer.pipe(Layer.provide(testDaemonConfig(join(tempDir, "data"))))));
 	}).pipe(Effect.scoped, Effect.provide(BunServices.layer), Effect.runPromise);
 
 const withClient = (baseUrl: string) =>
-	Effect.provide(
-		DaemonClient.layer(
-			`${baseUrl.replace("http", "ws")}/rpc?token=${TEST_TOKEN}`,
-		),
-	);
+	Effect.provide(DaemonClient.layer(`${baseUrl.replace("http", "ws")}/rpc?token=${TEST_TOKEN}`));
 
-const statusOf = (url: string) =>
-	Effect.promise(() => fetch(url).then((response) => response.status));
+const statusOf = (url: string) => Effect.promise(() => fetch(url).then((response) => response.status));
 
 describe("DaemonServer", () => {
 	test("rejects connections without the right token", async () => {
 		const statuses = await runWithDaemon((baseUrl) =>
-			Effect.all([
-				statusOf(`${baseUrl}/rpc`),
-				statusOf(`${baseUrl}/rpc?token=wrong`),
-			]),
+			Effect.all([statusOf(`${baseUrl}/rpc`), statusOf(`${baseUrl}/rpc?token=wrong`)]),
 		);
 		expect(statuses).toEqual([401, 401]);
 	});
@@ -80,9 +63,7 @@ describe("DaemonServer", () => {
 		);
 		expect(result.added.name).toBe("repo");
 		expect(result.added.defaultBranch).toBe("main");
-		expect(result.projects.map((project) => project.id)).toEqual([
-			result.added.id,
-		]);
+		expect(result.projects.map((project) => project.id)).toEqual([result.added.id]);
 		expect(result.workspace.kind).toBe("inPlace");
 		expect(result.workspace.branch).toBe("main");
 		expect(result.workspaces).toEqual([result.workspace]);

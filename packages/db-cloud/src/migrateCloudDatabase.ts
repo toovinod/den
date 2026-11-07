@@ -12,11 +12,7 @@ export const migrateCloudDatabase = Effect.gen(function* () {
 	const db = yield* PgDrizzle.makeWithDefaults({ relations });
 	yield* migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
 	yield* Effect.log("Cloud database is up to date");
-}).pipe(
-	Effect.provide(
-		PgClient.layerConfig({ url: Config.Redacted("DATABASE_URL") }),
-	),
-);
+}).pipe(Effect.provide(PgClient.layerConfig({ url: Config.Redacted("DATABASE_URL") })));
 
 if (import.meta.main) {
 	BunRuntime.runMain(migrateCloudDatabase);

@@ -37,12 +37,7 @@ const AssistantBlock = Schema.Union([
 
 const ToolResultContent = Schema.Union([
 	Schema.String,
-	Schema.Array(
-		Schema.Union([
-			Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
-			Other,
-		]),
-	),
+	Schema.Array(Schema.Union([Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }), Other])),
 ]);
 
 const UserBlock = Schema.Union([

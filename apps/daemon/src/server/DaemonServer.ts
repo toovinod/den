@@ -19,9 +19,7 @@ const RpcServerLayer = RpcServer.layer(DaemonRpcs).pipe(
 const AnnounceReady = Layer.effectDiscard(
 	Effect.gen(function* () {
 		const { address } = yield* HttpServer.HttpServer;
-		yield* Console.log(
-			`${READY_LINE_PREFIX}${HttpServer.formatAddress(address)}`,
-		);
+		yield* Console.log(`${READY_LINE_PREFIX}${HttpServer.formatAddress(address)}`);
 	}),
 );
 
@@ -32,10 +30,7 @@ const SHUTDOWN_GRACE = Duration.seconds(1);
 export const DaemonServer = Layer.unwrap(
 	Effect.gen(function* () {
 		const { port } = yield* DaemonConfig;
-		return Layer.mergeAll(
-			HttpRouter.serve(RpcServerLayer, { disableListenLog: true }),
-			AnnounceReady,
-		).pipe(
+		return Layer.mergeAll(HttpRouter.serve(RpcServerLayer, { disableListenLog: true }), AnnounceReady).pipe(
 			Layer.provideMerge(
 				BunHttpServer.layer({
 					port,

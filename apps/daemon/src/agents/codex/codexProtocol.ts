@@ -30,12 +30,7 @@ export const AgentMessageDelta = Schema.Struct({
 	delta: Schema.String,
 });
 
-const Status = Schema.Literals([
-	"inProgress",
-	"completed",
-	"failed",
-	"declined",
-]);
+const Status = Schema.Literals(["inProgress", "completed", "failed", "declined"]);
 
 export const ThreadItem = Schema.Union([
 	Schema.Struct({
@@ -82,12 +77,7 @@ export const ItemNotification = Schema.Struct({ item: ThreadItem });
 export const TurnCompleted = Schema.Struct({
 	turn: Schema.Struct({
 		id: Schema.String,
-		status: Schema.Literals([
-			"completed",
-			"interrupted",
-			"failed",
-			"inProgress",
-		]),
+		status: Schema.Literals(["completed", "interrupted", "failed", "inProgress"]),
 		error: Schema.NullOr(Schema.Struct({ message: Schema.String })),
 	}),
 });

@@ -4,11 +4,7 @@ import type { LocalDatabaseError } from "../database/LocalDatabase.ts";
 import type { GitCommandError, GitSpawnError } from "../git/runGit.ts";
 import type { IllegalJobTransitionError } from "../jobs/transitionJob.ts";
 
-type InternalFailure =
-	| LocalDatabaseError
-	| GitSpawnError
-	| GitCommandError
-	| IllegalJobTransitionError;
+type InternalFailure = LocalDatabaseError | GitSpawnError | GitCommandError | IllegalJobTransitionError;
 
 const isInternalFailure = (error: unknown): error is InternalFailure =>
 	Predicate.isTagged(error, "LocalDatabaseError") ||

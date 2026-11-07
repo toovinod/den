@@ -18,6 +18,4 @@ export const createApp = ({ webOrigin, authHandler }: CreateAppInput) =>
 			}),
 		)
 		.get("/health", (context) => context.json({ status: "ok" }))
-		.on(["GET", "POST"], "/api/auth/*", (context) =>
-			authHandler(context.req.raw),
-		);
+		.on(["GET", "POST"], "/api/auth/*", (context) => authHandler(context.req.raw));

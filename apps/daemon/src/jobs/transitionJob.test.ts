@@ -5,8 +5,7 @@ import { type JobEvent, transitionJob } from "./transitionJob.ts";
 
 const NOW = "2026-11-07T10:00:00.000Z";
 
-const move = (status: JobStatus, event: JobEvent, attempts = 0) =>
-	transitionJob({ status, attempts }, event, NOW);
+const move = (status: JobStatus, event: JobEvent, attempts = 0) => transitionJob({ status, attempts }, event, NOW);
 
 const retryable = {
 	_tag: "FailedRetryably",
@@ -40,9 +39,7 @@ describe("transitionJob", () => {
 	});
 
 	test("a permanent failure goes straight to failed", () => {
-		expect(
-			move("processing", { _tag: "FailedPermanently", error: "exit 1" }),
-		).toEqual(
+		expect(move("processing", { _tag: "FailedPermanently", error: "exit 1" })).toEqual(
 			Result.succeed({
 				status: "failed",
 				attempts: 0,
@@ -99,13 +96,7 @@ describe("transitionJob", () => {
 			"pending:Cancelled",
 			"processing:Cancelled",
 		]);
-		const statuses = [
-			"pending",
-			"processing",
-			"completed",
-			"failed",
-			"deadLetter",
-		] as const;
+		const statuses = ["pending", "processing", "completed", "failed", "deadLetter"] as const;
 		const events: ReadonlyArray<JobEvent> = [
 			{ _tag: "Started" },
 			{ _tag: "Succeeded" },
@@ -116,9 +107,7 @@ describe("transitionJob", () => {
 		for (const status of statuses) {
 			for (const event of events) {
 				const result = move(status, event);
-				expect(Result.isFailure(result)).toBe(
-					!legal.has(`${status}:${event._tag}`),
-				);
+				expect(Result.isFailure(result)).toBe(!legal.has(`${status}:${event._tag}`));
 			}
 		}
 	});

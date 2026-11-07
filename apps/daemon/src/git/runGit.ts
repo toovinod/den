@@ -1,27 +1,22 @@
 import { Effect, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-export class GitSpawnError extends Schema.TaggedError<GitSpawnError>()(
-	"GitSpawnError",
-	{ args: Schema.Array(Schema.String), cause: Schema.Defect() },
-) {}
+export class GitSpawnError extends Schema.TaggedError<GitSpawnError>()("GitSpawnError", {
+	args: Schema.Array(Schema.String),
+	cause: Schema.Defect(),
+}) {}
 
-export class GitCommandError extends Schema.TaggedError<GitCommandError>()(
-	"GitCommandError",
-	{
-		args: Schema.Array(Schema.String),
-		exitCode: Schema.Int,
-		stderr: Schema.String,
-	},
-) {}
+export class GitCommandError extends Schema.TaggedError<GitCommandError>()("GitCommandError", {
+	args: Schema.Array(Schema.String),
+	exitCode: Schema.Int,
+	stderr: Schema.String,
+}) {}
 
 // Leading whitespace is kept because `git status --porcelain` lines start with a space.
 export const runGit = Effect.fn("runGit")(
 	function* (cwd: string, args: ReadonlyArray<string>) {
 		const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-		const handle = yield* spawner.spawn(
-			ChildProcess.make("git", args, { cwd }),
-		);
+		const handle = yield* spawner.spawn(ChildProcess.make("git", args, { cwd }));
 		const [stdout, stderr, exitCode] = yield* Effect.all(
 			[
 				Stream.mkString(Stream.decodeText(handle.stdout)),
@@ -42,8 +37,6 @@ export const runGit = Effect.fn("runGit")(
 	Effect.scoped,
 	(effect, _cwd, args) =>
 		effect.pipe(
-			Effect.catchTag("PlatformError", (cause) =>
-				Effect.fail(new GitSpawnError({ args: [...args], cause })),
-			),
+			Effect.catchTag("PlatformError", (cause) => Effect.fail(new GitSpawnError({ args: [...args], cause }))),
 		),
 );

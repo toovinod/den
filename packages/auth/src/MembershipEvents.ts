@@ -27,20 +27,13 @@ export class MembershipEvents extends Context.Service<
 	MembershipEvents,
 	{
 		publish(event: MembershipEvent): Effect.Effect<void>;
-		readonly subscribe: Effect.Effect<
-			PubSub.Subscription<MembershipEvent>,
-			never,
-			Scope.Scope
-		>;
+		readonly subscribe: Effect.Effect<PubSub.Subscription<MembershipEvent>, never, Scope.Scope>;
 	}
 >()("swarm/auth/MembershipEvents") {
 	static readonly layer = Layer.effect(
 		MembershipEvents,
 		Effect.gen(function* () {
-			const pubsub = yield* Effect.acquireRelease(
-				PubSub.unbounded<MembershipEvent>(),
-				PubSub.shutdown,
-			);
+			const pubsub = yield* Effect.acquireRelease(PubSub.unbounded<MembershipEvent>(), PubSub.shutdown);
 			return MembershipEvents.of({
 				publish: (event) => PubSub.publish(pubsub, event).pipe(Effect.asVoid),
 				subscribe: PubSub.subscribe(pubsub),

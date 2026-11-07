@@ -49,13 +49,7 @@ export const createAuth = ({
 		},
 		plugins: [
 			organization({
-				sendInvitationEmail: ({
-					id,
-					email,
-					organization,
-					inviter,
-					invitation,
-				}) =>
+				sendInvitationEmail: ({ id, email, organization, inviter, invitation }) =>
 					sendInvitation({
 						to: email,
 						organizationName: organization.name,

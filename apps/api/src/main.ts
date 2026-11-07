@@ -6,13 +6,7 @@ import { Config, Effect, Layer, ManagedRuntime } from "effect";
 import { createApp } from "./createApp.ts";
 
 const AppLayer = Auth.layer.pipe(
-	Layer.provideMerge(
-		Layer.mergeAll(
-			AuthConfig.layer,
-			EmailService.layer,
-			MembershipEvents.layer,
-		),
-	),
+	Layer.provideMerge(Layer.mergeAll(AuthConfig.layer, EmailService.layer, MembershipEvents.layer)),
 );
 
 const runtime = ManagedRuntime.make(AppLayer);

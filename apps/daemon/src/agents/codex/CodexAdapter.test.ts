@@ -13,10 +13,7 @@ const newSession: StartSessionInput = {
 	auth: { mode: "subscription" },
 };
 
-const runWithCodex = <A, E>(
-	program: Effect.Effect<A, E, CodexAdapter>,
-	executable = fakeCodex,
-) =>
+const runWithCodex = <A, E>(program: Effect.Effect<A, E, CodexAdapter>, executable = fakeCodex) =>
 	program.pipe(
 		Effect.provide(CodexAdapter.layer),
 		Effect.provide(BunServices.layer),
@@ -24,10 +21,7 @@ const runWithCodex = <A, E>(
 		Effect.runPromise,
 	);
 
-const runSession = <A, E>(
-	program: (handle: AgentSessionHandle) => Effect.Effect<A, E>,
-	input = newSession,
-) =>
+const runSession = <A, E>(program: (handle: AgentSessionHandle) => Effect.Effect<A, E>, input = newSession) =>
 	runWithCodex(
 		Effect.gen(function* () {
 			const codex = yield* CodexAdapter;
@@ -151,10 +145,7 @@ describe("CodexAdapter", () => {
 	});
 
 	test("fails when the installed version differs from the generated types", async () => {
-		const error = await runWithCodex(
-			Effect.flip(checkAuth),
-			`${import.meta.dir}/fixtures/outdatedCodex.ts`,
-		);
+		const error = await runWithCodex(Effect.flip(checkAuth), `${import.meta.dir}/fixtures/outdatedCodex.ts`);
 		expect(error).toMatchObject({
 			_tag: "CodexVersionMismatchError",
 			actual: "0.0.1",
@@ -162,10 +153,7 @@ describe("CodexAdapter", () => {
 	});
 
 	test("reports a missing executable as not installed", async () => {
-		const error = await runWithCodex(
-			Effect.flip(checkAuth),
-			"/nonexistent/codex",
-		);
+		const error = await runWithCodex(Effect.flip(checkAuth), "/nonexistent/codex");
 		expect(error._tag).toBe("AgentNotInstalledError");
 	});
 });

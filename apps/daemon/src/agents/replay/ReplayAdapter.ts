@@ -1,10 +1,6 @@
 import { AgentEvent, type ApprovalOutcome } from "@repo/contracts/AgentEvent";
 import { Deferred, Effect, FiberHandle, Ref, Schema } from "effect";
-import {
-	type AgentAdapter,
-	type AgentCapabilities,
-	AgentKind,
-} from "../AgentAdapter.ts";
+import { type AgentAdapter, type AgentCapabilities, AgentKind } from "../AgentAdapter.ts";
 import { makeAgentSession } from "../makeAgentSession.ts";
 
 export const Recording = Schema.Struct({
@@ -38,17 +34,12 @@ export const makeReplayAdapter = (recording: Recording): AgentAdapter => ({
 				if (event.type === "approval.requested") {
 					const answered = yield* Deferred.make<ApprovalOutcome>();
 					const { type: _, ...request } = event;
-					yield* session.requestApproval(request, (outcome) =>
-						Deferred.succeed(answered, outcome),
-					);
+					yield* session.requestApproval(request, (outcome) => Deferred.succeed(answered, outcome));
 					// A cancelled approval means the turn is being interrupted, so playback stops.
 					if ((yield* Deferred.await(answered)) === "cancelled") {
 						return yield* Effect.interrupt;
 					}
-				} else if (
-					event.type !== "session.started" &&
-					event.type !== "approval.resolved"
-				) {
+				} else if (event.type !== "session.started" && event.type !== "approval.resolved") {
 					yield* session.emit(event);
 				}
 			});
@@ -69,10 +60,7 @@ export const makeReplayAdapter = (recording: Recording): AgentAdapter => ({
 							},
 						});
 					}
-					yield* FiberHandle.run(
-						playback,
-						Effect.forEach(turn, play, { discard: true }),
-					);
+					yield* FiberHandle.run(playback, Effect.forEach(turn, play, { discard: true }));
 				}),
 			steerTurn: () => Effect.void,
 			interruptTurn: Effect.gen(function* () {

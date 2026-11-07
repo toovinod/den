@@ -7,12 +7,9 @@ const DaemonConnection = Schema.Struct({
 	token: Schema.String,
 });
 
-class DaemonConnectionError extends Schema.TaggedError<DaemonConnectionError>()(
-	"DaemonConnectionError",
-	{
-		cause: Schema.Defect(),
-	},
-) {}
+class DaemonConnectionError extends Schema.TaggedError<DaemonConnectionError>()("DaemonConnectionError", {
+	cause: Schema.Defect(),
+}) {}
 
 const DaemonClientFromShell = Layer.unwrap(
 	Effect.gen(function* () {
@@ -20,11 +17,8 @@ const DaemonClientFromShell = Layer.unwrap(
 			try: () => invoke<unknown>("daemon_connection"),
 			catch: (cause) => new DaemonConnectionError({ cause }),
 		});
-		const { url, token } =
-			yield* Schema.decodeUnknownEffect(DaemonConnection)(raw);
-		return DaemonClient.layer(
-			`${url.replace(/^http/, "ws")}/rpc?token=${encodeURIComponent(token)}`,
-		);
+		const { url, token } = yield* Schema.decodeUnknownEffect(DaemonConnection)(raw);
+		return DaemonClient.layer(`${url.replace(/^http/, "ws")}/rpc?token=${encodeURIComponent(token)}`);
 	}),
 );
 

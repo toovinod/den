@@ -1,16 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import {
-	Config,
-	Context,
-	Effect,
-	Layer,
-	Option,
-	Redacted,
-	Schema,
-	Stdio,
-	Stream,
-} from "effect";
+import { Config, Context, Effect, Layer, Option, Redacted, Schema, Stdio, Stream } from "effect";
 
 export class DaemonTokenMissingError extends Schema.TaggedError<DaemonTokenMissingError>()(
 	"DaemonTokenMissingError",
@@ -25,12 +15,7 @@ export class DaemonTokenMissingError extends Schema.TaggedError<DaemonTokenMissi
 // agent, script and git process the daemon starts inherits its environment.
 const readTokenFromStdin = Effect.gen(function* () {
 	const stdio = yield* Stdio.Stdio;
-	const firstLine = yield* stdio.stdin.pipe(
-		Stream.decodeText(),
-		Stream.splitLines,
-		Stream.runHead,
-		Effect.orDie,
-	);
+	const firstLine = yield* stdio.stdin.pipe(Stream.decodeText(), Stream.splitLines, Stream.runHead, Effect.orDie);
 	const token = Option.getOrElse(firstLine, () => "").trim();
 	if (token === "") {
 		return yield* new DaemonTokenMissingError();
@@ -49,13 +34,9 @@ export class DaemonConfig extends Context.Service<
 	static readonly layer = Layer.effect(
 		DaemonConfig,
 		Effect.gen(function* () {
-			const port = yield* Config.Port("SWARM_DAEMON_PORT").pipe(
-				Config.withDefault(0),
-			);
+			const port = yield* Config.Port("SWARM_DAEMON_PORT").pipe(Config.withDefault(0));
 			const token = yield* readTokenFromStdin;
-			const dataDir = yield* Config.String("SWARM_DATA_DIR").pipe(
-				Config.withDefault(join(homedir(), ".swarm")),
-			);
+			const dataDir = yield* Config.String("SWARM_DATA_DIR").pipe(Config.withDefault(join(homedir(), ".swarm")));
 			return DaemonConfig.of({ port, token, dataDir });
 		}),
 	);

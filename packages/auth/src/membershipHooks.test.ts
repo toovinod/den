@@ -37,28 +37,18 @@ const invitation = {
 	createdAt: epoch,
 };
 
-const publishedBy = (
-	callHook: (hooks: ReturnType<typeof membershipHooks>) => Promise<void>,
-) =>
+const publishedBy = (callHook: (hooks: ReturnType<typeof membershipHooks>) => Promise<void>) =>
 	Effect.gen(function* () {
 		const events = yield* MembershipEvents;
 		const subscription = yield* events.subscribe;
 		const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-		yield* Effect.promise(() =>
-			callHook(membershipHooks((event) => runPromise(events.publish(event)))),
-		);
+		yield* Effect.promise(() => callHook(membershipHooks((event) => runPromise(events.publish(event)))));
 		return yield* PubSub.take(subscription);
-	}).pipe(
-		Effect.scoped,
-		Effect.provide(MembershipEvents.layer),
-		Effect.runPromise,
-	);
+	}).pipe(Effect.scoped, Effect.provide(MembershipEvents.layer), Effect.runPromise);
 
 describe("membershipHooks", () => {
 	test("publishes memberRemoved after a member is removed", async () => {
-		const event = await publishedBy((hooks) =>
-			hooks.afterRemoveMember({ member, user, organization }),
-		);
+		const event = await publishedBy((hooks) => hooks.afterRemoveMember({ member, user, organization }));
 		expect(event).toEqual({
 			_tag: "memberRemoved",
 			organizationId: "org_1",
@@ -100,9 +90,7 @@ describe("membershipHooks", () => {
 	});
 
 	test("publishes organizationDeleted after an org is deleted", async () => {
-		const event = await publishedBy((hooks) =>
-			hooks.afterDeleteOrganization({ organization, user }),
-		);
+		const event = await publishedBy((hooks) => hooks.afterDeleteOrganization({ organization, user }));
 		expect(event).toEqual({
 			_tag: "organizationDeleted",
 			organizationId: "org_1",

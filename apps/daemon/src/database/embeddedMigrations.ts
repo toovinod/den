@@ -1,18 +1,13 @@
 import type { MigrationMeta } from "drizzle-orm/migrator";
 import { formatToMillis } from "drizzle-orm/migrator.utils";
-import init from "./migrations/20261107072057_init/migration.sql" with {
-	type: "text",
-};
+import init from "./migrations/20261107072057_init/migration.sql" with { type: "text" };
 
 // A compiled daemon has no migrations folder on disk, so the SQL is imported into the bundle.
 // Add one line here per folder drizzle-kit generates; embeddedMigrations.test.ts fails if one is missing.
 const migrationFiles = [{ name: "20261107072057_init", sql: init }] as const;
 
 // Mirrors drizzle's readMigrationFiles so hashes match migrations applied from the folder.
-const toMigrationMeta = (file: {
-	readonly name: string;
-	readonly sql: string;
-}): MigrationMeta => ({
+const toMigrationMeta = (file: { readonly name: string; readonly sql: string }): MigrationMeta => ({
 	sql: file.sql.split("--> statement-breakpoint"),
 	bps: true,
 	folderMillis: formatToMillis(file.name.slice(0, 14)),
@@ -20,5 +15,4 @@ const toMigrationMeta = (file: {
 	name: file.name,
 });
 
-export const embeddedMigrations = (): Array<MigrationMeta> =>
-	migrationFiles.map(toMigrationMeta);
+export const embeddedMigrations = (): Array<MigrationMeta> => migrationFiles.map(toMigrationMeta);

@@ -5,8 +5,7 @@ const WEB_ORIGIN = "https://app.swarm.test";
 
 const app = createApp({
 	webOrigin: WEB_ORIGIN,
-	authHandler: (request) =>
-		Promise.resolve(Response.json({ path: new URL(request.url).pathname })),
+	authHandler: (request) => Promise.resolve(Response.json({ path: new URL(request.url).pathname })),
 });
 
 describe("api", () => {
@@ -33,9 +32,7 @@ describe("api", () => {
 
 		const allowed = await preflight(WEB_ORIGIN);
 		expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe(WEB_ORIGIN);
-		expect(allowed.headers.get("Access-Control-Allow-Credentials")).toBe(
-			"true",
-		);
+		expect(allowed.headers.get("Access-Control-Allow-Credentials")).toBe("true");
 
 		const other = await preflight("https://evil.test");
 		expect(other.headers.get("Access-Control-Allow-Origin")).toBeNull();

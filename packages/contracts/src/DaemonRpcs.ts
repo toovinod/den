@@ -7,8 +7,6 @@ export class DaemonHealth extends Schema.Class<DaemonHealth>("DaemonHealth")({
 	version: Schema.String,
 }) {}
 
-export class HealthRpcs extends RpcGroup.make(
-	Rpc.make("health", { success: DaemonHealth }),
-) {}
+export class HealthRpcs extends RpcGroup.make(Rpc.make("health", { success: DaemonHealth })) {}
 
 export const DaemonRpcs = HealthRpcs.merge(ProjectRpcs, WorkspaceRpcs);

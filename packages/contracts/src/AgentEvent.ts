@@ -3,17 +3,10 @@ import { Schema } from "effect";
 // Normalized agent events. The shape follows the Codex app-server protocol, the richer of the two,
 // and the Claude adapter maps its SDK messages onto it.
 
-export const ApprovalDecision = Schema.Literals([
-	"allowOnce",
-	"allowForSession",
-	"deny",
-]);
+export const ApprovalDecision = Schema.Literals(["allowOnce", "allowForSession", "deny"]);
 export type ApprovalDecision = typeof ApprovalDecision.Type;
 
-export const ApprovalOutcome = Schema.Union([
-	ApprovalDecision,
-	Schema.Literal("cancelled"),
-]);
+export const ApprovalOutcome = Schema.Union([ApprovalDecision, Schema.Literal("cancelled")]);
 export type ApprovalOutcome = typeof ApprovalOutcome.Type;
 
 export const FileChange = Schema.Struct({

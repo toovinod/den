@@ -7,19 +7,11 @@ import { scriptRun, workspace } from "../database/schema.ts";
 import { runGit } from "../git/runGit.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
-import {
-	runInTempDir,
-	runServiceTest,
-	waitForScriptRun,
-	withServices,
-} from "../testing/runServiceTest.ts";
+import { runInTempDir, runServiceTest, waitForScriptRun, withServices } from "../testing/runServiceTest.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import { WorkspaceService } from "./WorkspaceService.ts";
 
-const addProject = Effect.fn("addProject")(function* (
-	tempDir: string,
-	setupScript: string | null = null,
-) {
+const addProject = Effect.fn("addProject")(function* (tempDir: string, setupScript: string | null = null) {
 	const projects = yield* ProjectService;
 	const path = yield* makeTestRepository(join(tempDir, "repo"));
 	const added = yield* projects.add(path);
@@ -36,12 +28,7 @@ const fastRetries = {
 };
 
 const branchExists = (repositoryPath: string, branch: string) =>
-	runGit(repositoryPath, [
-		"show-ref",
-		"--verify",
-		"--quiet",
-		`refs/heads/${branch}`,
-	]).pipe(
+	runGit(repositoryPath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).pipe(
 		Effect.as(true),
 		Effect.catchTag("GitCommandError", () => Effect.succeed(false)),
 	);
@@ -106,9 +93,7 @@ describe("WorkspaceService", () => {
 					kind: "inPlace",
 					projectId: project.id,
 				});
-				const second = yield* Effect.flip(
-					workspaces.create({ kind: "inPlace", projectId: project.id }),
-				);
+				const second = yield* Effect.flip(workspaces.create({ kind: "inPlace", projectId: project.id }));
 				return { project, first, second };
 			}),
 		);
@@ -160,9 +145,7 @@ describe("WorkspaceService", () => {
 				});
 				yield* fs.writeFileString(join(created.path, "README.md"), "edited\n");
 				yield* fs.writeFileString(join(created.path, "new.txt"), "new\n");
-				const refused = yield* Effect.flip(
-					workspaces.archive(created.id, { force: false }),
-				);
+				const refused = yield* Effect.flip(workspaces.archive(created.id, { force: false }));
 				const stillThere = yield* fs.exists(created.path);
 				const archived = yield* workspaces.archive(created.id, { force: true });
 				return {
@@ -172,12 +155,7 @@ describe("WorkspaceService", () => {
 					archived,
 					folderExists: yield* fs.exists(created.path),
 					stashes: yield* runGit(project.path, ["stash", "list"]),
-					stashedFiles: yield* runGit(project.path, [
-						"show",
-						"--name-only",
-						"--format=",
-						"stash@{0}^3",
-					]),
+					stashedFiles: yield* runGit(project.path, ["show", "--name-only", "--format=", "stash@{0}^3"]),
 				};
 			}),
 		);
@@ -205,19 +183,12 @@ describe("WorkspaceService", () => {
 					name: "feature",
 				});
 				yield* runGit(created.path, ["commit", "--allow-empty", "-m", "work"]);
-				const refused = yield* Effect.flip(
-					workspaces.archive(created.id, { force: false }),
-				);
+				const refused = yield* Effect.flip(workspaces.archive(created.id, { force: false }));
 				const archived = yield* workspaces.archive(created.id, { force: true });
 				return {
 					refused,
 					archived,
-					branchHead: yield* runGit(project.path, [
-						"log",
-						"-1",
-						"--format=%s",
-						"feature",
-					]),
+					branchHead: yield* runGit(project.path, ["log", "-1", "--format=%s", "feature"]),
 				};
 			}),
 		);
@@ -268,9 +239,7 @@ describe("WorkspaceService", () => {
 				const refused = yield* Effect.flip(projects.remove(project.id));
 				yield* workspaces.archive(created.id, { force: false });
 				yield* projects.remove(project.id);
-				const leftover = yield* database.query((db) =>
-					db.select().from(workspace).where(eq(workspace.id, created.id)),
-				);
+				const leftover = yield* database.query((db) => db.select().from(workspace).where(eq(workspace.id, created.id)));
 				return { refused, leftover, listed: yield* projects.list };
 			}),
 		);
@@ -286,10 +255,7 @@ describe("WorkspaceService", () => {
 		const result = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {
 				const workspaces = yield* WorkspaceService;
-				const project = yield* addProject(
-					tempDir,
-					"sleep 0.2; echo hello; echo oops >&2; pwd",
-				);
+				const project = yield* addProject(tempDir, "sleep 0.2; echo hello; echo oops >&2; pwd");
 				const created = yield* workspaces.create({
 					kind: "worktree",
 					projectId: project.id,
@@ -363,14 +329,12 @@ describe("WorkspaceService", () => {
 				const workspaceId = yield* withServices(dataDir)(
 					Effect.gen(function* () {
 						const project = yield* addProject(tempDir);
-						const created = yield* Effect.flatMap(
-							WorkspaceService,
-							(workspaces) =>
-								workspaces.create({
-									kind: "worktree",
-									projectId: project.id,
-									name: "feature",
-								}),
+						const created = yield* Effect.flatMap(WorkspaceService, (workspaces) =>
+							workspaces.create({
+								kind: "worktree",
+								projectId: project.id,
+								name: "feature",
+							}),
 						);
 						yield* Effect.flatMap(ProjectService, (projects) =>
 							projects.updateScripts(project.id, {

@@ -29,11 +29,7 @@ export class ProjectRpcs extends RpcGroup.make(
 	}),
 	Rpc.make("removeProject", {
 		payload: { projectId: Schema.String },
-		error: Schema.Union([
-			ProjectNotFoundError,
-			ProjectHasActiveWorkspacesError,
-			DaemonInternalError,
-		]),
+		error: Schema.Union([ProjectNotFoundError, ProjectHasActiveWorkspacesError, DaemonInternalError]),
 	}),
 	Rpc.make("updateProjectScripts", {
 		payload: {

@@ -3,9 +3,7 @@ import type { AgentEvent } from "@repo/contracts/AgentEvent";
 import { Effect, Schema, Stream } from "effect";
 import type { AgentSessionHandle } from "../AgentAdapter.ts";
 import { MAX_QUEUED_MESSAGES } from "../makeAgentSession.ts";
-import recordingJson from "./fixtures/commandWithApproval.json" with {
-	type: "json",
-};
+import recordingJson from "./fixtures/commandWithApproval.json" with { type: "json" };
 import { makeReplayAdapter, Recording } from "./ReplayAdapter.ts";
 
 const recording = Schema.decodeUnknownSync(Recording)(recordingJson);
@@ -22,9 +20,7 @@ const takeUntil = (handle: AgentSessionHandle, type: AgentEvent["type"]) =>
 		Stream.runCollect,
 	);
 
-const runSession = <A, E>(
-	program: (handle: AgentSessionHandle) => Effect.Effect<A, E>,
-) =>
+const runSession = <A, E>(program: (handle: AgentSessionHandle) => Effect.Effect<A, E>) =>
 	Effect.gen(function* () {
 		const handle = yield* makeReplayAdapter(recording).startSession(input);
 		return yield* program(handle);

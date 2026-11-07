@@ -1,19 +1,9 @@
-import {
-	AgentAuthMode,
-	AgentKind,
-	AgentSessionStatus,
-} from "@repo/contracts/AgentSession";
+import { AgentAuthMode, AgentKind, AgentSessionStatus } from "@repo/contracts/AgentSession";
 import { JobStatus } from "@repo/contracts/JobStatus";
 import { ScriptRunKind } from "@repo/contracts/ScriptRun";
 import { WorkspaceKind, WorkspaceStatus } from "@repo/contracts/Workspace";
 import { sql } from "drizzle-orm";
-import {
-	index,
-	integer,
-	sqliteTable,
-	text,
-	uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const project = sqliteTable(
 	"project",
@@ -50,9 +40,7 @@ export const workspace = sqliteTable(
 	(table) => [
 		index("workspaceProjectIdIndex").on(table.projectId),
 		// Two active workspaces must never share a folder, including in-place ones.
-		uniqueIndex("workspaceActivePathUnique")
-			.on(table.path)
-			.where(sql`${table.status} = 'active'`),
+		uniqueIndex("workspaceActivePathUnique").on(table.path).where(sql`${table.status} = 'active'`),
 	],
 );
 
@@ -89,12 +77,7 @@ export const sessionEvent = sqliteTable(
 		createdAt: text().notNull(),
 	},
 	// Also serves `WHERE sessionId = ? AND sequence > ? ORDER BY sequence LIMIT ?`.
-	(table) => [
-		uniqueIndex("sessionEventSessionSequenceUnique").on(
-			table.sessionId,
-			table.sequence,
-		),
-	],
+	(table) => [uniqueIndex("sessionEventSessionSequenceUnique").on(table.sessionId, table.sequence)],
 );
 
 export const scriptRun = sqliteTable(
@@ -115,10 +98,7 @@ export const scriptRun = sqliteTable(
 		startedAt: text(),
 		finishedAt: text(),
 	},
-	(table) => [
-		index("scriptRunWorkspaceIdIndex").on(table.workspaceId),
-		index("scriptRunStatusIndex").on(table.status),
-	],
+	(table) => [index("scriptRunWorkspaceIdIndex").on(table.workspaceId), index("scriptRunStatusIndex").on(table.status)],
 );
 
 export const setting = sqliteTable("setting", {

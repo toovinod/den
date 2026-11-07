@@ -7,21 +7,10 @@ import { testDaemonConfig } from "../testing/testDaemonConfig.ts";
 import { DATABASE_FILE_NAME, LocalDatabase } from "./LocalDatabase.ts";
 import { project } from "./schema.ts";
 
-const withDatabase = <A, E>(
-	program: Effect.Effect<A, E, LocalDatabase>,
-	dataDir: string,
-) =>
-	program.pipe(
-		Effect.provide(
-			LocalDatabase.layer.pipe(
-				Layer.provide([testDaemonConfig(dataDir), BunServices.layer]),
-			),
-		),
-	);
+const withDatabase = <A, E>(program: Effect.Effect<A, E, LocalDatabase>, dataDir: string) =>
+	program.pipe(Effect.provide(LocalDatabase.layer.pipe(Layer.provide([testDaemonConfig(dataDir), BunServices.layer]))));
 
-const run = <A, E>(
-	program: (dataDir: string) => Effect.Effect<A, E, FileSystem.FileSystem>,
-) =>
+const run = <A, E>(program: (dataDir: string) => Effect.Effect<A, E, FileSystem.FileSystem>) =>
 	Effect.gen(function* () {
 		const fs = yield* FileSystem.FileSystem;
 		return yield* program(yield* fs.makeTempDirectoryScoped());
@@ -44,12 +33,7 @@ describe("LocalDatabase", () => {
 				dataDir,
 			),
 		);
-		expect(pragmas).toEqual([
-			{ journal_mode: "wal" },
-			{ foreign_keys: 1 },
-			{ timeout: 5000 },
-			[],
-		]);
+		expect(pragmas).toEqual([{ journal_mode: "wal" }, { foreign_keys: 1 }, { timeout: 5000 }, []]);
 	});
 
 	test("reopening an existing file applies no migration twice", async () => {
@@ -68,9 +52,7 @@ describe("LocalDatabase", () => {
 				);
 				yield* withDatabase(insert, dataDir);
 				return yield* withDatabase(
-					LocalDatabase.use((database) =>
-						database.query((db) => db.select().from(project)),
-					),
+					LocalDatabase.use((database) => database.query((db) => db.select().from(project))),
 					dataDir,
 				);
 			}),
@@ -86,8 +68,7 @@ describe("LocalDatabase", () => {
 				const openDir = join(tempDir, "open");
 				yield* fs.makeDirectory(openDir, { mode: 0o755 });
 				yield* fs.chmod(openDir, 0o755);
-				const modeOf = (path: string) =>
-					Effect.map(fs.stat(path), (info) => info.mode & 0o777);
+				const modeOf = (path: string) => Effect.map(fs.stat(path), (info) => info.mode & 0o777);
 				const modesIn = (dataDir: string) =>
 					Effect.all([
 						modeOf(dataDir),
@@ -95,10 +76,7 @@ describe("LocalDatabase", () => {
 						modeOf(join(dataDir, `${DATABASE_FILE_NAME}-wal`)),
 						modeOf(join(dataDir, `${DATABASE_FILE_NAME}-shm`)),
 					]);
-				return yield* Effect.all([
-					withDatabase(modesIn(freshDir), freshDir),
-					withDatabase(modesIn(openDir), openDir),
-				]);
+				return yield* Effect.all([withDatabase(modesIn(freshDir), freshDir), withDatabase(modesIn(openDir), openDir)]);
 			}),
 		);
 		expect(modes).toEqual([

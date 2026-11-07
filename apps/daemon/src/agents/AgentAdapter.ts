@@ -42,20 +42,19 @@ export interface AgentCapabilities {
 }
 
 // Retryable: the agent process died or could not be reached, or the session is busy.
-export class AgentProcessError extends Schema.TaggedError<AgentProcessError>()(
-	"AgentProcessError",
-	{ message: Schema.String, cause: Schema.Defect() },
-) {}
+export class AgentProcessError extends Schema.TaggedError<AgentProcessError>()("AgentProcessError", {
+	message: Schema.String,
+	cause: Schema.Defect(),
+}) {}
 
-export class AgentNotInstalledError extends Schema.TaggedError<AgentNotInstalledError>()(
-	"AgentNotInstalledError",
-	{ executable: Schema.String },
-) {}
+export class AgentNotInstalledError extends Schema.TaggedError<AgentNotInstalledError>()("AgentNotInstalledError", {
+	executable: Schema.String,
+}) {}
 
-export class AgentProtocolError extends Schema.TaggedError<AgentProtocolError>()(
-	"AgentProtocolError",
-	{ message: Schema.String, cause: Schema.Defect() },
-) {}
+export class AgentProtocolError extends Schema.TaggedError<AgentProtocolError>()("AgentProtocolError", {
+	message: Schema.String,
+	cause: Schema.Defect(),
+}) {}
 
 export class CodexVersionMismatchError extends Schema.TaggedError<CodexVersionMismatchError>()(
 	"CodexVersionMismatchError",
@@ -63,54 +62,35 @@ export class CodexVersionMismatchError extends Schema.TaggedError<CodexVersionMi
 ) {}
 
 // Retryable: a turn is running and the message queue is full.
-export class SessionBusyError extends Schema.TaggedError<SessionBusyError>()(
-	"SessionBusyError",
-	{ queued: Schema.Number },
-) {}
+export class SessionBusyError extends Schema.TaggedError<SessionBusyError>()("SessionBusyError", {
+	queued: Schema.Number,
+}) {}
 
-export class ApprovalNotFoundError extends Schema.TaggedError<ApprovalNotFoundError>()(
-	"ApprovalNotFoundError",
-	{ requestId: Schema.String },
-) {}
+export class ApprovalNotFoundError extends Schema.TaggedError<ApprovalNotFoundError>()("ApprovalNotFoundError", {
+	requestId: Schema.String,
+}) {}
 
-export class ApprovalChoiceError extends Schema.TaggedError<ApprovalChoiceError>()(
-	"ApprovalChoiceError",
-	{ requestId: Schema.String, decision: Schema.String },
-) {}
+export class ApprovalChoiceError extends Schema.TaggedError<ApprovalChoiceError>()("ApprovalChoiceError", {
+	requestId: Schema.String,
+	decision: Schema.String,
+}) {}
 
-export type AgentError =
-	| AgentProcessError
-	| AgentNotInstalledError
-	| AgentProtocolError
-	| CodexVersionMismatchError;
+export type AgentError = AgentProcessError | AgentNotInstalledError | AgentProtocolError | CodexVersionMismatchError;
 
 export type SendMessageError = AgentError | SessionBusyError;
-export type ApprovalError =
-	| AgentError
-	| ApprovalNotFoundError
-	| ApprovalChoiceError;
+export type ApprovalError = AgentError | ApprovalNotFoundError | ApprovalChoiceError;
 
-const retryableTags: ReadonlySet<string> = new Set([
-	"AgentProcessError",
-	"SessionBusyError",
-]);
+const retryableTags: ReadonlySet<string> = new Set(["AgentProcessError", "SessionBusyError"]);
 
-export const isRetryableAgentError = (
-	error: SendMessageError | ApprovalError,
-): boolean => retryableTags.has(error._tag);
+export const isRetryableAgentError = (error: SendMessageError | ApprovalError): boolean =>
+	retryableTags.has(error._tag);
 
 export interface AgentSessionHandle {
 	// Waits until the agent reports its id, which may only happen after the first message.
 	readonly nativeSessionId: Effect.Effect<string, AgentError>;
 	readonly events: Stream.Stream<AgentEvent, AgentError>;
-	sendMessage(
-		text: string,
-		options?: { readonly steer?: boolean },
-	): Effect.Effect<void, SendMessageError>;
-	respondToApproval(
-		requestId: string,
-		decision: ApprovalDecision,
-	): Effect.Effect<void, ApprovalError>;
+	sendMessage(text: string, options?: { readonly steer?: boolean }): Effect.Effect<void, SendMessageError>;
+	respondToApproval(requestId: string, decision: ApprovalDecision): Effect.Effect<void, ApprovalError>;
 	// Cancels pending approvals first, then stops the running turn.
 	readonly interrupt: Effect.Effect<void, AgentError>;
 }
@@ -119,7 +99,5 @@ export interface AgentAdapter {
 	readonly kind: AgentKind;
 	readonly capabilities: AgentCapabilities;
 	readonly checkAuth: Effect.Effect<AgentAuthStatus, AgentError>;
-	startSession(
-		input: StartSessionInput,
-	): Effect.Effect<AgentSessionHandle, AgentError, Scope.Scope>;
+	startSession(input: StartSessionInput): Effect.Effect<AgentSessionHandle, AgentError, Scope.Scope>;
 }

@@ -3,9 +3,7 @@ import { Effect, FileSystem } from "effect";
 import { runGit } from "../git/runGit.ts";
 
 // A real git repository on `main` with one commit, isolated from the user's git identity.
-export const makeTestRepository = Effect.fn("makeTestRepository")(function* (
-	path: string,
-) {
+export const makeTestRepository = Effect.fn("makeTestRepository")(function* (path: string) {
 	const fs = yield* FileSystem.FileSystem;
 	yield* fs.makeDirectory(path, { recursive: true });
 	yield* runGit(path, ["init", "--initial-branch=main"]);

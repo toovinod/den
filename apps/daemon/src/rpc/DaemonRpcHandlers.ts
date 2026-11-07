@@ -5,12 +5,7 @@ import { ProjectRpcHandlers } from "./ProjectRpcHandlers.ts";
 import { WorkspaceRpcHandlers } from "./WorkspaceRpcHandlers.ts";
 
 const HealthRpcHandlers = HealthRpcs.toLayer({
-	health: () =>
-		Effect.succeed(new DaemonHealth({ version: packageJson.version })),
+	health: () => Effect.succeed(new DaemonHealth({ version: packageJson.version })),
 });
 
-export const DaemonRpcHandlers = Layer.mergeAll(
-	HealthRpcHandlers,
-	ProjectRpcHandlers,
-	WorkspaceRpcHandlers,
-);
+export const DaemonRpcHandlers = Layer.mergeAll(HealthRpcHandlers, ProjectRpcHandlers, WorkspaceRpcHandlers);

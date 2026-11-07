@@ -5,18 +5,13 @@ import { Config, Context, Effect, Layer, Schema } from "effect";
 import { isSqlError, type SqlError } from "effect/sql/SqlError";
 import { relations } from "./schema.ts";
 
-export class CloudDatabaseError extends Schema.TaggedError<CloudDatabaseError>()(
-	"CloudDatabaseError",
-	{
-		// True for connection loss, deadlocks, serialization failures and timeouts.
-		retryable: Schema.Boolean,
-		cause: Schema.Defect(),
-	},
-) {}
+export class CloudDatabaseError extends Schema.TaggedError<CloudDatabaseError>()("CloudDatabaseError", {
+	// True for connection loss, deadlocks, serialization failures and timeouts.
+	retryable: Schema.Boolean,
+	cause: Schema.Defect(),
+}) {}
 
-export const toCloudDatabaseError = (
-	error: EffectDrizzleQueryError | SqlError,
-): CloudDatabaseError => {
+export const toCloudDatabaseError = (error: EffectDrizzleQueryError | SqlError): CloudDatabaseError => {
 	const sqlError = isSqlError(error) ? error : error.cause;
 	return new CloudDatabaseError({
 		retryable: isSqlError(sqlError) && sqlError.isRetryable,
@@ -31,9 +26,7 @@ export class CloudDatabase extends Context.Service<
 	CloudDatabase,
 	{
 		query<A>(
-			run: (
-				db: CloudDrizzle,
-			) => Effect.Effect<A, EffectDrizzleQueryError | SqlError>,
+			run: (db: CloudDrizzle) => Effect.Effect<A, EffectDrizzleQueryError | SqlError>,
 		): Effect.Effect<A, CloudDatabaseError>;
 	}
 >()("swarm/db-cloud/CloudDatabase") {
@@ -42,16 +35,8 @@ export class CloudDatabase extends Context.Service<
 		Effect.gen(function* () {
 			const db = yield* makeDatabase;
 			return CloudDatabase.of({
-				query: (run) =>
-					run(db).pipe(
-						Effect.mapError(toCloudDatabaseError),
-						Effect.withSpan("CloudDatabase.query"),
-					),
+				query: (run) => run(db).pipe(Effect.mapError(toCloudDatabaseError), Effect.withSpan("CloudDatabase.query")),
 			});
 		}),
-	).pipe(
-		Layer.provide(
-			PgClient.layerConfig({ url: Config.Redacted("DATABASE_URL") }),
-		),
-	);
+	).pipe(Layer.provide(PgClient.layerConfig({ url: Config.Redacted("DATABASE_URL") })));
 }

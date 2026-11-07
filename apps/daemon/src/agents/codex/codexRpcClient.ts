@@ -1,10 +1,6 @@
 import { type Cause, Deferred, Effect, Queue, Schema, Stream } from "effect";
 import { type ChildProcess, ChildProcessSpawner } from "effect/process";
-import {
-	type AgentError,
-	AgentProcessError,
-	AgentProtocolError,
-} from "../AgentAdapter.ts";
+import { type AgentError, AgentProcessError, AgentProtocolError } from "../AgentAdapter.ts";
 import { toAgentError } from "../toAgentError.ts";
 
 // Codex app-server speaks JSON-RPC 2.0 without the "jsonrpc" field, one message per line.
@@ -28,9 +24,7 @@ const IncomingMessage = Schema.Union([
 	}),
 	Schema.Struct({ id: RequestId, result: Schema.Unknown }),
 ]);
-const decodeLine = Schema.decodeUnknownEffect(
-	Schema.fromJsonString(IncomingMessage),
-);
+const decodeLine = Schema.decodeUnknownEffect(Schema.fromJsonString(IncomingMessage));
 
 export type CodexIncoming =
 	| {
@@ -51,11 +45,7 @@ export interface CodexRpcClient {
 	request(method: string, params: unknown): Effect.Effect<unknown, AgentError>;
 	notify(method: string): Effect.Effect<void>;
 	respond(id: RequestId, result: unknown): Effect.Effect<void>;
-	respondError(
-		id: RequestId,
-		code: number,
-		message: string,
-	): Effect.Effect<void>;
+	respondError(id: RequestId, code: number, message: string): Effect.Effect<void>;
 }
 
 export const METHOD_NOT_FOUND = -32601;
@@ -63,27 +53,18 @@ export const METHOD_NOT_FOUND = -32601;
 const INCOMING_BUFFER = 256;
 
 // Spawns `codex app-server` in the caller's scope. Closing the scope kills the process.
-export const makeCodexRpcClient = Effect.fn("makeCodexRpcClient")(function* (
-	command: ChildProcess.StandardCommand,
-) {
+export const makeCodexRpcClient = Effect.fn("makeCodexRpcClient")(function* (command: ChildProcess.StandardCommand) {
 	const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 	const handle = yield* spawner
 		.spawn(command)
-		.pipe(
-			Effect.mapError(
-				toAgentError(command.command, "Could not start Codex app-server."),
-			),
-		);
+		.pipe(Effect.mapError(toAgentError(command.command, "Could not start Codex app-server.")));
 
 	const outgoing = yield* Queue.unbounded<string>();
-	const incoming = yield* Queue.bounded<CodexIncoming, AgentError | Cause.Done>(
-		INCOMING_BUFFER,
-	);
+	const incoming = yield* Queue.bounded<CodexIncoming, AgentError | Cause.Done>(INCOMING_BUFFER);
 	const pending = new Map<RequestId, Deferred.Deferred<unknown, AgentError>>();
 	let nextId = 0;
 
-	const send = (message: object) =>
-		Effect.asVoid(Queue.offer(outgoing, `${JSON.stringify(message)}\n`));
+	const send = (message: object) => Effect.asVoid(Queue.offer(outgoing, `${JSON.stringify(message)}\n`));
 
 	const exited = new AgentProcessError({
 		message: "Codex app-server exited.",
@@ -122,9 +103,9 @@ export const makeCodexRpcClient = Effect.fn("makeCodexRpcClient")(function* (
 			}
 			const deferred = pending.get(message.id);
 			if (deferred === undefined) {
-				return yield* Effect.logWarning(
-					"Codex answered an unknown request",
-				).pipe(Effect.annotateLogs({ id: message.id }));
+				return yield* Effect.logWarning("Codex answered an unknown request").pipe(
+					Effect.annotateLogs({ id: message.id }),
+				);
 			}
 			pending.delete(message.id);
 			if ("error" in message) {
@@ -143,9 +124,7 @@ export const makeCodexRpcClient = Effect.fn("makeCodexRpcClient")(function* (
 	yield* Stream.fromQueue(outgoing).pipe(
 		Stream.encodeText,
 		Stream.run(handle.stdin),
-		Effect.catch((cause) =>
-			Effect.logWarning("Writing to Codex failed", cause),
-		),
+		Effect.catch((cause) => Effect.logWarning("Writing to Codex failed", cause)),
 		Effect.forkScoped,
 	);
 
@@ -160,10 +139,7 @@ export const makeCodexRpcClient = Effect.fn("makeCodexRpcClient")(function* (
 	yield* handle.stdout.pipe(
 		Stream.decodeText(),
 		Stream.splitLines,
-		Stream.mapError(
-			(cause) =>
-				new AgentProcessError({ message: "Reading from Codex failed.", cause }),
-		),
+		Stream.mapError((cause) => new AgentProcessError({ message: "Reading from Codex failed.", cause })),
 		Stream.runForEach(handleLine),
 		Effect.andThen(Effect.fail(exited)),
 		Effect.catch((error: AgentError) =>
@@ -187,9 +163,7 @@ export const makeCodexRpcClient = Effect.fn("makeCodexRpcClient")(function* (
 				pending.set(id, deferred);
 				yield* send({ id, method, params });
 				return yield* Deferred.await(deferred);
-			}).pipe(
-				Effect.withSpan("CodexRpcClient.request", { attributes: { method } }),
-			),
+			}).pipe(Effect.withSpan("CodexRpcClient.request", { attributes: { method } })),
 		notify: (method) => send({ method }),
 		respond: (id, result) => send({ id, result }),
 		respondError: (id, code, message) => send({ id, error: { code, message } }),

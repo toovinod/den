@@ -129,9 +129,7 @@ interface AgentAdapter {
 	readonly kind: "claude" | "codex";
 	readonly capabilities: AgentCapabilities;
 	checkAuth: Effect<AgentAuthStatus, AgentError>;
-	startSession(
-		input: StartSessionInput,
-	): Effect<AgentSessionHandle, AgentError, Scope>;
+	startSession(input: StartSessionInput): Effect<AgentSessionHandle, AgentError, Scope>;
 }
 ```
 

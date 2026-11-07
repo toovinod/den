@@ -11,9 +11,7 @@ const configFromStdin = (...chunks: ReadonlyArray<string>) =>
 		Effect.provide(DaemonConfig.layer),
 		Effect.provide(
 			Stdio.layerTest({
-				stdin: Stream.fromIterable(
-					chunks.map((chunk) => encoder.encode(chunk)),
-				),
+				stdin: Stream.fromIterable(chunks.map((chunk) => encoder.encode(chunk))),
 			}),
 		),
 		Effect.result,

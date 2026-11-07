@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-	CappedOutput,
-	OUTPUT_MAX_BYTES,
-	OUTPUT_MAX_LINES,
-} from "./CappedOutput.ts";
+import { CappedOutput, OUTPUT_MAX_BYTES, OUTPUT_MAX_LINES } from "./CappedOutput.ts";
 
 describe("CappedOutput", () => {
 	test("keeps everything under both caps", () => {
@@ -31,9 +27,7 @@ describe("CappedOutput", () => {
 			output.append(`${line}:${longLine}`);
 		}
 		const text = output.toString();
-		expect(new TextEncoder().encode(text).length).toBeLessThanOrEqual(
-			OUTPUT_MAX_BYTES,
-		);
+		expect(new TextEncoder().encode(text).length).toBeLessThanOrEqual(OUTPUT_MAX_BYTES);
 		expect(text.split("\n").at(-1)).toBe(`99:${longLine}`);
 		expect(text.startsWith("0:")).toBe(false);
 	});

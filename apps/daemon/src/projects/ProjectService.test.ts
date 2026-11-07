@@ -9,18 +9,14 @@ import { ProjectService } from "./ProjectService.ts";
 describe("ProjectService", () => {
 	test("rejects a folder that is not a git repository", async () => {
 		const error = await runServiceTest((tempDir) =>
-			Effect.flatMap(ProjectService, (projects) =>
-				Effect.flip(projects.add(tempDir)),
-			),
+			Effect.flatMap(ProjectService, (projects) => Effect.flip(projects.add(tempDir))),
 		);
 		expect(error._tag).toBe("NotAGitRepositoryError");
 	});
 
 	test("rejects a folder that does not exist", async () => {
 		const error = await runServiceTest((tempDir) =>
-			Effect.flatMap(ProjectService, (projects) =>
-				Effect.flip(projects.add(join(tempDir, "missing"))),
-			),
+			Effect.flatMap(ProjectService, (projects) => Effect.flip(projects.add(join(tempDir, "missing")))),
 		);
 		expect(error._tag).toBe("ProjectFolderNotFoundError");
 	});
@@ -49,9 +45,7 @@ describe("ProjectService", () => {
 				yield* runGit(tempDir, ["clone", "--quiet", origin, clone]);
 				yield* runGit(clone, ["checkout", "-b", "feature"]);
 				yield* runGit(clone, ["config", "init.defaultBranch", "other"]);
-				return yield* Effect.flatMap(ProjectService, (projects) =>
-					projects.add(clone),
-				);
+				return yield* Effect.flatMap(ProjectService, (projects) => projects.add(clone));
 			}),
 		);
 		expect(project.defaultBranch).toBe("trunk");
@@ -63,9 +57,7 @@ describe("ProjectService", () => {
 				const path = yield* makeTestRepository(join(tempDir, "repo"));
 				yield* runGit(path, ["checkout", "-b", "feature"]);
 				yield* runGit(path, ["config", "init.defaultBranch", "develop"]);
-				return yield* Effect.flatMap(ProjectService, (projects) =>
-					projects.add(path),
-				);
+				return yield* Effect.flatMap(ProjectService, (projects) => projects.add(path));
 			}),
 		);
 		expect(project.defaultBranch).toBe("develop");
@@ -78,9 +70,7 @@ describe("ProjectService", () => {
 				yield* runGit(path, ["checkout", "-b", "feature"]);
 				// An empty local value hides any global init.defaultBranch.
 				yield* runGit(path, ["config", "init.defaultBranch", ""]);
-				return yield* Effect.flatMap(ProjectService, (projects) =>
-					projects.add(path),
-				);
+				return yield* Effect.flatMap(ProjectService, (projects) => projects.add(path));
 			}),
 		);
 		expect(project.defaultBranch).toBe("feature");
@@ -90,9 +80,7 @@ describe("ProjectService", () => {
 		const project = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {
 				const projects = yield* ProjectService;
-				const added = yield* projects.add(
-					yield* makeTestRepository(join(tempDir, "repo")),
-				);
+				const added = yield* projects.add(yield* makeTestRepository(join(tempDir, "repo")));
 				return yield* projects.updateScripts(added.id, {
 					setupScript: " bun install ",
 					runScript: "  ",

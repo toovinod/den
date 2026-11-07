@@ -1,18 +1,5 @@
-import type {
-	AgentEvent,
-	ApprovalDecision,
-	ApprovalOutcome,
-} from "@repo/contracts/AgentEvent";
-import {
-	type Cause,
-	Deferred,
-	Effect,
-	Option,
-	Queue,
-	Ref,
-	type Scope,
-	Stream,
-} from "effect";
+import type { AgentEvent, ApprovalDecision, ApprovalOutcome } from "@repo/contracts/AgentEvent";
+import { type Cause, Deferred, Effect, Option, Queue, Ref, type Scope, Stream } from "effect";
 import {
 	type AgentCapabilities,
 	type AgentError,
@@ -27,14 +14,9 @@ import {
 const EVENT_BUFFER = 256;
 export const MAX_QUEUED_MESSAGES = 8;
 
-export type ApprovalRequest = Omit<
-	Extract<AgentEvent, { type: "approval.requested" }>,
-	"type"
->;
+export type ApprovalRequest = Omit<Extract<AgentEvent, { type: "approval.requested" }>, "type">;
 
-type RespondToAgent = (
-	outcome: ApprovalOutcome,
-) => Effect.Effect<void, AgentError>;
+type RespondToAgent = (outcome: ApprovalOutcome) => Effect.Effect<void, AgentError>;
 
 // What each adapter does to drive its agent. The session below owns everything else:
 // the event buffer, turn queue, pending approvals and the native id.
@@ -46,25 +28,16 @@ export interface TurnDriver {
 
 export interface AgentSession {
 	emit(event: AgentEvent): Effect.Effect<void>;
-	requestApproval(
-		request: ApprovalRequest,
-		respond: RespondToAgent,
-	): Effect.Effect<void>;
+	requestApproval(request: ApprovalRequest, respond: RespondToAgent): Effect.Effect<void>;
 	setNativeSessionId(id: string): Effect.Effect<void>;
 	readonly nativeSessionId: Effect.Effect<string, AgentError>;
 	fail(error: AgentError): Effect.Effect<void>;
 	readonly end: Effect.Effect<void>;
-	start(
-		driver: TurnDriver,
-	): Effect.Effect<AgentSessionHandle, never, Scope.Scope>;
+	start(driver: TurnDriver): Effect.Effect<AgentSessionHandle, never, Scope.Scope>;
 }
 
-export const makeAgentSession = Effect.fnUntraced(function* (
-	capabilities: AgentCapabilities,
-) {
-	const events = yield* Queue.bounded<AgentEvent, AgentError | Cause.Done>(
-		EVENT_BUFFER,
-	);
+export const makeAgentSession = Effect.fnUntraced(function* (capabilities: AgentCapabilities) {
+	const events = yield* Queue.bounded<AgentEvent, AgentError | Cause.Done>(EVENT_BUFFER);
 	yield* Effect.addFinalizer(() => Queue.end(events));
 	const nativeId = yield* Deferred.make<string, AgentError>();
 	const inbox = yield* Queue.bounded<string>(MAX_QUEUED_MESSAGES);

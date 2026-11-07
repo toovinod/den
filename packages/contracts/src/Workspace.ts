@@ -8,9 +8,7 @@ export const WorkspaceStatus = Schema.Literals(["active", "archived"]);
 export type WorkspaceStatus = typeof WorkspaceStatus.Type;
 
 // The name becomes the git branch and the worktree folder, so keep it to safe characters.
-export const WorkspaceName = Schema.String.check(
-	Schema.isPattern(/^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/),
-);
+export const WorkspaceName = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/));
 
 export class Workspace extends Schema.Class<Workspace>("Workspace")({
 	id: Schema.String,
@@ -26,19 +24,17 @@ export class Workspace extends Schema.Class<Workspace>("Workspace")({
 	archivedAt: Schema.NullOr(Schema.String),
 }) {}
 
-export class WorkspaceNotFoundError extends Schema.TaggedError<WorkspaceNotFoundError>()(
-	"WorkspaceNotFoundError",
-	{ workspaceId: Schema.String },
-) {
+export class WorkspaceNotFoundError extends Schema.TaggedError<WorkspaceNotFoundError>()("WorkspaceNotFoundError", {
+	workspaceId: Schema.String,
+}) {
 	override get message() {
 		return "This workspace no longer exists. Refresh the workspace list.";
 	}
 }
 
-export class WorkspacePathInUseError extends Schema.TaggedError<WorkspacePathInUseError>()(
-	"WorkspacePathInUseError",
-	{ path: Schema.String },
-) {
+export class WorkspacePathInUseError extends Schema.TaggedError<WorkspacePathInUseError>()("WorkspacePathInUseError", {
+	path: Schema.String,
+}) {
 	override get message() {
 		return `An active workspace already uses ${this.path}. Archive it first or pick another name.`;
 	}
@@ -53,19 +49,17 @@ export class BranchAlreadyExistsError extends Schema.TaggedError<BranchAlreadyEx
 	}
 }
 
-export class WorktreeCreateError extends Schema.TaggedError<WorktreeCreateError>()(
-	"WorktreeCreateError",
-	{ branch: Schema.String },
-) {
+export class WorktreeCreateError extends Schema.TaggedError<WorktreeCreateError>()("WorktreeCreateError", {
+	branch: Schema.String,
+}) {
 	override get message() {
 		return `Swarm could not create a worktree for ${this.branch}. Check that the base branch exists and the repository is not locked.`;
 	}
 }
 
-export class WorktreeRemoveError extends Schema.TaggedError<WorktreeRemoveError>()(
-	"WorktreeRemoveError",
-	{ path: Schema.String },
-) {
+export class WorktreeRemoveError extends Schema.TaggedError<WorktreeRemoveError>()("WorktreeRemoveError", {
+	path: Schema.String,
+}) {
 	override get message() {
 		return `Swarm could not remove the worktree at ${this.path}. Close programs using it and try again.`;
 	}

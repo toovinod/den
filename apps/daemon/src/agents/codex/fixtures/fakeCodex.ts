@@ -100,12 +100,8 @@ const runTurn = async (text: string) => {
 };
 
 // Swarm must pin these, or the user's own Codex config could turn approvals off.
-const hasSwarmPolicy = (params: {
-	approvalPolicy?: string;
-	sandbox?: string;
-}) =>
-	params.approvalPolicy === "on-request" &&
-	params.sandbox === "workspace-write";
+const hasSwarmPolicy = (params: { approvalPolicy?: string; sandbox?: string }) =>
+	params.approvalPolicy === "on-request" && params.sandbox === "workspace-write";
 
 const serve = async () => {
 	for await (const line of console) {

@@ -22,12 +22,8 @@ export default function Home() {
 		<main className="daemonStatus">
 			<h1>Swarm</h1>
 			{status.state === "connecting" && <p>Connecting to the daemon...</p>}
-			{status.state === "connected" && (
-				<p>Daemon v{status.version} is running.</p>
-			)}
-			{status.state === "failed" && (
-				<p>Could not reach the daemon. Open Swarm from the desktop app.</p>
-			)}
+			{status.state === "connected" && <p>Daemon v{status.version} is running.</p>}
+			{status.state === "failed" && <p>Could not reach the daemon. Open Swarm from the desktop app.</p>}
 		</main>
 	);
 }
