@@ -52,6 +52,27 @@ export const AgentEvent = Schema.Union([
 		type: Schema.Literal("session.started"),
 		nativeSessionId: Schema.String,
 	}),
+	// The user's own message, stored so history shows it. Images are stored apart and fetched by id.
+	Schema.Struct({
+		type: Schema.Literal("user.message"),
+		itemId: Schema.String,
+		text: Schema.String,
+		attachments: Schema.Array(Schema.Struct({ id: Schema.String, mediaType: Schema.String })),
+	}),
+	// Context used by the conversation so far, after each model call.
+	Schema.Struct({
+		type: Schema.Literal("usage.updated"),
+		contextTokens: Schema.Int,
+		contextWindow: Schema.NullOr(Schema.Int),
+	}),
+	// Plan usage limits, when the provider reports them (subscriptions mostly).
+	Schema.Struct({
+		type: Schema.Literal("rateLimit.updated"),
+		window: Schema.String,
+		status: Schema.Literals(["allowed", "warning", "rejected"]),
+		usedPercent: Schema.NullOr(Schema.Number),
+		resetsAt: Schema.NullOr(Schema.String),
+	}),
 	Schema.Struct({
 		type: Schema.Literal("message.delta"),
 		itemId: Schema.String,

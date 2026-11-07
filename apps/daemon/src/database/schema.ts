@@ -58,6 +58,7 @@ export const agentSession = sqliteTable(
 		nativeSessionId: text(),
 		authMode: text({ enum: AgentAuthMode.literals }).notNull(),
 		status: text({ enum: AgentSessionStatus.literals }).notNull(),
+		effort: text(),
 		title: text(),
 		createdAt: text().notNull(),
 		updatedAt: text().notNull(),

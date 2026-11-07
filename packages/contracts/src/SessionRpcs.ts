@@ -1,6 +1,11 @@
 import {
+	AgentAuthMode,
 	AgentInfo,
 	AgentKind,
+	AttachmentNotFoundError,
+	AuthModeNotAllowedError,
+	ImageData,
+	MAX_IMAGES_PER_MESSAGE,
 	AgentSession,
 	AgentUnavailableError,
 	ApprovalNotFoundError,
@@ -30,9 +35,25 @@ export class SessionRpcs extends RpcGroup.make(
 		payload: { agent: AgentKind },
 		error: DaemonInternalError,
 	}),
+	// Applies to new sessions only. Running sessions keep the credential they started with.
+	Rpc.make("setAgentAuthMode", {
+		payload: { agent: AgentKind, mode: AgentAuthMode },
+		error: Schema.Union([AuthModeNotAllowedError, DaemonInternalError]),
+	}),
+	// Codex only: starts its own ChatGPT sign-in and returns the URL to open. Codex keeps the tokens.
+	Rpc.make("startAgentLogin", {
+		payload: { agent: AgentKind },
+		success: Schema.Struct({ authUrl: Schema.String }),
+		error: Schema.Union([AuthModeNotAllowedError, DaemonInternalError]),
+	}),
 	// The agent process starts on the first message.
 	Rpc.make("createSession", {
-		payload: { workspaceId: Schema.String, agent: AgentKind, model: Schema.String },
+		payload: {
+			workspaceId: Schema.String,
+			agent: AgentKind,
+			model: Schema.String,
+			effort: Schema.NullOr(Schema.String),
+		},
 		success: AgentSession,
 		error: Schema.Union([WorkspaceNotFoundError, DaemonInternalError]),
 	}),
@@ -46,9 +67,20 @@ export class SessionRpcs extends RpcGroup.make(
 		success: AgentSession,
 		error: Schema.Union([SessionNotFoundError, DaemonInternalError]),
 	}),
+	// Takes effect from the next turn.
+	Rpc.make("updateSessionSettings", {
+		payload: { sessionId: Schema.String, model: Schema.String, effort: Schema.NullOr(Schema.String) },
+		success: AgentSession,
+		error: Schema.Union([SessionNotFoundError, DaemonInternalError]),
+	}),
 	// steer sends the text into the running turn when the agent supports it, otherwise it queues.
 	Rpc.make("sendMessage", {
-		payload: { sessionId: Schema.String, text: Schema.String, steer: Schema.Boolean },
+		payload: {
+			sessionId: Schema.String,
+			text: Schema.String,
+			images: Schema.Array(ImageData).check(Schema.isMaxLength(MAX_IMAGES_PER_MESSAGE)),
+			steer: Schema.Boolean,
+		},
 		error: Schema.Union([
 			SessionNotFoundError,
 			SessionLimitReachedError,
@@ -56,6 +88,11 @@ export class SessionRpcs extends RpcGroup.make(
 			AgentUnavailableError,
 			DaemonInternalError,
 		]),
+	}),
+	Rpc.make("getAttachment", {
+		payload: { sessionId: Schema.String, attachmentId: Schema.String },
+		success: ImageData,
+		error: Schema.Union([SessionNotFoundError, AttachmentNotFoundError, DaemonInternalError]),
 	}),
 	Rpc.make("respondToApproval", {
 		payload: { sessionId: Schema.String, requestId: Schema.String, decision: ApprovalDecision },
