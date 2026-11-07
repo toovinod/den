@@ -1,0 +1,123 @@
+[
+	[
+		{ "type": "usage.updated", "contextTokens": 18400, "contextWindow": 200000 },
+		{
+			"type": "message.completed",
+			"itemId": "msg-b1",
+			"text": "I'll look at how the parser handles **empty input** first."
+		},
+		{
+			"type": "tool.started",
+			"itemId": "read-b1",
+			"tool": { "kind": "other", "name": "Read src/parser.ts" }
+		},
+		{
+			"type": "tool.completed",
+			"itemId": "read-b1",
+			"tool": { "kind": "other", "name": "Read src/parser.ts" },
+			"status": "completed",
+			"output": "export const parse = (input: string) => input.split(\",\");"
+		},
+		{
+			"type": "tool.started",
+			"itemId": "edit-b1",
+			"tool": {
+				"kind": "fileChange",
+				"changes": [
+					{
+						"path": "src/parser.ts",
+						"kind": "update",
+						"diff": "@@ -1 +1,2 @@\n-export const parse = (input: string) => input.split(\",\");\n+export const parse = (input: string) =>\n+\tinput === \"\" ? [] : input.split(\",\");"
+					}
+				]
+			}
+		},
+		{
+			"type": "approval.requested",
+			"requestId": "edit-b1-approval",
+			"itemId": "edit-b1",
+			"kind": "fileChange",
+			"summary": "Edit src/parser.ts",
+			"reason": "Return an empty list for empty input.",
+			"choices": ["allowOnce", "deny"]
+		},
+		{
+			"type": "tool.completed",
+			"itemId": "edit-b1",
+			"tool": {
+				"kind": "fileChange",
+				"changes": [
+					{
+						"path": "src/parser.ts",
+						"kind": "update",
+						"diff": "@@ -1 +1,2 @@\n-export const parse = (input: string) => input.split(\",\");\n+export const parse = (input: string) =>\n+\tinput === \"\" ? [] : input.split(\",\");"
+					}
+				]
+			},
+			"status": "completed",
+			"output": null
+		},
+		{ "type": "usage.updated", "contextTokens": 31250, "contextWindow": 200000 },
+		{
+			"type": "message.completed",
+			"itemId": "msg-b2",
+			"text": "Done. `parse(\"\")` now returns `[]` instead of `[\"\"]`.\n\n- Empty input is handled before splitting\n- Other inputs behave as before"
+		},
+		{ "type": "turn.completed", "turnId": "turn-b", "result": { "status": "completed" } }
+	],
+	[
+		{
+			"type": "rateLimit.updated",
+			"window": "5h",
+			"status": "warning",
+			"usedPercent": 82,
+			"resetsAt": "2026-11-07T18:00:00Z"
+		},
+		{
+			"type": "message.completed",
+			"itemId": "msg-c1",
+			"text": "Let me check the open issues for this bug."
+		},
+		{
+			"type": "tool.started",
+			"itemId": "mcp-c1",
+			"tool": { "kind": "mcpCall", "server": "github", "tool": "search_issues" }
+		},
+		{
+			"type": "approval.requested",
+			"requestId": "mcp-c1-approval",
+			"itemId": "mcp-c1",
+			"kind": "mcpCall",
+			"summary": "github.search_issues",
+			"reason": null,
+			"choices": ["allowOnce", "deny"]
+		},
+		{
+			"type": "tool.completed",
+			"itemId": "mcp-c1",
+			"tool": { "kind": "mcpCall", "server": "github", "tool": "search_issues" },
+			"status": "completed",
+			"output": "2 issues mention empty input."
+		},
+		{ "type": "error", "message": "The model is overloaded. Retrying.", "willRetry": true },
+		{
+			"type": "tool.started",
+			"itemId": "cmd-c2",
+			"tool": { "kind": "command", "command": "bun run lint", "cwd": null }
+		},
+		{
+			"type": "tool.completed",
+			"itemId": "cmd-c2",
+			"tool": { "kind": "command", "command": "bun run lint", "cwd": null },
+			"status": "failed",
+			"output": "src/parser.ts:2:2 lint/style/useTemplate\n\n1 error"
+		},
+		{ "type": "usage.updated", "contextTokens": 52800, "contextWindow": 200000 },
+		{
+			"type": "message.completed",
+			"itemId": "msg-c2",
+			"text": "Lint found one style error. Here is the fix:\n\n```ts\nexport const parse = (input: string) =>\n\tinput === \"\" ? [] : input.split(\",\");\n```\n\nWant me to apply it?"
+		},
+		{ "type": "turn.completed", "turnId": "turn-c", "result": { "status": "completed" } }
+	]
+]

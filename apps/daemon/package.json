@@ -6,6 +6,7 @@
 	"scripts": {
 		"check-types": "bun --bun tsc --noEmit",
 		"db:generate": "bun --bun drizzle-kit generate",
+		"dev:fake": "bun src/testing/devDaemon.ts",
 		"test": "bun test",
 		"generate:codex": "rm -rf src/agents/codex/generated && codex app-server generate-ts --out src/agents/codex/generated && codex --version | awk '{print $2}' > src/agents/codex/generated/CODEX_VERSION"
 	},
