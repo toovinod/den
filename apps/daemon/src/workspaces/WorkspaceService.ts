@@ -11,6 +11,7 @@ import { applyScriptRunEvent, runSetupScript } from "./runSetupScript.ts";
 import type { CreateWorkspaceInput } from "@repo/contracts/WorkspaceRpcs";
 import { ScriptRun, ScriptRunOutput } from "@repo/contracts/ScriptRun";
 import { project, scriptRun, workspace } from "../database/schema.ts";
+import { TerminalService } from "../terminals/TerminalService.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import type { ChildProcessSpawner } from "effect/process";
@@ -34,6 +35,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 		const { dataDir } = yield* DaemonConfig;
 		const database = yield* LocalDatabase;
 		const projects = yield* ProjectService;
+		const terminals = yield* TerminalService;
 		const fs = yield* FileSystem.FileSystem;
 		const services = yield* Effect.context<
 			LocalDatabase | ChildProcessSpawner.ChildProcessSpawner | SecureRandom.SecureRandom
@@ -207,6 +209,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 				if (current.status === "archived") {
 					return current;
 				}
+				yield* terminals.closeWorkspace(workspaceId);
 				if (current.kind === "worktree") {
 					// The foreign key keeps the project while it has workspaces.
 					const owner = yield* projects

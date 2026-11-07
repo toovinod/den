@@ -77,3 +77,11 @@ export class WorkspaceHasUnsavedWorkError extends Schema.TaggedError<WorkspaceHa
 		return `This workspace has ${this.changedFiles.length} changed file(s) and ${this.unpushedCommits} unpushed commit(s). Commit and push them, or archive with force to stash the changes and keep the branch.`;
 	}
 }
+
+export class WorkspaceArchivedError extends Schema.TaggedError<WorkspaceArchivedError>()("WorkspaceArchivedError", {
+	workspaceId: Schema.String,
+}) {
+	override get message() {
+		return "This workspace is archived. Create a new workspace to keep working.";
+	}
+}

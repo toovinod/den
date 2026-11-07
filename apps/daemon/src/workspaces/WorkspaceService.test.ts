@@ -1,5 +1,6 @@
 import { runInTempDir, runServiceTest, waitForScriptRun, withServices } from "../testing/runServiceTest.ts";
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
+import { TerminalService } from "../terminals/TerminalService.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
@@ -406,5 +407,21 @@ describe("WorkspaceService", () => {
 			}),
 		);
 		expect(results.map((archived) => archived.status)).toEqual(["archived", "archived", "archived", "archived"]);
+	});
+
+	test("archiving a workspace closes its terminals", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const terminals = yield* TerminalService;
+				const workspaces = yield* WorkspaceService;
+				const project = yield* addProject(tempDir);
+				const created = yield* workspaces.create({ kind: "worktree", projectId: project.id, name: "feature" });
+				yield* terminals.open(created.id, created.path, { cols: 80, rows: 24 });
+				const before = terminals.list(created.id).length;
+				yield* workspaces.archive(created.id, { force: false });
+				return { before, after: terminals.list(created.id).length };
+			}),
+		);
+		expect(result).toEqual({ before: 1, after: 0 });
 	});
 });

@@ -1,3 +1,4 @@
+import type { TerminalService } from "../terminals/TerminalService.ts";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import type { ProjectService } from "../projects/ProjectService.ts";
 import type { LocalDatabase } from "../database/LocalDatabase.ts";
@@ -7,7 +8,7 @@ import { testDaemonConfig } from "./testDaemonConfig.ts";
 import { BunServices } from "@effect/platform-bun";
 import { join } from "node:path";
 
-type Services = LocalDatabase | ProjectService | WorkspaceService | BunServices.BunServices;
+type Services = LocalDatabase | ProjectService | TerminalService | WorkspaceService | BunServices.BunServices;
 
 export const withServices =
 	(dataDir: string) =>
