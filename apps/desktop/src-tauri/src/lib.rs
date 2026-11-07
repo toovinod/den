@@ -1,7 +1,10 @@
 use std::{
   io::Read,
   process::{Command, Stdio},
-  sync::Mutex,
+  sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+  },
   thread,
   time::{Duration, Instant},
 };
@@ -17,6 +20,10 @@ use tokio::sync::watch;
 // Must match READY_LINE_PREFIX in apps/daemon/src/server/DaemonServer.ts.
 const READY_LINE_PREFIX: &str = "SWARM_DAEMON_READY ";
 
+// Longer than swarmd's own 8 second shutdown deadline, so a daemon that is still stopping its
+// children is not cut off. Only a daemon that hangs past its own deadline gets killed.
+const DAEMON_EXIT_WAIT: Duration = Duration::from_secs(10);
+
 #[derive(Clone, Serialize)]
 struct DaemonConnection {
   url: String,
@@ -25,7 +32,11 @@ struct DaemonConnection {
 
 struct Daemon {
   connection: watch::Receiver<Option<DaemonConnection>>,
-  child: Mutex<Option<CommandChild>>,
+  // With the pid read at spawn: `CommandChild::pid` waits on a lock the plugin's waiter thread
+  // can hold while swarmd is stopped, and quitting runs on the UI thread.
+  child: Mutex<Option<(CommandChild, u32)>>,
+  exited: watch::Receiver<bool>,
+  quitting: AtomicBool,
 }
 
 #[tauri::command]
@@ -74,6 +85,7 @@ fn login_shell_path() -> Option<String> {
 fn spawn_daemon(
   app: &tauri::AppHandle,
   ready: watch::Sender<Option<DaemonConnection>>,
+  exited: watch::Sender<bool>,
 ) -> Result<CommandChild, Box<dyn std::error::Error>> {
   let token = generate_token()?;
   let mut sidecar = app.shell().sidecar("swarmd")?;
@@ -98,7 +110,10 @@ fn spawn_daemon(
           }
         }
         CommandEvent::Stderr(line) => log::warn!("swarmd: {}", String::from_utf8_lossy(&line).trim_end()),
-        CommandEvent::Terminated(status) => log::error!("swarmd exited: {status:?}"),
+        CommandEvent::Terminated(status) => {
+          log::info!("swarmd exited: {status:?}");
+          let _ = exited.send(true);
+        }
         _ => {}
       }
     }
@@ -118,13 +133,15 @@ pub fn run() {
     )
     .setup(|app| {
       let (ready, connection) = watch::channel(None);
-      app.manage(Daemon { connection, child: Mutex::new(None) });
+      let (exited_sender, exited) = watch::channel(false);
+      app.manage(Daemon { connection, child: Mutex::new(None), exited, quitting: AtomicBool::new(false) });
       let app = app.handle().clone();
       // Reading the login shell's PATH can take seconds, so the window does not wait for it.
-      tauri::async_runtime::spawn_blocking(move || match spawn_daemon(&app, ready) {
+      tauri::async_runtime::spawn_blocking(move || match spawn_daemon(&app, ready, exited_sender) {
         Ok(child) => {
+          let pid = child.pid();
           if let Ok(mut slot) = app.state::<Daemon>().child.lock() {
-            *slot = Some(child);
+            *slot = Some((child, pid));
           }
         }
         Err(error) => log::error!("Could not start swarmd: {error}"),
@@ -134,11 +151,44 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![daemon_connection])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")
-    .run(|app, event| {
-      // Dropping the child closes the daemon's stdin, and it shuts down and stops everything it
-      // started. A crash closes stdin too. `kill()` would SIGKILL the daemon and orphan its children.
-      if let RunEvent::Exit = event {
-        drop(app.state::<Daemon>().child.lock().ok().and_then(|mut child| child.take()));
-      }
+    .run(|app, event| match event {
+      RunEvent::ExitRequested { api, .. } => quit(app, api),
+      // In case the app exits without asking first. A crash closes stdin too.
+      RunEvent::Exit => drop(take_daemon_child(app)),
+      _ => {}
     });
+}
+
+fn take_daemon_child(app: &tauri::AppHandle) -> Option<(CommandChild, u32)> {
+  app.state::<Daemon>().child.lock().ok().and_then(|mut child| child.take())
+}
+
+// Dropping the child closes the daemon's stdin, and it shuts down and stops everything it
+// started. `kill()` would SIGKILL it at once and orphan its children, so the app hides its
+// windows, waits off the UI thread for the daemon to exit, and kills it only when it hangs.
+fn quit(app: &tauri::AppHandle, api: tauri::ExitRequestApi) {
+  let daemon = app.state::<Daemon>();
+  // The second request is our own `app.exit` below.
+  if daemon.quitting.swap(true, Ordering::SeqCst) {
+    return;
+  }
+  let Some((child, pid)) = take_daemon_child(app) else {
+    return;
+  };
+  api.prevent_exit();
+  for window in app.webview_windows().values() {
+    let _ = window.hide();
+  }
+  drop(child);
+  let mut exited = daemon.exited.clone();
+  let app = app.clone();
+  tauri::async_runtime::spawn(async move {
+    if tokio::time::timeout(DAEMON_EXIT_WAIT, exited.wait_for(|exited| *exited)).await.is_err() {
+      log::error!("swarmd did not exit within {DAEMON_EXIT_WAIT:?}, killing it");
+      // Still swarmd's pid: it has not exited, so the pid cannot have been reused. The children
+      // it leaves are stopped by the next swarmd from its process registry.
+      unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
+    }
+    app.exit(0);
+  });
 }

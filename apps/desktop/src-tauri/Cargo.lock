@@ -3013,6 +3013,7 @@ name = "swarm"
 version = "0.1.0"
 dependencies = [
  "getrandom 0.4.3",
+ "libc",
  "log",
  "serde",
  "serde_json",
