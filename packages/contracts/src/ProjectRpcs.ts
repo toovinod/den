@@ -3,6 +3,9 @@ import {
 	NotAGitRepositoryError,
 	Project,
 	ProjectAlreadyAddedError,
+	ProjectCreateError,
+	ProjectFolderExistsError,
+	ProjectFolderName,
 	ProjectFolderNotFoundError,
 	ProjectHasActiveWorkspacesError,
 	ProjectNotFoundError,
@@ -17,6 +20,20 @@ export class ProjectRpcs extends RpcGroup.make(
 		success: Project,
 		error: Schema.Union([
 			ProjectFolderNotFoundError,
+			NotAGitRepositoryError,
+			DefaultBranchNotFoundError,
+			ProjectAlreadyAddedError,
+			DaemonInternalError,
+		]),
+	}),
+	// Makes a new folder in parentPath, initializes a repository with an empty first commit, and adds it.
+	Rpc.make("createProject", {
+		payload: { parentPath: Schema.String, name: ProjectFolderName },
+		success: Project,
+		error: Schema.Union([
+			ProjectFolderNotFoundError,
+			ProjectFolderExistsError,
+			ProjectCreateError,
 			NotAGitRepositoryError,
 			DefaultBranchNotFoundError,
 			ProjectAlreadyAddedError,

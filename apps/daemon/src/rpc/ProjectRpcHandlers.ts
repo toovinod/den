@@ -8,6 +8,8 @@ export const ProjectRpcHandlers = ProjectRpcs.toLayer(
 		const projects = yield* ProjectService;
 		return ProjectRpcs.of({
 			addProject: ({ path }) => projects.add(path).pipe(orInternalError("add the project")),
+			createProject: ({ parentPath, name }) =>
+				projects.create(parentPath, name).pipe(orInternalError("create the project")),
 			listProjects: () => projects.list.pipe(orInternalError("list projects")),
 			removeProject: ({ projectId }) => projects.remove(projectId).pipe(orInternalError("remove the project")),
 			setProjectTrust: ({ projectId, trusted }) =>

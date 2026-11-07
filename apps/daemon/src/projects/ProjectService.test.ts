@@ -1,10 +1,11 @@
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
 import { runServiceTest } from "../testing/runServiceTest.ts";
+import { ProjectFolderName } from "@repo/contracts/Project";
 import { ProjectService } from "./ProjectService.ts";
 import { describe, expect, test } from "bun:test";
 import { runGit } from "../git/runGit.ts";
+import { Effect, Schema } from "effect";
 import { join } from "node:path";
-import { Effect } from "effect";
 
 describe("ProjectService", () => {
 	test("rejects a folder that is not a git repository", async () => {
@@ -105,5 +106,34 @@ describe("ProjectService", () => {
 		expect(result.trusted.trusted).toBe(true);
 		expect(result.reloaded.trusted).toBe(true);
 		expect(result.missing._tag).toBe("ProjectNotFoundError");
+	});
+
+	test("creates a new folder with a repository and an empty first commit, then adds it", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const projects = yield* ProjectService;
+				const created = yield* projects.create(tempDir, "fresh");
+				const again = yield* Effect.flip(projects.create(tempDir, "fresh"));
+				const missingParent = yield* Effect.flip(projects.create(join(tempDir, "nope"), "x"));
+				return {
+					tempDir,
+					created,
+					again,
+					missingParent,
+					log: yield* runGit(created.path, ["log", "--format=%s"]),
+				};
+			}),
+		);
+		expect(result.created).toMatchObject({ name: "fresh", defaultBranch: "main" });
+		expect(result.created.path).toEndWith("/fresh");
+		expect(result.log).toBe("Initial commit");
+		expect(result.again._tag).toBe("ProjectFolderExistsError");
+		expect(result.missingParent._tag).toBe("ProjectFolderNotFoundError");
+	});
+
+	test("rejects folder names that would leave the parent folder", () => {
+		const isValid = Schema.is(ProjectFolderName);
+		expect(["app", "my app", "a.b"].map(isValid)).toEqual([true, true, true]);
+		expect(["..", ".", "a/b", "", "../x"].map(isValid)).toEqual([false, false, false, false, false]);
 	});
 });
