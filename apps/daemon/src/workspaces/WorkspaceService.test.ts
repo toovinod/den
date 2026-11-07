@@ -8,7 +8,7 @@ import { WorkspaceService } from "./WorkspaceService.ts";
 import { Duration, Effect, FileSystem } from "effect";
 import { describe, expect, test } from "bun:test";
 import { runGit } from "../git/runGit.ts";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { join } from "node:path";
 
 const addProject = Effect.fn("addProject")(function* (tempDir: string, setupScript: string | null = null) {
@@ -369,5 +369,29 @@ describe("WorkspaceService", () => {
 			attempts: 1,
 			exitCode: 0,
 		});
+	});
+
+	test("removes the new worktree and branch when the workspace cannot be saved", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const project = yield* addProject(tempDir);
+				const database = yield* LocalDatabase;
+				yield* database.query((db) =>
+					db.run(sql`CREATE TRIGGER failInsert BEFORE INSERT ON workspace BEGIN SELECT RAISE(ABORT, 'disk full'); END`),
+				);
+				const error = yield* Effect.flatMap(WorkspaceService, (workspaces) =>
+					Effect.flip(workspaces.create({ kind: "worktree", projectId: project.id, name: "feature" })),
+				);
+				return {
+					error,
+					folderExists: yield* fs.exists(join(tempDir, "data", "worktrees", "repo", "feature")),
+					branchExists: yield* branchExists(project.path, "feature"),
+				};
+			}),
+		);
+		expect(result.error._tag).toBe("LocalDatabaseError");
+		expect(result.folderExists).toBe(false);
+		expect(result.branchExists).toBe(false);
 	});
 });

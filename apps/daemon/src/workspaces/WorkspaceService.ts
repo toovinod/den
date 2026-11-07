@@ -4,12 +4,12 @@ import {
 	WorkspaceNotFoundError,
 	WorkspacePathInUseError,
 } from "@repo/contracts/Workspace";
+import { discardWorktree, findUnsavedWork, removeWorktree } from "./removeWorktree.ts";
 import { LocalDatabase, PRIVATE_DIRECTORY_MODE } from "../database/LocalDatabase.ts";
 import { applyScriptRunEvent, runSetupScript } from "./runSetupScript.ts";
 import type { CreateWorkspaceInput } from "@repo/contracts/WorkspaceRpcs";
 import { ScriptRun, ScriptRunOutput } from "@repo/contracts/ScriptRun";
 import { Context, Effect, FiberMap, FileSystem, Layer } from "effect";
-import { findUnsavedWork, removeWorktree } from "./removeWorktree.ts";
 import { project, scriptRun, workspace } from "../database/schema.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
@@ -147,9 +147,16 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 				};
 			}
 
-			if (!(yield* insertWorkspace(row, setupRun))) {
-				return yield* new WorkspacePathInUseError({ path: row.path });
-			}
+			yield* insertWorkspace(row, setupRun).pipe(
+				Effect.flatMap((inserted) =>
+					inserted ? Effect.void : Effect.fail(new WorkspacePathInUseError({ path: row.path })),
+				),
+				Effect.onError(() =>
+					row.kind === "worktree"
+						? discardWorktree({ repositoryPath: owner.path, worktreePath: row.path, branch: row.branch })
+						: Effect.void,
+				),
+			);
 			yield* Effect.logInfo("Created workspace").pipe(
 				Effect.annotateLogs({
 					workspaceId: id,
