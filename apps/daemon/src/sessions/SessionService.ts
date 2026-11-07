@@ -493,18 +493,23 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 		}, Semaphore.withPermit(processLock));
 
 		// Archiving a workspace releases every agent process in it.
-		// Stops the workspace's agents and deletes the images its sessions were sent.
-		const archiveWorkspace = Effect.fn("SessionService.archiveWorkspace")(function* (workspaceId: string) {
+		const stopWorkspace = Effect.fn("SessionService.stopWorkspace")(function* (workspaceId: string) {
 			for (const runtime of [...runtimes.values()]) {
 				if (runtime.workspaceId === workspaceId) yield* stopRuntime(runtime);
 			}
+		}, Semaphore.withPermit(processLock));
+
+		// Only once the workspace is archived: an archive that fails leaves its chats usable.
+		const deleteWorkspaceAttachments = Effect.fn("SessionService.deleteWorkspaceAttachments")(function* (
+			workspaceId: string,
+		) {
 			const sessions = yield* database.query((db) =>
 				db.select({ id: agentSession.id }).from(agentSession).where(eq(agentSession.workspaceId, workspaceId)),
 			);
 			for (const { id } of sessions) {
 				yield* fs.remove(attachmentsDir(id), { recursive: true, force: true });
 			}
-		}, Semaphore.withPermit(processLock));
+		});
 
 		const getAttachment = Effect.fn("SessionService.getAttachment")(function* (
 			sessionId: string,
@@ -767,7 +772,8 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 			respondToApproval,
 			interrupt,
 			stop,
-			archiveWorkspace,
+			stopWorkspace,
+			deleteWorkspaceAttachments,
 			getAttachment,
 			subscribe,
 			watch,

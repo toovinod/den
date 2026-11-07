@@ -13,6 +13,7 @@ import type { SessionEvent } from "@repo/contracts/SessionEvent";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { AgentEvent } from "@repo/contracts/AgentEvent";
 import { describe, expect, test } from "bun:test";
+import { runGit } from "../git/runGit.ts";
 import { asc, eq } from "drizzle-orm";
 import { join } from "node:path";
 
@@ -411,6 +412,40 @@ describe("SessionService", () => {
 		expect(result.served).toEqual(image);
 		expect(result.unknown._tag).toBe("AttachmentNotFoundError");
 		expect(result.removed).toBe(true);
+	});
+
+	test("keeps sent images when archiving the workspace fails", async () => {
+		const image = { mediaType: "image/png", base64: Buffer.from("png bytes").toString("base64") } as const;
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const sessions = yield* SessionService;
+				const workspaces = yield* WorkspaceService;
+				const path = yield* makeTestRepository(join(tempDir, "repo"));
+				const project = yield* Effect.flatMap(ProjectService, (projects) => projects.add(path));
+				const created = yield* workspaces.create({ kind: "worktree", projectId: project.id, name: "feature" });
+				const session = yield* sessions.create({
+					workspaceId: created.id,
+					agent: "codex",
+					model: "replay",
+					effort: null,
+				});
+				yield* sessions.sendMessage(session.id, "look", [image], false);
+				const [, stored] = yield* waitForStored(session.id, 2);
+				const event = Schema.decodeUnknownSync(AgentEvent)(stored?.payload);
+				const attachmentId = event.type === "user.message" ? (event.attachments[0]?.id ?? "") : "";
+				// A locked worktree refuses `git worktree remove`, so the archive fails.
+				yield* runGit(path, ["worktree", "lock", created.path]);
+				const failed = yield* Effect.flip(workspaces.archive(created.id, { force: false }));
+				return {
+					failed,
+					status: (yield* workspaces.get(created.id)).status,
+					served: yield* sessions.getAttachment(session.id, attachmentId),
+				};
+			}),
+		);
+		expect(result.failed._tag).toBe("WorktreeRemoveError");
+		expect(result.status).toBe("active");
+		expect(result.served).toEqual(image);
 	});
 
 	test("refuses images for a model that cannot read them", async () => {

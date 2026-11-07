@@ -268,7 +268,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("den/d
 		// removed. Only once archiving goes ahead: a refused archive leaves them running.
 		const stopWorkspaceProcesses = (workspaceId: string) =>
 			Effect.gen(function* () {
-				yield* sessions.archiveWorkspace(workspaceId);
+				yield* sessions.stopWorkspace(workspaceId);
 				yield* terminals.closeWorkspace(workspaceId);
 				yield* cancelScripts(workspaceId, "The workspace was archived.");
 			});
@@ -316,6 +316,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("den/d
 				yield* database.query((db) =>
 					db.update(workspace).set({ status: "archived", archivedAt }).where(eq(workspace.id, workspaceId)),
 				);
+				yield* sessions.deleteWorkspaceAttachments(workspaceId);
 				const runs = yield* listScriptRuns(workspaceId);
 				for (const run of runs) {
 					outputs.delete(run.id);
