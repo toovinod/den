@@ -14,7 +14,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-	title: "Swarm",
+	title: "Den",
 	description: "Run Claude Code and Codex in parallel.",
 };
 

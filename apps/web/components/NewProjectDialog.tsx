@@ -19,7 +19,7 @@ export const NewProjectDialog = () => {
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>Add a project</DialogTitle>
-						<DialogDescription>Swarm works in git repositories on this computer.</DialogDescription>
+						<DialogDescription>Den works in git repositories on this computer.</DialogDescription>
 					</DialogHeader>
 					<Tabs defaultValue="existing" className="gap-3">
 						<TabsList className="w-full">
@@ -127,9 +127,7 @@ const NewFolder = () => {
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="project-name">Folder name</Label>
 				<Input id="project-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="my-app" />
-				<p className="text-xs text-muted-foreground">
-					Swarm makes the folder, runs git init and an empty first commit.
-				</p>
+				<p className="text-xs text-muted-foreground">Den makes the folder, runs git init and an empty first commit.</p>
 			</div>
 			{error === null ? null : <p className="text-xs text-destructive">{error}</p>}
 			<Button

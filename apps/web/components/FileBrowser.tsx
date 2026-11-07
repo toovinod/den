@@ -91,7 +91,7 @@ const FolderList = ({
 const describe = (content: FileContent) => {
 	switch (content.kind) {
 		case "symlink":
-			return `A link to ${content.target}. Swarm does not follow links.`;
+			return `A link to ${content.target}. Den does not follow links.`;
 		case "binary":
 			return `A binary file of ${content.size} bytes.`;
 		case "tooLarge":

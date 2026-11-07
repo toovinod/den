@@ -110,7 +110,7 @@ const attempt = <A>(run: () => Promise<A>): Promise<A | null> =>
 
 // Data
 
-const LAST_WORKSPACE_KEY = "swarm.lastWorkspace";
+const LAST_WORKSPACE_KEY = "den.lastWorkspace";
 
 // Without storage the app opens the first workspace next time, which is fine.
 const rememberWorkspace = (workspaceId: string) => writeStored(LAST_WORKSPACE_KEY, workspaceId);

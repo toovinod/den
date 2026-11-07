@@ -105,7 +105,7 @@ export const CommandPalette = () => {
 		<CommandDialog
 			open={open}
 			onOpenChange={(next) => !next && openDialog(null)}
-			title="Search Swarm"
+			title="Search Den"
 			description="Search chats, workspaces and actions"
 			showCloseButton={false}
 			className="top-[14%] translate-y-0"

@@ -11,13 +11,13 @@ class DaemonConnectionError extends Schema.TaggedError<DaemonConnectionError>()(
 	cause: Schema.Defect(),
 }) {
 	override get message() {
-		return "Swarm could not reach its daemon. Restart the app.";
+		return "Den could not reach its daemon. Restart the app.";
 	}
 }
 
 // Outside the desktop shell (a browser during development) the daemon URL comes from the build environment,
-// for example NEXT_PUBLIC_SWARM_DAEMON_URL=ws://127.0.0.1:4799/rpc?token=dev.
-const devDaemonUrl = process.env.NEXT_PUBLIC_SWARM_DAEMON_URL;
+// for example NEXT_PUBLIC_DEN_DAEMON_URL=ws://127.0.0.1:4799/rpc?token=dev.
+const devDaemonUrl = process.env.NEXT_PUBLIC_DEN_DAEMON_URL;
 
 const DaemonClientFromShell = Layer.unwrap(
 	Effect.gen(function* () {

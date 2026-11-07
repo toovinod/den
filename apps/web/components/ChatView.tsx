@@ -207,7 +207,7 @@ const Welcome = () => {
 	const hasProjects = useAppState((current) => Object.keys(current.projects).length > 0);
 	return (
 		<section className="flex h-full flex-col items-center justify-center gap-3 bg-background text-center">
-			<h1 className="text-base font-semibold">{hasProjects ? "Pick a workspace" : "Welcome to Swarm"}</h1>
+			<h1 className="text-base font-semibold">{hasProjects ? "Pick a workspace" : "Welcome to Den"}</h1>
 			<p className="max-w-sm text-muted-foreground">
 				{hasProjects
 					? "Choose a workspace in the sidebar, or create one to give an agent its own branch."

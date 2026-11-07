@@ -112,7 +112,7 @@ const CreatePullRequest = ({
 			}}
 		>
 			<p className="text-xs text-muted-foreground">
-				Swarm pushes {workspace.branch} and opens a pull request with the GitHub CLI.
+				Den pushes {workspace.branch} and opens a pull request with the GitHub CLI.
 			</p>
 			<Input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="Title" placeholder="Title" />
 			<Textarea
