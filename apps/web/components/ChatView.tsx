@@ -1,5 +1,6 @@
 "use client";
 
+import { DenLogo } from "./DenLogo.tsx";
 import {
 	closeTab,
 	newChat,
@@ -207,6 +208,7 @@ const Welcome = () => {
 	const hasProjects = useAppState((current) => Object.keys(current.projects).length > 0);
 	return (
 		<section className="flex h-full flex-col items-center justify-center gap-3 bg-background text-center">
+			<DenLogo className="size-12" />
 			<h1 className="text-base font-semibold">{hasProjects ? "Pick a workspace" : "Welcome to Den"}</h1>
 			<p className="max-w-sm text-muted-foreground">
 				{hasProjects

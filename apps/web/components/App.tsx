@@ -1,5 +1,6 @@
 "use client";
 
+import { DenLogo } from "./DenLogo.tsx";
 import { boot, closeTab, newChat, onWindowFocus, openDialog, setPanel, useAppState } from "../lib/store.ts";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@repo/ui/components/resizable";
 import { SidebarProvider } from "@repo/ui/components/sidebar";
@@ -58,6 +59,7 @@ export const App = () => {
 	if (connection.status !== "ready") {
 		return (
 			<main className="flex h-full flex-col items-center justify-center gap-2 text-center">
+				<DenLogo className="size-10" />
 				<p className="font-medium">Den</p>
 				<p className="text-sm text-muted-foreground">
 					{connection.status === "failed" ? connection.message : "Connecting to the daemon"}
