@@ -2,7 +2,7 @@
 # Keep the Postgres major version equal to the Neon project's.
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18.6-alpine
     environment:
       POSTGRES_USER: swarm
       POSTGRES_PASSWORD: swarm
@@ -10,7 +10,7 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - swarm-postgres:/var/lib/postgresql/data
+      - swarm-postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U swarm -d swarm"]
       interval: 2s
@@ -19,7 +19,7 @@ services:
 
   # BullMQ queues for the cloud worker.
   redis:
-    image: redis:8-alpine
+    image: redis:8.10-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "127.0.0.1:6379:6379"
