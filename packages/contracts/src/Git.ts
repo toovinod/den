@@ -143,3 +143,80 @@ export class PullRequestReadError extends Schema.TaggedError<PullRequestReadErro
 		return `gh could not read the pull request for ${this.branch}. Run \`gh pr view\` in a terminal to see why.`;
 	}
 }
+
+export const PullRequestCheckState = Schema.Literals(["passing", "failing", "pending"]);
+export type PullRequestCheckState = typeof PullRequestCheckState.Type;
+
+export class PullRequestCheck extends Schema.Class<PullRequestCheck>("PullRequestCheck")({
+	name: Schema.String,
+	state: PullRequestCheckState,
+	url: Schema.NullOr(Schema.String),
+}) {}
+
+// A conversation comment has no path. A review comment sits on a line of a file, or on the whole file when line is null.
+export class PullRequestComment extends Schema.Class<PullRequestComment>("PullRequestComment")({
+	id: Schema.String,
+	author: Schema.String,
+	body: Schema.String,
+	createdAt: Schema.String,
+	path: Schema.NullOr(Schema.String),
+	line: Schema.NullOr(Schema.Int),
+}) {}
+
+export class PullRequestReview extends Schema.Class<PullRequestReview>("PullRequestReview")({
+	id: Schema.String,
+	author: Schema.String,
+	state: Schema.String,
+	body: Schema.String,
+	submittedAt: Schema.NullOr(Schema.String),
+}) {}
+
+export class PullRequestConversation extends Schema.Class<PullRequestConversation>("PullRequestConversation")({
+	checks: Schema.Array(PullRequestCheck),
+	comments: Schema.Array(PullRequestComment),
+	reviewComments: Schema.Array(PullRequestComment),
+	reviews: Schema.Array(PullRequestReview),
+}) {}
+
+// Approving needs no text. Requesting changes and commenting do, as on GitHub.
+export const PullRequestReviewInput = Schema.Union([
+	Schema.Struct({ verdict: Schema.Literal("approve"), body: Schema.String }),
+	Schema.Struct({ verdict: Schema.Literals(["requestChanges", "comment"]), body: Schema.NonEmptyString }),
+]);
+export type PullRequestReviewInput = typeof PullRequestReviewInput.Type;
+
+export const PullRequestMergeMethod = Schema.Literals(["squash", "merge", "rebase"]);
+export type PullRequestMergeMethod = typeof PullRequestMergeMethod.Type;
+
+export class PullRequestNotFoundError extends Schema.TaggedError<PullRequestNotFoundError>()(
+	"PullRequestNotFoundError",
+	{ branch: Schema.String },
+) {
+	override get message() {
+		return `${this.branch} has no pull request yet. Open one first.`;
+	}
+}
+
+export class PullRequestReviewError extends Schema.TaggedError<PullRequestReviewError>()("PullRequestReviewError", {
+	branch: Schema.String,
+}) {
+	override get message() {
+		return `gh could not submit the review for ${this.branch}. GitHub does not let you approve or request changes on your own pull request. Run \`gh pr review\` in a terminal to see why.`;
+	}
+}
+
+export class PullRequestMergeError extends Schema.TaggedError<PullRequestMergeError>()("PullRequestMergeError", {
+	branch: Schema.String,
+}) {
+	override get message() {
+		return `gh could not merge the pull request for ${this.branch}. Check that its checks and reviews allow it, or run \`gh pr merge\` in a terminal to see why.`;
+	}
+}
+
+export class RemoteBranchDeleteError extends Schema.TaggedError<RemoteBranchDeleteError>()("RemoteBranchDeleteError", {
+	branch: Schema.String,
+}) {
+	override get message() {
+		return `The pull request merged, but Swarm could not delete ${this.branch} on origin. Delete it on GitHub.`;
+	}
+}

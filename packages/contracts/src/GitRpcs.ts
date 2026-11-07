@@ -7,9 +7,16 @@ import {
 	GitStatus,
 	NoRemoteError,
 	NothingToCommitError,
+	PullRequestConversation,
 	PullRequestCreateError,
+	PullRequestMergeError,
+	PullRequestMergeMethod,
+	PullRequestNotFoundError,
 	PullRequestReadError,
+	PullRequestReviewError,
+	PullRequestReviewInput,
 	PullRequestStatus,
+	RemoteBranchDeleteError,
 	PushFailedError,
 	PushRejectedError,
 	WorkspaceDiff,
@@ -75,5 +82,34 @@ export class GitRpcs extends RpcGroup.make(
 		payload: { workspaceId: Schema.String },
 		success: PullRequestStatus,
 		error: Schema.Union([WorkspaceNotFoundError, ...GhError, PullRequestReadError, DaemonInternalError]),
+	}),
+	// Checks one by one, the conversation, reviews and the comments on lines of the diff.
+	Rpc.make("getPullRequestConversation", {
+		payload: { workspaceId: Schema.String },
+		success: PullRequestConversation,
+		error: Schema.Union([
+			WorkspaceNotFoundError,
+			...GhError,
+			PullRequestNotFoundError,
+			PullRequestReadError,
+			DaemonInternalError,
+		]),
+	}),
+	Rpc.make("reviewPullRequest", {
+		payload: { workspaceId: Schema.String, review: PullRequestReviewInput },
+		error: Schema.Union([WorkspaceNotFoundError, ...GhError, PullRequestReviewError, DaemonInternalError]),
+	}),
+	// Returns the pull request as it is after the merge.
+	Rpc.make("mergePullRequest", {
+		payload: { workspaceId: Schema.String, method: PullRequestMergeMethod, deleteBranch: Schema.Boolean },
+		success: PullRequestStatus,
+		error: Schema.Union([
+			WorkspaceNotFoundError,
+			...GhError,
+			PullRequestMergeError,
+			RemoteBranchDeleteError,
+			PullRequestReadError,
+			DaemonInternalError,
+		]),
 	}),
 ) {}

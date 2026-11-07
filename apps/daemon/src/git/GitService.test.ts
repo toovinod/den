@@ -278,6 +278,131 @@ describe("GitService pull requests", () => {
 			pullRequest: { number: 7, isDraft: true, reviewDecision: null, checks: { passing: 2, failing: 1, pending: 1 } },
 		});
 	});
+
+	test("reads checks one by one, the conversation, reviews and line comments", async () => {
+		const viewJson = JSON.stringify({
+			number: 7,
+			statusCheckRollup: [
+				{ name: "build", status: "COMPLETED", conclusion: "FAILURE", detailsUrl: "https://ci/build" },
+				{ context: "deploy", state: "PENDING", targetUrl: null },
+			],
+			comments: [{ id: "IC_1", author: { login: "ana" }, body: "Nice", createdAt: "2026-01-01T00:00:00Z" }],
+			reviews: [
+				{ id: "PRR_1", author: null, state: "CHANGES_REQUESTED", body: "Fix it", submittedAt: "2026-01-02T00:00:00Z" },
+			],
+		});
+		const commentsJson = JSON.stringify([
+			{ id: 11, user: { login: "bo" }, body: "Rename this", path: "src/a.ts", line: 4, created_at: "2026-01-03" },
+		]);
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const created = yield* createWorkspace(tempDir);
+				const executable = yield* fakeGh(
+					tempDir,
+					[`[ "$1" = api ] && echo '${commentsJson}'`, `[ "$1 $2" = "pr view" ] && echo '${viewJson}'`, "exit 0"].join(
+						"\n",
+					),
+				);
+				const conversation = yield* Effect.flatMap(GitService, (git) =>
+					git.getPullRequestConversation(created.id),
+				).pipe(Effect.provideService(GhSettings, { executable }));
+				return { conversation, ghLog: yield* fs.readFileString(join(tempDir, "gh.log")) };
+			}),
+		);
+		expect(result.conversation.checks).toEqual([
+			{ name: "build", state: "failing", url: "https://ci/build" },
+			{ name: "deploy", state: "pending", url: null },
+		]);
+		expect(result.conversation.comments).toEqual([
+			{ id: "IC_1", author: "ana", body: "Nice", createdAt: "2026-01-01T00:00:00Z", path: null, line: null },
+		]);
+		expect(result.conversation.reviews[0]).toMatchObject({ author: "ghost", state: "CHANGES_REQUESTED" });
+		expect(result.conversation.reviewComments).toEqual([
+			{ id: "11", author: "bo", body: "Rename this", createdAt: "2026-01-03", path: "src/a.ts", line: 4 },
+		]);
+		expect(result.ghLog).toContain("api repos/{owner}/{repo}/pulls/7/comments?per_page=100");
+	});
+
+	test("reports a branch with no pull request", async () => {
+		const error = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const created = yield* createWorkspace(tempDir);
+				const executable = yield* fakeGh(tempDir, 'echo "no pull requests found for branch" >&2; exit 1');
+				return yield* Effect.flatMap(GitService, (git) => Effect.flip(git.getPullRequestConversation(created.id))).pipe(
+					Effect.provideService(GhSettings, { executable }),
+				);
+			}),
+		);
+		expect(error._tag).toBe("PullRequestNotFoundError");
+	});
+
+	test("submits reviews with gh pr review", async () => {
+		const ghLog = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const created = yield* createWorkspace(tempDir);
+				const executable = yield* fakeGh(tempDir, "exit 0");
+				yield* Effect.gen(function* () {
+					const git = yield* GitService;
+					yield* git.reviewPullRequest(created.id, { verdict: "approve", body: "" });
+					yield* git.reviewPullRequest(created.id, { verdict: "requestChanges", body: "Add tests" });
+				}).pipe(Effect.provideService(GhSettings, { executable }));
+				return yield* fs.readFileString(join(tempDir, "gh.log"));
+			}),
+		);
+		expect(ghLog.split("\n")).toEqual([
+			"pr review feature --approve",
+			"pr review feature --request-changes --body Add tests",
+			"",
+		]);
+	});
+
+	test("merges, deletes the branch on origin and returns the merged pull request", async () => {
+		const merged = JSON.stringify({
+			number: 7,
+			url: "https://github.com/acme/repo/pull/7",
+			title: "Add feature",
+			state: "MERGED",
+			isDraft: false,
+			reviewDecision: "APPROVED",
+			statusCheckRollup: [],
+		});
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const git = yield* GitService;
+				const created = yield* createWorkspace(tempDir);
+				const origin = yield* addOrigin(tempDir, join(tempDir, "repo"));
+				yield* git.push(created.id);
+				const executable = yield* fakeGh(tempDir, `[ "$1 $2" = "pr view" ] && echo '${merged}'\nexit 0`);
+				const status = yield* git
+					.mergePullRequest(created.id, "squash", true)
+					.pipe(Effect.provideService(GhSettings, { executable }));
+				return {
+					status,
+					remoteBranches: yield* runGit(origin, ["branch", "--list"]),
+					ghLog: yield* fs.readFileString(join(tempDir, "gh.log")),
+				};
+			}),
+		);
+		expect(result.ghLog).toContain("pr merge feature --squash");
+		expect(result.remoteBranches).toBe("");
+		expect(result.status).toMatchObject({ status: "found", pullRequest: { state: "MERGED" } });
+	});
+
+	test("reports a merge that gh refused", async () => {
+		const error = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const created = yield* createWorkspace(tempDir);
+				const executable = yield* fakeGh(tempDir, '[ "$1" = auth ] && exit 0\nexit 1');
+				return yield* Effect.flatMap(GitService, (git) =>
+					Effect.flip(git.mergePullRequest(created.id, "rebase", false)),
+				).pipe(Effect.provideService(GhSettings, { executable }));
+			}),
+		);
+		expect(error._tag).toBe("PullRequestMergeError");
+	});
 });
 
 describe("GitService diff never leaves the workspace", () => {

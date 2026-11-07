@@ -6,10 +6,21 @@ import {
 	NoRemoteError,
 	NothingToCommitError,
 	PullRequest,
+	PullRequestCheck,
+	type PullRequestCheckState,
+	PullRequestComment,
+	PullRequestConversation,
 	PullRequestCreateError,
+	PullRequestMergeError,
+	type PullRequestMergeMethod,
+	PullRequestNotFoundError,
 	PullRequestReadError,
+	PullRequestReview,
+	PullRequestReviewError,
+	type PullRequestReviewInput,
 	PullRequestState,
 	type PullRequestStatus,
+	RemoteBranchDeleteError,
 	PushFailedError,
 	PushRejectedError,
 	WorkspaceDiff,
@@ -24,11 +35,11 @@ import {
 	untrackedHunks,
 } from "./parseGitOutput.ts";
 import { Context, Effect, type FileSystem, Layer, Schema } from "effect";
+import { type GhCommandError, requireGhLogin, runGh } from "./runGh.ts";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import { readWorkspaceFile } from "../files/readWorkspaceFile.ts";
 import type { Workspace } from "@repo/contracts/Workspace";
 import type { ChildProcessSpawner } from "effect/process";
-import { requireGhLogin, runGh } from "./runGh.ts";
 import { isAbsolute, normalize } from "node:path";
 import { runGit } from "./runGit.ts";
 
@@ -43,11 +54,51 @@ const UNTRACKED_BYTE_LIMIT = 1024 * 1024;
 // Literal pathspecs, so names with *, ? or : are never read as patterns.
 const pathspecs = (paths: ReadonlyArray<string>) => ["--", ...paths.map((path) => `:(literal)${path}`)];
 
+// Check runs have a name, status, conclusion and detailsUrl. Legacy commit statuses have a context, state and targetUrl.
 const GhCheck = Schema.Struct({
+	name: Schema.optionalKey(Schema.String),
+	context: Schema.optionalKey(Schema.String),
 	status: Schema.optionalKey(Schema.String),
 	conclusion: Schema.optionalKey(Schema.NullOr(Schema.String)),
 	state: Schema.optionalKey(Schema.String),
+	detailsUrl: Schema.optionalKey(Schema.NullOr(Schema.String)),
+	targetUrl: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
+type GhCheck = typeof GhCheck.Type;
+
+const GhAuthor = Schema.NullOr(Schema.Struct({ login: Schema.String }));
+
+const GhConversation = Schema.fromJsonString(
+	Schema.Struct({
+		number: Schema.Int,
+		statusCheckRollup: Schema.NullOr(Schema.Array(GhCheck)),
+		comments: Schema.Array(
+			Schema.Struct({ id: Schema.String, author: GhAuthor, body: Schema.String, createdAt: Schema.String }),
+		),
+		reviews: Schema.Array(
+			Schema.Struct({
+				id: Schema.String,
+				author: GhAuthor,
+				state: Schema.String,
+				body: Schema.String,
+				submittedAt: Schema.NullOr(Schema.String),
+			}),
+		),
+	}),
+);
+
+const GhReviewComments = Schema.fromJsonString(
+	Schema.Array(
+		Schema.Struct({
+			id: Schema.Int,
+			user: GhAuthor,
+			body: Schema.String,
+			path: Schema.String,
+			line: Schema.NullOr(Schema.Int),
+			created_at: Schema.String,
+		}),
+	),
+);
 
 const GhPullRequest = Schema.fromJsonString(
 	Schema.Struct({
@@ -71,20 +122,26 @@ const FAILED_CONCLUSIONS = new Set([
 ]);
 
 // Check runs report status and conclusion; legacy commit statuses report only state.
-const summarizeChecks = (checks: ReadonlyArray<typeof GhCheck.Type>) => {
+const checkState = (check: GhCheck): PullRequestCheckState => {
+	const result = check.status === undefined ? check.state : check.status === "COMPLETED" ? check.conclusion : null;
+	if (result === null || result === undefined || result === "" || result === "PENDING" || result === "EXPECTED") {
+		return "pending";
+	}
+	return FAILED_CONCLUSIONS.has(result) ? "failing" : "passing";
+};
+
+const summarizeChecks = (checks: ReadonlyArray<GhCheck>) => {
 	const summary = { passing: 0, failing: 0, pending: 0 };
 	for (const check of checks) {
-		const result = check.status === undefined ? check.state : check.status === "COMPLETED" ? check.conclusion : null;
-		if (result === null || result === undefined || result === "" || result === "PENDING" || result === "EXPECTED") {
-			summary.pending++;
-		} else if (FAILED_CONCLUSIONS.has(result)) {
-			summary.failing++;
-		} else {
-			summary.passing++;
-		}
+		summary[checkState(check)]++;
 	}
 	return summary;
 };
+
+const authorName = (author: typeof GhAuthor.Type) => author?.login ?? "ghost";
+
+const MERGE_FLAGS = { squash: "--squash", merge: "--merge", rebase: "--rebase" } as const;
+const REVIEW_FLAGS = { approve: "--approve", requestChanges: "--request-changes", comment: "--comment" } as const;
 
 export class GitService extends Context.Service<GitService>()("swarm/daemon/git/GitService", {
 	make: Effect.gen(function* () {
@@ -384,7 +441,158 @@ export class GitService extends Context.Service<GitService>()("swarm/daemon/git/
 			return yield* workspaces.setPullRequestUrl(workspaceId, url);
 		}, Effect.provide(services));
 
-		return { getWorkspaceDiff, getFileDiff, getStatus, commit, push, getPullRequest, createPullRequest };
+		// gh output that does not match its documented JSON is a gh change we need to know about.
+		const decodeGh = <A>(schema: Schema.Codec<A, string>, output: string, branch: string) =>
+			Schema.decodeUnknownEffect(schema)(output).pipe(
+				Effect.catchTag("SchemaError", (cause) =>
+					Effect.logError("Could not read gh output", cause).pipe(
+						Effect.andThen(Effect.fail(new PullRequestReadError({ branch }))),
+					),
+				),
+			);
+
+		// Any gh failure: a missing login first, then the error the caller names.
+		const failGh =
+			<E>(cwd: string, message: string, error: E) =>
+			(cause: GhCommandError) =>
+				requireGhLogin(cwd).pipe(Effect.andThen(Effect.logError(message, cause)), Effect.andThen(Effect.fail(error)));
+
+		const getPullRequestConversation = Effect.fn("GitService.getPullRequestConversation")(function* (
+			workspaceId: string,
+		) {
+			const current = yield* workspaces.get(workspaceId);
+			const { branch } = current;
+			const viewed = yield* runGh(current.path, [
+				"pr",
+				"view",
+				branch,
+				"--json",
+				"number,statusCheckRollup,comments,reviews",
+			]).pipe(
+				Effect.catchTag("GhCommandError", (cause) =>
+					(/no pull requests found/i.test(cause.stderr)
+						? Effect.fail(new PullRequestNotFoundError({ branch }))
+						: Effect.void
+					).pipe(
+						Effect.andThen(failGh(current.path, "gh pr view failed", new PullRequestReadError({ branch }))(cause)),
+					),
+				),
+			);
+			const conversation = yield* decodeGh(GhConversation, viewed, branch);
+			// gh fills in {owner}/{repo} from the repository's remote. 100 is GitHub's largest page.
+			const lineComments = yield* runGh(current.path, [
+				"api",
+				`repos/{owner}/{repo}/pulls/${conversation.number}/comments?per_page=100`,
+			]).pipe(
+				Effect.catchTag("GhCommandError", failGh(current.path, "gh api failed", new PullRequestReadError({ branch }))),
+				Effect.flatMap((output) => decodeGh(GhReviewComments, output, branch)),
+			);
+			return new PullRequestConversation({
+				checks: (conversation.statusCheckRollup ?? []).map(
+					(check) =>
+						new PullRequestCheck({
+							name: check.name ?? check.context ?? "Check",
+							state: checkState(check),
+							url: check.detailsUrl ?? check.targetUrl ?? null,
+						}),
+				),
+				comments: conversation.comments.map(
+					(comment) =>
+						new PullRequestComment({
+							id: comment.id,
+							author: authorName(comment.author),
+							body: comment.body,
+							createdAt: comment.createdAt,
+							path: null,
+							line: null,
+						}),
+				),
+				reviewComments: lineComments.map(
+					(comment) =>
+						new PullRequestComment({
+							id: String(comment.id),
+							author: authorName(comment.user),
+							body: comment.body,
+							createdAt: comment.created_at,
+							path: comment.path,
+							line: comment.line,
+						}),
+				),
+				reviews: conversation.reviews.map(
+					(review) =>
+						new PullRequestReview({
+							id: review.id,
+							author: authorName(review.author),
+							state: review.state,
+							body: review.body,
+							submittedAt: review.submittedAt,
+						}),
+				),
+			});
+		}, Effect.provide(services));
+
+		const reviewPullRequest = Effect.fn("GitService.reviewPullRequest")(function* (
+			workspaceId: string,
+			review: PullRequestReviewInput,
+		) {
+			const current = yield* workspaces.get(workspaceId);
+			yield* runGh(current.path, [
+				"pr",
+				"review",
+				current.branch,
+				REVIEW_FLAGS[review.verdict],
+				...(review.body === "" ? [] : ["--body", review.body]),
+			]).pipe(
+				Effect.catchTag(
+					"GhCommandError",
+					failGh(current.path, "gh pr review failed", new PullRequestReviewError({ branch: current.branch })),
+				),
+			);
+			yield* Effect.logInfo("Reviewed pull request").pipe(
+				Effect.annotateLogs({ workspaceId, verdict: review.verdict }),
+			);
+		}, Effect.provide(services));
+
+		const mergePullRequest = Effect.fn("GitService.mergePullRequest")(function* (
+			workspaceId: string,
+			method: PullRequestMergeMethod,
+			deleteBranch: boolean,
+		) {
+			const current = yield* workspaces.get(workspaceId);
+			const { branch } = current;
+			yield* runGh(current.path, ["pr", "merge", branch, MERGE_FLAGS[method]]).pipe(
+				Effect.catchTag(
+					"GhCommandError",
+					failGh(current.path, "gh pr merge failed", new PullRequestMergeError({ branch })),
+				),
+			);
+			yield* Effect.logInfo("Merged pull request").pipe(Effect.annotateLogs({ workspaceId, method }));
+			// Not gh's --delete-branch: it also switches the local checkout, which a worktree cannot do while the base
+			// branch is checked out in the project folder. The local branch goes when the workspace is archived.
+			if (deleteBranch) {
+				yield* runGit(current.path, ["push", "origin", "--delete", branch]).pipe(
+					Effect.catchTag("GitCommandError", (cause) =>
+						Effect.logError("Could not delete the remote branch", cause).pipe(
+							Effect.andThen(Effect.fail(new RemoteBranchDeleteError({ branch }))),
+						),
+					),
+				);
+			}
+			return yield* getPullRequest(workspaceId);
+		}, Effect.provide(services));
+
+		return {
+			getWorkspaceDiff,
+			getFileDiff,
+			getStatus,
+			commit,
+			push,
+			getPullRequest,
+			createPullRequest,
+			getPullRequestConversation,
+			reviewPullRequest,
+			mergePullRequest,
+		};
 	}),
 }) {
 	static readonly layer = Layer.effect(GitService, GitService.make);

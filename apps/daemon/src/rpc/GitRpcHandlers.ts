@@ -18,6 +18,12 @@ export const GitRpcHandlers = GitRpcs.toLayer(
 				git.createPullRequest(workspaceId, { title, body, draft }).pipe(orInternalError("open the pull request")),
 			getPullRequest: ({ workspaceId }) =>
 				git.getPullRequest(workspaceId).pipe(orInternalError("read the pull request")),
+			getPullRequestConversation: ({ workspaceId }) =>
+				git.getPullRequestConversation(workspaceId).pipe(orInternalError("read the pull request conversation")),
+			reviewPullRequest: ({ workspaceId, review }) =>
+				git.reviewPullRequest(workspaceId, review).pipe(orInternalError("review the pull request")),
+			mergePullRequest: ({ workspaceId, method, deleteBranch }) =>
+				git.mergePullRequest(workspaceId, method, deleteBranch).pipe(orInternalError("merge the pull request")),
 		});
 	}),
 );
