@@ -26,8 +26,8 @@ import { CappedOutput } from "./CappedOutput.ts";
 import { runRunScript } from "./runRunScript.ts";
 import { nowIso } from "../database/nowIso.ts";
 import { newId } from "../database/newId.ts";
-import { basename, join } from "node:path";
 import { runGit } from "../git/runGit.ts";
+import { join } from "node:path";
 
 type WorkspaceRow = typeof workspace.$inferSelect;
 type ScriptRunRow = typeof scriptRun.$inferInsert;
@@ -148,7 +148,8 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("den/d
 			let setupRun: ScriptRunRow | null = null;
 			if (input.kind === "worktree") {
 				const worktreesDir = join(dataDir, "worktrees");
-				const path = join(worktreesDir, basename(owner.path), input.name);
+				// Keyed by project id: two repositories can share a folder name. The UI shows the workspace name.
+				const path = join(worktreesDir, owner.id, input.name);
 				// Checked before git touches the disk, so the user gets a clear error.
 				if (yield* isPathActive(path)) {
 					return yield* new WorkspacePathInUseError({ path });

@@ -51,7 +51,7 @@ describe("WorkspaceService", () => {
 					created,
 					folderExists: yield* fs.exists(join(created.path, "README.md")),
 					branchExists: yield* branchExists(project.path, "feature"),
-					expectedPath: join(tempDir, "data", "worktrees", "repo", "feature"),
+					expectedPath: join(tempDir, "data", "worktrees", project.id, "feature"),
 				};
 			}),
 		);
@@ -64,6 +64,21 @@ describe("WorkspaceService", () => {
 		expect(result.created.path).toBe(result.expectedPath);
 		expect(result.folderExists).toBe(true);
 		expect(result.branchExists).toBe(true);
+	});
+
+	test("two projects whose folders share a name can each have a workspace with the same name", async () => {
+		const paths = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const projects = yield* ProjectService;
+				const workspaces = yield* WorkspaceService;
+				const create = Effect.fn("create")(function* (parent: string) {
+					const project = yield* projects.add(yield* makeTestRepository(join(tempDir, parent, "app")));
+					return yield* workspaces.create({ kind: "worktree", projectId: project.id, name: "feature" });
+				});
+				return [yield* create("a"), yield* create("b")].map((created) => created.path);
+			}),
+		);
+		expect(new Set(paths).size).toBe(2);
 	});
 
 	test("refuses a name whose branch already exists", async () => {
