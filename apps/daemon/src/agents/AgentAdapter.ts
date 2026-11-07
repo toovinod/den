@@ -1,4 +1,5 @@
 import type {
+	AgentAuthMode,
 	AgentCapabilities,
 	AgentInfo,
 	AgentKind,
@@ -95,6 +96,8 @@ export interface AgentSessionHandle {
 export interface AgentAdapter {
 	readonly kind: AgentKind;
 	readonly capabilities: AgentCapabilities;
+	// The auth modes the user may pick, the default first.
+	readonly authModes: ReadonlyArray<AgentAuthMode>;
 	readonly checkAuth: Effect.Effect<AgentAuthStatus, AgentError>;
 	readonly listModels: Effect.Effect<AgentModels, AgentError>;
 	startSession(input: StartSessionInput): Effect.Effect<AgentSessionHandle, AgentError, Scope.Scope>;

@@ -400,6 +400,8 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 			return ClaudeAdapter.of({
 				kind: "claude",
 				capabilities,
+				// claude.ai subscriptions stay off in third-party apps until Anthropic approves it (architecture 2.1).
+				authModes: ["apiKey"],
 				checkAuth,
 				listModels: Effect.succeed(models),
 				startSession,

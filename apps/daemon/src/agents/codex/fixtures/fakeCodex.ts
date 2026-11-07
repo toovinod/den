@@ -133,6 +133,13 @@ const serve = async () => {
 					},
 				});
 				break;
+			case "account/login/start":
+				send({
+					id: message.id,
+					result: { type: "chatgpt", loginId: "login-1", authUrl: "https://auth.example/login" },
+				});
+				setTimeout(() => notify("account/login/completed", { loginId: "login-1", success: true, error: null }), 50);
+				break;
 			case "model/list":
 				send({
 					id: message.id,

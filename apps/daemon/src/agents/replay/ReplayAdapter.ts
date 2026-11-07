@@ -24,6 +24,7 @@ const capabilities: AgentCapabilities = {
 export const makeReplayAdapter = (recording: Recording): AgentAdapter => ({
 	kind: recording.kind,
 	capabilities,
+	authModes: recording.kind === "claude" ? ["apiKey"] : ["apiKey", "subscription"],
 	checkAuth: Effect.succeed({ status: "loggedIn", account: null }),
 	listModels: Effect.succeed({
 		models: [

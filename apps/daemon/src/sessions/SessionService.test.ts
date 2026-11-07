@@ -1,6 +1,6 @@
+import { commandWithApproval, TEST_LOGIN_URL, testAgentServices } from "../testing/testAgentServices.ts";
 import { runInTempDir, runServiceTest, type Services, withServices } from "../testing/runServiceTest.ts";
 import { Deferred, Effect, Fiber, FileSystem, Logger, Redacted, Schedule, Stream } from "effect";
-import { commandWithApproval, testAgentServices } from "../testing/testAgentServices.ts";
 import { makeReplayAdapter, type Recording } from "../agents/replay/ReplayAdapter.ts";
 import type { AgentSessionStatus, AgentKind } from "@repo/contracts/AgentSession";
 import { DATABASE_FILE_NAME, LocalDatabase } from "../database/LocalDatabase.ts";
@@ -462,6 +462,32 @@ describe("SessionService", () => {
 			)(Effect.flatMap(SessionService, (sessions) => Effect.repeat(sessions.listAgents, { times: 2 }))),
 		);
 		expect(calls).toBe(1);
+	});
+
+	test("keeps Claude on API keys and lets Codex switch between its sign-in modes", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const sessions = yield* SessionService;
+				const claudeRefused = yield* Effect.flip(sessions.setAuthMode("claude", "subscription"));
+				const loginRefused = yield* Effect.flip(sessions.startLogin("claude"));
+				const login = yield* sessions.startLogin("codex");
+				yield* sessions.setAuthMode("codex", "apiKey");
+				const [, codex] = yield* sessions.listAgents;
+				const session = yield* addSession(tempDir);
+				const needsKey = yield* Effect.flip(sessions.sendMessage(session.id, "hi", false));
+				return { claudeRefused, loginRefused, login, codex, session, needsKey };
+			}),
+		);
+		expect(result.claudeRefused._tag).toBe("AuthModeNotAllowedError");
+		expect(result.loginRefused._tag).toBe("AuthModeNotAllowedError");
+		expect(result.login.authUrl).toBe(TEST_LOGIN_URL);
+		expect(result.codex).toMatchObject({
+			authModes: ["apiKey", "subscription"],
+			authMode: "apiKey",
+			availability: { status: "needsApiKey" },
+		});
+		expect(result.session.authMode).toBe("apiKey");
+		expect(result.needsKey).toMatchObject({ _tag: "AgentUnavailableError", availability: { status: "needsApiKey" } });
 	});
 
 	test("the API key never reaches the database or the logs", async () => {

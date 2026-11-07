@@ -6,6 +6,7 @@ import {
 	ErrorNotification,
 	FileChangeApprovalParams,
 	ItemNotification,
+	LoginResponse,
 	ModelListResponse,
 	type ThreadItem,
 	ThreadResponse,
@@ -15,6 +16,7 @@ import {
 import {
 	type AgentAdapter,
 	type AgentAuthStatus,
+	type AgentError,
 	type AgentModels,
 	AgentProtocolError,
 	CodexVersionMismatchError,
@@ -23,9 +25,11 @@ import {
 } from "../AgentAdapter.ts";
 import { type CodexIncoming, type CodexRpcClient, METHOD_NOT_FOUND, makeCodexRpcClient } from "./codexRpcClient.ts";
 import type { CommandExecutionApprovalDecision } from "./generated/v2/CommandExecutionApprovalDecision.ts";
+import { Context, Effect, Exit, Layer, Option, Ref, Scope, Stream } from "effect";
 import type { AgentCapabilities, AgentModel } from "@repo/contracts/AgentSession";
 import type { TurnInterruptParams } from "./generated/v2/TurnInterruptParams.ts";
 import codexVersionFile from "./generated/CODEX_VERSION" with { type: "text" };
+import type { LoginAccountParams } from "./generated/v2/LoginAccountParams.ts";
 import type { ThreadResumeParams } from "./generated/v2/ThreadResumeParams.ts";
 import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
 import type { ThreadStartParams } from "./generated/v2/ThreadStartParams.ts";
@@ -36,7 +40,6 @@ import type { TurnStartParams } from "./generated/v2/TurnStartParams.ts";
 import type { TurnSteerParams } from "./generated/v2/TurnSteerParams.ts";
 import type { InitializeParams } from "./generated/InitializeParams.ts";
 import packageJson from "../../../package.json" with { type: "json" };
-import { Context, Effect, Layer, Option, Ref, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
@@ -257,7 +260,16 @@ const handleServerRequest = Effect.fnUntraced(function* (
 	}
 });
 
-export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
+// Codex runs its own ChatGPT sign-in, which Claude has no equivalent for.
+export interface CodexAgentAdapter extends AgentAdapter {
+	// Returns the URL to open. Codex stores the tokens itself when the user finishes.
+	readonly startLogin: Effect.Effect<string, AgentError>;
+}
+
+// Codex waits on its local callback server until the user finishes in the browser.
+const LOGIN_TIMEOUT = "10 minutes";
+
+export class CodexAdapter extends Context.Service<CodexAdapter, CodexAgentAdapter>()(
 	"swarm/daemon/agents/codex/CodexAdapter",
 ) {
 	static readonly layer = Layer.effect(
@@ -265,6 +277,7 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 		Effect.gen(function* () {
 			const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 			const provide = Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner);
+			const layerScope = yield* Effect.scope;
 
 			// A short-lived app-server for questions outside a session. Closing the scope stops it.
 			const connect = Effect.gen(function* () {
@@ -321,6 +334,32 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 				} while (cursor !== null);
 				return { models, defaultModel: defaultModel || (models[0]?.id ?? "") } satisfies AgentModels;
 			}).pipe(Effect.scoped, provide, Effect.withSpan("CodexAdapter.listModels"));
+
+			const startLogin = Effect.gen(function* () {
+				const scope = yield* Scope.make();
+				const login = yield* Effect.gen(function* () {
+					const client = yield* connect;
+					const { authUrl } = yield* client
+						.request("account/login/start", { type: "chatgpt" } satisfies LoginAccountParams)
+						.pipe(Effect.flatMap(decodeCodex(LoginResponse)));
+					return { client, authUrl };
+				}).pipe(
+					Scope.provide(scope),
+					Effect.onError(() => Scope.close(scope, Exit.void)),
+				);
+				// The app-server must outlive this call, or the browser sign-in has nothing to return to.
+				yield* login.client.incoming.pipe(
+					Stream.takeUntil(
+						(message) => message._tag === "notification" && message.method === "account/login/completed",
+					),
+					Stream.runDrain,
+					Effect.timeoutOption(LOGIN_TIMEOUT),
+					Effect.catch((error) => Effect.logWarning("Codex sign-in stopped", error)),
+					Effect.ensuring(Scope.close(scope, Exit.void)),
+					Effect.forkIn(layerScope),
+				);
+				return login.authUrl;
+			}).pipe(provide, Effect.withSpan("CodexAdapter.startLogin"));
 
 			const startSession = Effect.fn("CodexAdapter.startSession")(function* (input: StartSessionInput) {
 				const { executable } = yield* CodexAdapterConfig;
@@ -416,8 +455,10 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 			return CodexAdapter.of({
 				kind: "codex",
 				capabilities,
+				authModes: ["apiKey", "subscription"],
 				checkAuth,
 				listModels,
+				startLogin,
 				startSession,
 			});
 		}),

@@ -4,9 +4,11 @@ import { memoryCredentialStore } from "./memoryCredentialStore.ts";
 import { ClaudeAdapter } from "../agents/claude/ClaudeAdapter.ts";
 import { CodexAdapter } from "../agents/codex/CodexAdapter.ts";
 import type { AgentAdapter } from "../agents/AgentAdapter.ts";
-import { Layer, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 
 export const commandWithApproval = Schema.decodeUnknownSync(Recording)(recordingJson);
+
+export const TEST_LOGIN_URL = "https://auth.example/login";
 
 // Replayed agents and in-memory keys, so tests never start a real agent or touch the keychain.
 export const testAgentServices = (
@@ -17,6 +19,6 @@ export const testAgentServices = (
 ) =>
 	Layer.mergeAll(
 		Layer.succeed(ClaudeAdapter, adapters.claude),
-		Layer.succeed(CodexAdapter, adapters.codex),
+		Layer.succeed(CodexAdapter, { startLogin: Effect.succeed(TEST_LOGIN_URL), ...adapters.codex }),
 		memoryCredentialStore,
 	);

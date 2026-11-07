@@ -40,6 +40,8 @@ export const ModelListResponse = Schema.Struct({
 	nextCursor: Schema.NullOr(Schema.String),
 });
 
+export const LoginResponse = Schema.Struct({ authUrl: Schema.String });
+
 export const AgentMessageDelta = Schema.Struct({
 	itemId: Schema.String,
 	delta: Schema.String,

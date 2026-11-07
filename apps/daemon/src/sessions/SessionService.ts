@@ -1,5 +1,5 @@
 import {
-	type AgentAuthMode,
+	AgentAuthMode,
 	type AgentAvailability,
 	AgentInfo,
 	type AgentKind,
@@ -7,6 +7,7 @@ import {
 	type AgentSessionStatus,
 	AgentUnavailableError,
 	ApprovalNotFoundError,
+	AuthModeNotAllowedError,
 	ResubscribeRequiredError,
 	SessionLimitReachedError,
 	SessionNotFoundError,
@@ -37,7 +38,7 @@ import {
 	Semaphore,
 	Stream,
 } from "effect";
-import { agentSession, project, sessionEvent, workspace } from "../database/schema.ts";
+import { agentSession, project, sessionEvent, setting, workspace } from "../database/schema.ts";
 import { AgentEvent, type ApprovalDecision } from "@repo/contracts/AgentEvent";
 import { WorkspaceNotFoundError } from "@repo/contracts/Workspace";
 import { ClaudeAdapter } from "../agents/claude/ClaudeAdapter.ts";
@@ -89,9 +90,8 @@ const isBusy = (status: AgentSessionStatus) => status === "running" || status ==
 const statusOf = (runtime: Runtime): AgentSessionStatus =>
 	runtime.approvals.size > 0 ? "awaitingApproval" : runtime.outstanding > 0 ? "running" : runtime.resting;
 
-// Claude's subscription login stays off until Anthropic approves it (architecture section 2.1).
-const authModeFor = (agent: AgentKind, hasApiKey: boolean): AgentAuthMode =>
-	hasApiKey || agent === "claude" ? "apiKey" : "subscription";
+const authModeSetting = (agent: AgentKind) => `agentAuthMode.${agent}`;
+const decodeAuthMode = Schema.decodeUnknownOption(AgentAuthMode);
 
 const toAvailability = (error: AgentError): AgentAvailability => {
 	switch (error._tag) {
@@ -125,10 +125,8 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 	make: Effect.gen(function* () {
 		const database = yield* LocalDatabase;
 		const credentials = yield* CredentialStore;
-		const adapters: Record<AgentKind, AgentAdapter> = {
-			claude: yield* ClaudeAdapter,
-			codex: yield* CodexAdapter,
-		};
+		const codex = yield* CodexAdapter;
+		const adapters: Record<AgentKind, AgentAdapter> = { claude: yield* ClaudeAdapter, codex };
 		const services = yield* Effect.context<SecureRandom.SecureRandom>();
 		const events = yield* PubSub.unbounded<Published>();
 		const sessionChanges = yield* PubSub.unbounded<AgentSession>();
@@ -273,15 +271,50 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 			yield* stopRuntime(idle);
 		});
 
-		const authFor = Effect.fnUntraced(function* (agent: AgentKind) {
-			const apiKey = yield* credentials.get(agent);
-			if (Option.isSome(apiKey)) {
-				return { mode: "apiKey", apiKey: apiKey.value } satisfies StartSessionInput["auth"];
+		// The user's choice, else an API key when one is stored, else the agent's first mode.
+		const authModeOf = Effect.fnUntraced(function* (agent: AgentKind) {
+			const [stored] = yield* database.query((db) =>
+				db
+					.select()
+					.from(setting)
+					.where(eq(setting.key, authModeSetting(agent))),
+			);
+			const chosen = decodeAuthMode(stored?.value);
+			if (Option.isSome(chosen)) return chosen.value;
+			const modes = adapters[agent].authModes;
+			const hasApiKey = Option.isSome(yield* credentials.get(agent));
+			return hasApiKey || !modes.includes("subscription") ? "apiKey" : "subscription";
+		});
+
+		const setAuthMode = Effect.fn("SessionService.setAuthMode")(function* (agent: AgentKind, mode: AgentAuthMode) {
+			if (!adapters[agent].authModes.includes(mode)) {
+				return yield* new AuthModeNotAllowedError({ agent, mode });
 			}
-			if (authModeFor(agent, false) === "apiKey") {
+			const key = authModeSetting(agent);
+			yield* database.query((db) =>
+				db
+					.insert(setting)
+					.values({ key, value: mode })
+					.onConflictDoUpdate({ target: setting.key, set: { value: mode } }),
+			);
+		});
+
+		const startLogin = Effect.fn("SessionService.startLogin")(function* (agent: AgentKind) {
+			if (agent === "claude") {
+				return yield* new AuthModeNotAllowedError({ agent, mode: "subscription" });
+			}
+			return { authUrl: yield* codex.startLogin };
+		});
+
+		const authFor = Effect.fnUntraced(function* (agent: AgentKind) {
+			if ((yield* authModeOf(agent)) === "subscription") {
+				return { mode: "subscription" } satisfies StartSessionInput["auth"];
+			}
+			const apiKey = yield* credentials.get(agent);
+			if (Option.isNone(apiKey)) {
 				return yield* new AgentUnavailableError({ agent, availability: { status: "needsApiKey" } });
 			}
-			return { mode: "subscription" } satisfies StartSessionInput["auth"];
+			return { mode: "apiKey", apiKey: apiKey.value } satisfies StartSessionInput["auth"];
 		});
 
 		const startRuntime = Effect.fnUntraced(function* (row: SessionRow) {
@@ -426,13 +459,13 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 			if (found === 0) {
 				return yield* new WorkspaceNotFoundError({ workspaceId: input.workspaceId });
 			}
-			const hasApiKey = Option.isSome(yield* credentials.get(input.agent));
+			const authMode = yield* authModeOf(input.agent);
 			const now = yield* nowIso;
 			const row: SessionRow = {
 				id: yield* newId,
 				...input,
 				nativeSessionId: null,
-				authMode: authModeFor(input.agent, hasApiKey),
+				authMode,
 				status: "idle",
 				title: null,
 				createdAt: now,
@@ -572,6 +605,7 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 		const agentInfo = Effect.fnUntraced(function* (kind: AgentKind) {
 			const adapter = adapters[kind];
 			const hasApiKey = Option.isSome(yield* credentials.get(kind));
+			const authMode = yield* authModeOf(kind);
 			const listed = yield* Effect.result(modelsOf(kind));
 			if (Result.isFailure(listed)) {
 				yield* Effect.logWarning("Could not list agent models, showing none", listed.failure).pipe(
@@ -580,7 +614,7 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 			}
 			const availability: AgentAvailability = Result.isFailure(listed)
 				? toAvailability(listed.failure)
-				: authModeFor(kind, hasApiKey) === "apiKey"
+				: authMode === "apiKey"
 					? hasApiKey
 						? { status: "ready", account: null }
 						: { status: "needsApiKey" }
@@ -592,8 +626,8 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 				kind,
 				availability,
 				capabilities: adapter.capabilities,
-				authModes: kind === "claude" ? ["apiKey"] : ["apiKey", "subscription"],
-				authMode: authModeFor(kind, hasApiKey),
+				authModes: adapter.authModes,
+				authMode,
 				...(Result.isSuccess(listed) ? listed.success : { models: [], defaultModel: "" }),
 			});
 		});
@@ -630,6 +664,8 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 		return {
 			listAgents,
 			setApiKey,
+			setAuthMode,
+			startLogin,
 			removeApiKey,
 			create,
 			list,

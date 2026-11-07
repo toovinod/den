@@ -47,6 +47,11 @@ describe("CodexAdapter", () => {
 		expect(status).toEqual({ status: "loggedIn", account: "dev@example.com" });
 	});
 
+	test("starts the ChatGPT sign-in and returns its URL", async () => {
+		const url = await runWithCodex(Effect.flatMap(CodexAdapter, (codex) => codex.startLogin));
+		expect(url).toBe("https://auth.example/login");
+	});
+
 	test("lists models from every model/list page", async () => {
 		const models = await runWithCodex(Effect.flatMap(CodexAdapter, (codex) => codex.listModels));
 		expect(models).toEqual({
