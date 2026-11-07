@@ -5,7 +5,8 @@ const TAG = "pr_feedback";
 // Anyone who can comment on the pull request writes these bodies, and the agent has a shell. A body that closed
 // the block early could make its own text read as the user's instructions. Escaping every bracket, not only tags
 // that look like ours, leaves no spelling of the tag (zero-width characters, look-alikes) that gets through.
-const neutralizeTags = (text: string) => text.replaceAll("<", "&lt;");
+// NFKC first turns full-width and small brackets into a plain "<".
+const neutralizeTags = (text: string) => text.normalize("NFKC").replaceAll("<", "&lt;");
 
 // Review feedback as one message, so the agent can work through it.
 export const feedbackMessage = (conversation: PullRequestConversation) => {
