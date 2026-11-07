@@ -1,29 +1,66 @@
-# Swarm
+<a href="https://github.com/toovinod/swarm">
+  <img alt="Swarm is the open-source desktop app for running Claude Code and Codex in parallel." src=".github/assets/banner.svg">
+</a>
 
-Run Claude Code and Codex in parallel, with as many agents as you need in every workspace.
+<h3 align="center">Swarm</h3>
 
-Swarm is an open-source desktop app for working with coding agents.
-A workspace is a git worktree on its own branch, or the project folder itself.
-Each workspace runs any number of agent sessions side by side: Claude and Codex together, or one agent writing code while another reviews it.
-Swarm orchestrates the agents' own loops, shows their work as it streams, asks you to approve risky actions, and helps you review the diff and open a pull request.
-It is built to stay small: a Tauri shell, a static UI and one Bun daemon.
+<p align="center">
+    The open-source app for running coding agents in parallel.
+    <br />
+    <a href="docs/architecture.md"><strong>Learn more »</strong></a>
+    <br />
+    <br />
+    <a href="#introduction"><strong>Introduction</strong></a> ·
+    <a href="#tech-stack"><strong>Tech Stack</strong></a> ·
+    <a href="#local-development"><strong>Local Development</strong></a> ·
+    <a href="#contributing"><strong>Contributing</strong></a>
+</p>
 
-> **Status: pre-alpha.** The foundations, projects, workspaces and agent adapters exist. The app is not usable end to end yet.
+<p align="center">
+  <a href="https://github.com/toovinod/swarm/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/toovinod/swarm/ci.yml?branch=main&label=CI&logo=github&logoColor=fff" alt="CI" />
+  </a>
+  <a href="https://github.com/toovinod/swarm/stargazers">
+    <img src="https://img.shields.io/github/stars/toovinod/swarm?style=flat&label=stars&logo=github&color=0bf&logoColor=fff" alt="Stars" />
+  </a>
+  <a href="https://github.com/toovinod/swarm/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/toovinod/swarm?label=license&logo=github&color=f80&logoColor=fff" alt="License" />
+  </a>
+</p>
 
-## How it works
+<br/>
 
-- **Projects** are git repositories you add from your machine.
-- **Workspaces** are worktrees of a project. Create as many as you like and run them in parallel.
-- **Agents** run inside a workspace, as many as you like. Each session keeps its own chat, approvals and status. Swarm talks to `codex app-server` and the Claude Agent SDK, and never implements its own agent loop.
-- **Your data stays local.** Code, chats and terminal output stay on your machine. The agents you configure still send context to their model providers under those providers' terms.
-- **Bring your own keys.** Agent API keys live in your OS keychain and are passed only to the agent processes.
+## Introduction
 
-The design, with every decision and its reasons, is in [docs/architecture.md](docs/architecture.md).
+Swarm is the open-source desktop app for running [Claude Code](https://code.claude.com) and [Codex](https://github.com/openai/codex) in parallel.
 
-## Development
+Every task gets its own workspace: a git worktree on its own branch, or the project folder itself.
+Each workspace runs as many agent sessions as you need, side by side.
+Review the diff, open a terminal, and create, review and merge the pull request without leaving the app.
 
-You need [Bun](https://bun.sh) 1.4.4 or later, [Rust](https://rustup.rs) 1.90 or later, [Docker](https://www.docker.com) and git.
-To work on agents, install the [Codex CLI](https://github.com/openai/codex) and [Claude Code](https://code.claude.com).
+Your code, chats and terminal output stay on your machine, and your API keys stay in your OS keychain.
+
+> Swarm is in early development and not ready for daily use yet.
+
+## Tech Stack
+
+- [Tauri](https://tauri.app/) - desktop shell
+- [Next.js](https://nextjs.org/) - framework
+- [TypeScript](https://www.typescriptlang.org/) - language
+- [Tailwind](https://tailwindcss.com/) - CSS
+- [shadcn/ui](https://ui.shadcn.com/) - components
+- [Bun](https://bun.sh/) - runtime
+- [Effect](https://effect.website/) - services and errors
+- [Drizzle](https://orm.drizzle.team/) - ORM
+- [SQLite](https://sqlite.org/) - local database
+- [Postgres](https://www.postgresql.org/) - cloud database
+- [Hono](https://hono.dev/) - API
+- [Better Auth](https://www.better-auth.com/) - auth
+- [Resend](https://resend.com/) - emails
+- [Turborepo](https://turborepo.com/) - monorepo
+- [Biome](https://biomejs.dev/) - lint and format
+
+## Local Development
 
 ```bash
 cp .env.example .env
@@ -33,37 +70,32 @@ cp .env.example .env
 bun run setup
 ```
 
-`setup` installs dependencies, starts Postgres and Redis in Docker, and applies the database migrations.
+```bash
+bun run dev
+```
 
-| Command                             | What it does                                                                                            |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `bun run dev`                       | Runs the web UI, the API and the desktop app with its daemon. The API applies pending migrations first. |
-| `bun test`                          | Runs all tests.                                                                                         |
-| `bun run lint`                      | Checks formatting and lint rules with Biome. `bun run format` fixes them.                               |
-| `bun run check-types`               | Type-checks every package.                                                                              |
-| `bun run build`                     | Builds every app.                                                                                       |
-| `bun run db:up` / `bun run db:down` | Starts or stops the local Postgres and Redis.                                                           |
-| `bun run db:migrate`                | Applies pending cloud database migrations.                                                              |
-
-## Repository layout
-
-| Path                     | What it is                                                   |
-| ------------------------ | ------------------------------------------------------------ |
-| `apps/desktop`           | Tauri shell that starts the daemon and loads the UI          |
-| `apps/web`               | Next.js UI, built as a static export                         |
-| `apps/daemon`            | `swarmd`: local database, git, workspaces and agent adapters |
-| `apps/api`               | Hono API: accounts, organizations and invitations            |
-| `packages/contracts`     | Schemas and RPC definitions shared by the apps               |
-| `packages/auth`          | Better Auth configuration                                    |
-| `packages/db-cloud`      | Postgres schema, migrations and database service             |
-| `packages/email`         | Transactional email through Resend                           |
-| `scripts/sortImports.ts` | Keeps imports ordered from the longest to the shortest       |
+`setup` installs dependencies, starts Postgres and Redis in Docker and applies the migrations.
+`dev` runs the web UI, the API and the desktop app with its daemon.
+To work on agents, install [Claude Code](https://code.claude.com) and the [Codex CLI](https://github.com/openai/codex).
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md), the rules every change follows.
+We love our contributors! Here's how you can contribute:
+
+- [Open an issue](https://github.com/toovinod/swarm/issues) if you believe you've found a bug.
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md), the rules every change follows.
+- Make a [pull request](https://github.com/toovinod/swarm/pulls) to add features, improve quality of life or fix bugs.
+
 Report security issues privately as described in [SECURITY.md](SECURITY.md).
+
+### Recommended Versions
+
+| Tool   | Version |
+| ------ | ------- |
+| bun    | 1.4.4   |
+| rust   | 1.90    |
+| docker | latest  |
 
 ## License
 
-[MIT](LICENSE)
+Swarm is open source under the [MIT License](LICENSE).
