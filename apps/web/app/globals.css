@@ -32,19 +32,20 @@ a {
 	text-decoration: none;
 }
 
-.imgDark {
-	display: none;
-}
-
 @media (prefers-color-scheme: dark) {
 	html {
 		color-scheme: dark;
 	}
+}
 
-	.imgLight {
-		display: none;
-	}
-	.imgDark {
-		display: unset;
-	}
+body {
+	font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.daemonStatus {
+	display: grid;
+	gap: 8px;
+	place-content: center;
+	min-height: 100vh;
+	text-align: center;
 }

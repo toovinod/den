@@ -10,7 +10,10 @@
 		"check-types": "bun --bun next typegen && bun --bun tsc --noEmit"
 	},
 	"dependencies": {
+		"@repo/contracts": "workspace:*",
 		"@repo/ui": "*",
+		"@tauri-apps/api": "2.12.4",
+		"effect": "4.1.2",
 		"next": "16.4.5",
 		"react": "19.3.1",
 		"react-dom": "19.3.1"
