@@ -2,6 +2,7 @@ import {
 	type AgentAdapter,
 	type AgentAuthStatus,
 	type AgentCapabilities,
+	AgentNotInstalledError,
 	AgentProcessError,
 	AgentProtocolError,
 	type StartSessionInput,
@@ -22,13 +23,13 @@ import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
 
-// Inside a `bun build --compile` binary the SDK cannot find its bundled CLI, so releases
-// extract it and set this path. Unset, the SDK uses its bundled CLI and `checkAuth`
-// runs `claude` from PATH.
+// Swarm runs the user's own `claude`, found on PATH unless this names another one. Inside a
+// `bun build --compile` binary the SDK cannot find the CLI it bundles, and the user's install
+// is also the one their login belongs to.
 export const ClaudeAdapterConfig = Context.Reference<{
-	readonly executablePath: string | undefined;
+	readonly executable: string;
 }>("swarm/daemon/agents/claude/ClaudeAdapterConfig", {
-	defaultValue: () => ({ executablePath: undefined }),
+	defaultValue: () => ({ executable: "claude" }),
 });
 
 const capabilities: AgentCapabilities = {
@@ -236,8 +237,7 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 			const claudeQuery = yield* ClaudeQuery;
 
 			const checkAuth = Effect.gen(function* () {
-				const { executablePath } = yield* ClaudeAdapterConfig;
-				const executable = executablePath ?? "claude";
+				const { executable } = yield* ClaudeAdapterConfig;
 				const output = yield* spawner
 					.string(ChildProcess.make(executable, ["auth", "status", "--json"]))
 					.pipe(Effect.mapError(toAgentError(executable, "Could not run claude auth status.")));
@@ -254,7 +254,12 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 			}).pipe(Effect.withSpan("ClaudeAdapter.checkAuth"));
 
 			const startSession = Effect.fn("ClaudeAdapter.startSession")(function* (input: StartSessionInput) {
-				const { executablePath } = yield* ClaudeAdapterConfig;
+				const { executable } = yield* ClaudeAdapterConfig;
+				// The SDK wants a path, not a command name.
+				const executablePath = Bun.which(executable);
+				if (executablePath === null) {
+					return yield* new AgentNotInstalledError({ executable });
+				}
 				const session = yield* makeAgentSession(capabilities);
 				const prompts = yield* Queue.unbounded<SDKUserMessage>();
 				const { handle, interrupting } = yield* makeMessageHandler(session);
@@ -295,7 +300,7 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 					permissionMode: "default",
 					settingSources: input.trustProjectSettings ? ["user", "project", "local"] : ["user"],
 					...(input.resumeId === undefined ? {} : { resume: input.resumeId }),
-					...(executablePath === undefined ? {} : { pathToClaudeCodeExecutable: executablePath }),
+					pathToClaudeCodeExecutable: executablePath,
 					...(input.auth.mode === "apiKey"
 						? {
 								// An optional plain string cannot fail to decode, so a ConfigError here is a defect.

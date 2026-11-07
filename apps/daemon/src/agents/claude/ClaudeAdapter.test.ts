@@ -118,7 +118,13 @@ const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 		},
 	});
 
-const runWithClaude = <A, E>(program: Effect.Effect<A, E, ClaudeAdapter>, permissions: Array<PermissionResult> = []) =>
+const fakeClaude = `${import.meta.dir}/fixtures/fakeClaude.ts`;
+
+const runWithClaude = <A, E>(
+	program: Effect.Effect<A, E, ClaudeAdapter>,
+	permissions: Array<PermissionResult> = [],
+	executable = fakeClaude,
+) =>
 	program.pipe(
 		Effect.provide(
 			ClaudeAdapter.layer.pipe(
@@ -126,9 +132,7 @@ const runWithClaude = <A, E>(program: Effect.Effect<A, E, ClaudeAdapter>, permis
 				Layer.provide(BunServices.layer),
 			),
 		),
-		Effect.provideService(ClaudeAdapterConfig, {
-			executablePath: `${import.meta.dir}/fixtures/fakeClaude.ts`,
-		}),
+		Effect.provideService(ClaudeAdapterConfig, { executable }),
 		Effect.runPromise,
 	);
 
@@ -299,6 +303,23 @@ describe("ClaudeAdapter", () => {
 		});
 		expect(startedWith.at(-1)?.settingSources).toEqual(["user", "project", "local"]);
 		expect(startedWith.at(-1)?.permissionMode).toBe("default");
+	});
+
+	test("runs the configured claude instead of the SDK's bundled one", async () => {
+		await runSession(() => Effect.void);
+		expect(startedWith.at(-1)?.pathToClaudeCodeExecutable).toBe(fakeClaude);
+	});
+
+	test("reports a missing claude as not installed", async () => {
+		const error = await runWithClaude(
+			Effect.gen(function* () {
+				const claude = yield* ClaudeAdapter;
+				return yield* claude.startSession(newSession);
+			}).pipe(Effect.scoped, Effect.flip),
+			[],
+			"/nonexistent/claude",
+		);
+		expect(error._tag).toBe("AgentNotInstalledError");
 	});
 });
 
