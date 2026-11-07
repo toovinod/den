@@ -86,11 +86,10 @@ pub fn run() {
     .build(tauri::generate_context!())
     .expect("error while building tauri application")
     .run(|app, event| {
+      // Dropping the child closes the daemon's stdin, and it shuts down and stops everything it
+      // started. A crash closes stdin too. `kill()` would SIGKILL the daemon and orphan its children.
       if let RunEvent::Exit = event {
-        let child = app.state::<Daemon>().child.lock().ok().and_then(|mut child| child.take());
-        if let Some(child) = child {
-          let _ = child.kill();
-        }
+        drop(app.state::<Daemon>().child.lock().ok().and_then(|mut child| child.take()));
       }
     });
 }
