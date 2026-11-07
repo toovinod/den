@@ -187,6 +187,7 @@ It stopped once the release signalled the PTY's process group instead of only th
   On Linux the setup script and the PTY kept running.
   The app crashing is covered, because swarmd survives it and cleans up.
   Covering swarmd crashing needs a supervisor or children that watch their stdin, and is left open.
+  Since closed without a supervisor: the next swarmd stops what a crashed one left (architecture section 3.3).
 - **Keychain on Linux.** `Bun.secrets` needs libsecret and a running Secret Service (GNOME Keyring or KWallet).
   The UI has to say that clearly instead of failing on save.
 - **Claude.** The adapter runs the user's own `claude`. Swarm does not embed or extract the SDK's CLI.
