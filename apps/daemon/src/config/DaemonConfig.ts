@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Config, Context, Effect, Layer, type Redacted } from "effect";
 
 export class DaemonConfig extends Context.Service<
@@ -5,6 +7,8 @@ export class DaemonConfig extends Context.Service<
 	{
 		readonly port: number;
 		readonly token: Redacted.Redacted<string>;
+		// Holds the SQLite file and the worktrees folder.
+		readonly dataDir: string;
 	}
 >()("swarm/daemon/config/DaemonConfig") {
 	static readonly layer = Layer.effect(
@@ -14,7 +18,10 @@ export class DaemonConfig extends Context.Service<
 				Config.withDefault(0),
 			);
 			const token = yield* Config.Redacted("SWARM_DAEMON_TOKEN");
-			return DaemonConfig.of({ port, token });
+			const dataDir = yield* Config.String("SWARM_DATA_DIR").pipe(
+				Config.withDefault(join(homedir(), ".swarm")),
+			);
+			return DaemonConfig.of({ port, token, dataDir });
 		}),
 	);
 }
