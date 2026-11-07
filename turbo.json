@@ -14,8 +14,11 @@
 			"cache": false,
 			"persistent": true
 		},
+		"daemon#build": {
+			"outputs": ["dist/**"]
+		},
 		"desktop#build": {
-			"dependsOn": ["web#build"],
+			"dependsOn": ["daemon#build", "web#build"],
 			"outputs": []
 		}
 	}

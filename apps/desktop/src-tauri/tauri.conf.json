@@ -28,6 +28,6 @@
 		"android": {
 			"debugApplicationIdSuffix": ".debug"
 		},
-		"externalBin": ["binaries/swarmd"]
+		"externalBin": ["../../daemon/dist/swarmd"]
 	}
 }

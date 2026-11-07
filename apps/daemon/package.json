@@ -4,6 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"build": "bun src/compileDaemon.ts",
 		"check-types": "bun --bun tsc --noEmit",
 		"db:generate": "bun --bun drizzle-kit generate",
 		"test": "bun test",
