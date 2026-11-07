@@ -94,6 +94,15 @@ It keeps a release pull request open with the next version and the changelog.
 Merging that pull request tags the commit `vX.Y.Z` and publishes a GitHub release.
 Nobody tags or edits the changelog by hand.
 
+Until 1.0, versions move slowly on purpose:
+
+- `fix:` and `feat:` bump the patch version, so 0.1.0 becomes 0.1.1.
+- A breaking change (`feat!:` or a `BREAKING CHANGE:` footer) bumps the minor version, so 0.1.1 becomes 0.2.0.
+- `docs:`, `chore:`, `refactor:` and `test:` do not bump the version.
+
+Merge the release pull request only when there is a build worth shipping, not after every change.
+It keeps collecting changes while it stays open, so one release can cover many merged pull requests.
+
 ## Code of conduct
 
 Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
