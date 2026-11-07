@@ -6,13 +6,14 @@ import { RpcSerialization, RpcServer } from "effect/rpc";
 import { DaemonConfig } from "../config/DaemonConfig.ts";
 import { DaemonRpcHandlers } from "../rpc/DaemonRpcHandlers.ts";
 import { RpcWebSocketRoute } from "../rpc/RpcWebSocketRoute.ts";
+import { DaemonServices } from "./DaemonServices.ts";
 
 // The desktop shell waits for this exact line on stdout to learn the daemon's address.
 export const READY_LINE_PREFIX = "SWARM_DAEMON_READY ";
 
 const RpcServerLayer = RpcServer.layer(DaemonRpcs).pipe(
 	Layer.provide([DaemonRpcHandlers, RpcWebSocketRoute]),
-	Layer.provide(RpcSerialization.layerJson),
+	Layer.provide([RpcSerialization.layerJson, DaemonServices]),
 );
 
 const AnnounceReady = Layer.effectDiscard(
