@@ -12,6 +12,7 @@ import type { CreateWorkspaceInput } from "@repo/contracts/WorkspaceRpcs";
 import { ScriptRun, ScriptRunOutput } from "@repo/contracts/ScriptRun";
 import { project, scriptRun, workspace } from "../database/schema.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
+import { SessionService } from "../sessions/SessionService.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import type { ChildProcessSpawner } from "effect/process";
 import { DaemonConfig } from "../config/DaemonConfig.ts";
@@ -34,6 +35,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 		const { dataDir } = yield* DaemonConfig;
 		const database = yield* LocalDatabase;
 		const projects = yield* ProjectService;
+		const sessions = yield* SessionService;
 		const fs = yield* FileSystem.FileSystem;
 		const services = yield* Effect.context<
 			LocalDatabase | ChildProcessSpawner.ChildProcessSpawner | SecureRandom.SecureRandom
@@ -189,6 +191,8 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 				.pipe(Effect.map((rows) => rows.map((row) => new Workspace(row))));
 
 		const cancelScripts = Effect.fn("WorkspaceService.cancelScripts")(function* (workspaceId: string, reason: string) {
+			// Agent processes run in the workspace folder, so they stop before it can be removed.
+			yield* sessions.stopWorkspace(workspaceId);
 			const unfinished = yield* database.query((db) =>
 				db
 					.select({ id: scriptRun.id })

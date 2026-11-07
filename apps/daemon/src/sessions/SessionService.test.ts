@@ -352,6 +352,26 @@ describe("SessionService", () => {
 		});
 	});
 
+	test("archiving a workspace stops its agent processes", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const sessions = yield* SessionService;
+				const session = yield* addSession(tempDir);
+				yield* sessions.sendMessage(session.id, "run the tests", false);
+				yield* waitForStatus(session.id, "awaitingApproval");
+				yield* Effect.flatMap(WorkspaceService, (workspaces) =>
+					workspaces.archive(session.workspaceId, { force: false }),
+				);
+				return {
+					status: yield* statusOf(session.id),
+					approval: yield* Effect.flip(sessions.respondToApproval(session.id, "0", "allowOnce")),
+				};
+			}),
+		);
+		expect(result.status).toBe("interrupted");
+		expect(result.approval._tag).toBe("ApprovalNotFoundError");
+	});
+
 	test("Claude needs an API key before it starts", async () => {
 		const error = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {
