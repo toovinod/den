@@ -12,7 +12,10 @@
 			"!!apps/daemon/src/agents/codex/generated",
 			"!!apps/daemon/src/database/migrations",
 			"!!packages/db-cloud/drizzle",
-			"!!packages/db-cloud/src/authSchema.ts"
+			"!!packages/db-cloud/src/authSchema.ts",
+			"!!packages/ui/src/components",
+			"!!packages/ui/src/hooks",
+			"!!packages/ui/src/lib/utils.ts"
 		]
 	},
 	"formatter": {
@@ -38,6 +41,11 @@
 			}
 		}
 	],
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	},
 	"javascript": {
 		"formatter": {
 			"quoteStyle": "double"
