@@ -7,7 +7,8 @@
 			}
 		],
 		"strictNullChecks": true,
-		"allowImportingTsExtensions": true
+		"allowImportingTsExtensions": true,
+		"types": ["bun"]
 	},
 	"include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", "next.config.js", ".next/types/**/*.ts"],
 	"exclude": ["node_modules"]
