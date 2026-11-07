@@ -1,36 +1,14 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/create-next-app).
+# web
 
-## Getting Started
+The Swarm user interface, a Next.js static export that the desktop app loads from disk.
 
-First, run the development server:
+In the desktop app it reaches the daemon through Tauri.
+In a plain browser, set `NEXT_PUBLIC_SWARM_DAEMON_URL` to the daemon's WebSocket URL, for example a dev daemon whose sessions replay recorded turns:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+echo devtoken | SWARM_DAEMON_PORT=4799 SWARM_DATA_DIR="$(mktemp -d)" bun run --cwd apps/daemon dev:fake
+NEXT_PUBLIC_SWARM_DAEMON_URL="ws://127.0.0.1:4799/rpc?token=devtoken" bun run --cwd apps/web dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load Inter, a custom Google Font.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+UI components come from shadcn/ui in `packages/ui`.
+Add one with `bunx --bun shadcn@latest add <name>` from `packages/ui`, then replace its `from "cn"` import with `@repo/ui/lib/utils`.
