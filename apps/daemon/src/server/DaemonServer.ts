@@ -11,10 +11,11 @@ import { HttpRouter, HttpServer } from "effect/http";
 // The desktop shell waits for this exact line on stdout to learn the daemon's address.
 const READY_LINE_PREFIX = "SWARM_DAEMON_READY ";
 
-const RpcServerLayer = RpcServer.layer(DaemonRpcs).pipe(
-	Layer.provide([DaemonRpcHandlers, RpcWebSocketRoute]),
-	Layer.provide([RpcSerialization.layerJson, DaemonServices]),
-);
+const makeRpcServerLayer = (handlers: typeof DaemonRpcHandlers) =>
+	RpcServer.layer(DaemonRpcs).pipe(
+		Layer.provide([handlers, RpcWebSocketRoute]),
+		Layer.provide([RpcSerialization.layerJson, DaemonServices]),
+	);
 
 const AnnounceReady = Layer.effectDiscard(
 	Effect.gen(function* () {
@@ -27,17 +28,24 @@ const AnnounceReady = Layer.effectDiscard(
 // instead of waiting the default 20 seconds for them to close.
 const SHUTDOWN_GRACE = Duration.seconds(1);
 
-export const DaemonServer = Layer.unwrap(
-	Effect.gen(function* () {
-		const { port } = yield* DaemonConfig;
-		return Layer.mergeAll(HttpRouter.serve(RpcServerLayer, { disableListenLog: true }), AnnounceReady).pipe(
-			Layer.provideMerge(
-				BunHttpServer.layer({
-					port,
-					hostname: "127.0.0.1",
-					gracefulShutdownTimeout: SHUTDOWN_GRACE,
-				}),
-			),
-		);
-	}),
-);
+// Takes the handlers so the dev daemon can serve fake sessions. The shipped daemon uses DaemonServer.
+export const makeDaemonServer = (handlers: typeof DaemonRpcHandlers) =>
+	Layer.unwrap(
+		Effect.gen(function* () {
+			const { port } = yield* DaemonConfig;
+			return Layer.mergeAll(
+				HttpRouter.serve(makeRpcServerLayer(handlers), { disableListenLog: true }),
+				AnnounceReady,
+			).pipe(
+				Layer.provideMerge(
+					BunHttpServer.layer({
+						port,
+						hostname: "127.0.0.1",
+						gracefulShutdownTimeout: SHUTDOWN_GRACE,
+					}),
+				),
+			);
+		}),
+	);
+
+export const DaemonServer = makeDaemonServer(DaemonRpcHandlers);

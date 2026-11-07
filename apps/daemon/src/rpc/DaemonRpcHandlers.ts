@@ -12,12 +12,14 @@ const HealthRpcHandlers = HealthRpcs.toLayer({
 	health: () => Effect.succeed(new DaemonHealth({ version: packageJson.version })),
 });
 
-export const DaemonRpcHandlers = Layer.mergeAll(
+// Everything but sessions, so the dev daemon can pair it with fake sessions.
+export const CoreRpcHandlers = Layer.mergeAll(
 	HealthRpcHandlers,
 	ProjectRpcHandlers,
 	WorkspaceRpcHandlers,
-	SessionRpcHandlers,
 	TerminalRpcHandlers,
 	GitRpcHandlers,
 	FileRpcHandlers,
 );
+
+export const DaemonRpcHandlers = Layer.merge(CoreRpcHandlers, SessionRpcHandlers);
