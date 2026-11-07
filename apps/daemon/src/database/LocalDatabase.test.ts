@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import { BunServices } from "@effect/platform-bun";
 import { sql } from "drizzle-orm";
 import { Effect, FileSystem, Layer } from "effect";
 import { testDaemonConfig } from "../testing/testDaemonConfig.ts";
-import { LocalDatabase } from "./LocalDatabase.ts";
+import { DATABASE_FILE_NAME, LocalDatabase } from "./LocalDatabase.ts";
 import { project } from "./schema.ts";
 
 const withDatabase = <A, E>(
@@ -75,5 +76,35 @@ describe("LocalDatabase", () => {
 			}),
 		);
 		expect(rows.map((row) => row.id)).toEqual(["p1"]);
+	});
+
+	test("keeps the data dir and database files private to the user", async () => {
+		const modes = await run((tempDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const freshDir = join(tempDir, "fresh");
+				// An existing folder that is too open gets tightened.
+				const openDir = join(tempDir, "open");
+				yield* fs.makeDirectory(openDir, { mode: 0o755 });
+				yield* fs.chmod(openDir, 0o755);
+				const modeOf = (path: string) =>
+					Effect.map(fs.stat(path), (info) => info.mode & 0o777);
+				const modesIn = (dataDir: string) =>
+					Effect.all([
+						modeOf(dataDir),
+						modeOf(join(dataDir, DATABASE_FILE_NAME)),
+						modeOf(join(dataDir, `${DATABASE_FILE_NAME}-wal`)),
+						modeOf(join(dataDir, `${DATABASE_FILE_NAME}-shm`)),
+					]);
+				return yield* Effect.all([
+					withDatabase(modesIn(freshDir), freshDir),
+					withDatabase(modesIn(openDir), openDir),
+				]);
+			}),
+		);
+		expect(modes).toEqual([
+			[0o700, 0o600, 0o600, 0o600],
+			[0o700, 0o600, 0o600, 0o600],
+		]);
 	});
 });

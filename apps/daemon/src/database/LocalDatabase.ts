@@ -28,6 +28,22 @@ export class LocalDatabaseError extends Schema.TaggedError<LocalDatabaseError>()
 
 export const DATABASE_FILE_NAME = "swarm.db";
 
+// Chats, paths and scripts are private to the user who runs the daemon.
+export const PRIVATE_DIRECTORY_MODE = 0o700;
+export const PRIVATE_FILE_MODE = 0o600;
+
+// SQLite creates the -wal and -shm files with the process umask; only the owner may read them.
+const restrictDatabaseFiles = Effect.gen(function* () {
+	const { dataDir } = yield* DaemonConfig;
+	const fs = yield* FileSystem.FileSystem;
+	for (const suffix of ["", "-wal", "-shm"]) {
+		const file = join(dataDir, `${DATABASE_FILE_NAME}${suffix}`);
+		if (yield* fs.exists(file)) {
+			yield* fs.chmod(file, PRIVATE_FILE_MODE);
+		}
+	}
+});
+
 export class LocalDatabase extends Context.Service<
 	LocalDatabase,
 	{
@@ -46,6 +62,7 @@ export class LocalDatabase extends Context.Service<
 			// The client keeps one connection, so this pragma holds for every query.
 			yield* client`PRAGMA foreign_keys = ON`;
 			yield* migrate(embeddedMigrations(), db._.session);
+			yield* restrictDatabaseFiles;
 
 			return LocalDatabase.of({
 				query: (run) =>
@@ -66,7 +83,12 @@ export class LocalDatabase extends Context.Service<
 				Effect.gen(function* () {
 					const { dataDir } = yield* DaemonConfig;
 					const fs = yield* FileSystem.FileSystem;
-					yield* fs.makeDirectory(dataDir, { recursive: true });
+					yield* fs.makeDirectory(dataDir, {
+						recursive: true,
+						mode: PRIVATE_DIRECTORY_MODE,
+					});
+					// mkdir leaves an existing folder's mode alone, so tighten it explicitly.
+					yield* fs.chmod(dataDir, PRIVATE_DIRECTORY_MODE);
 					// SqliteClient turns on WAL by default.
 					return SqliteClient.layer({
 						filename: join(dataDir, DATABASE_FILE_NAME),
