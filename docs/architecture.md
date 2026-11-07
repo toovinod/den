@@ -204,6 +204,8 @@ Rules:
 - `apps/web` is one Next.js app, always built as a static export. No Next.js server exists in any deployment.
 - Desktop routes run inside Tauri and talk only to the daemon.
 - Hosted pages (sign-in, device approval, invite accept) are static client pages served from a static host. They call `apps/api` from the browser, with credentials, and the api allows only the configured web origin.
+- **API shutdown.** On SIGTERM or SIGINT the api stops accepting connections, waits up to `API_SHUTDOWN_GRACE` (10 s) for requests in flight, closes the database client and exits 0.
+  If cleanup hangs 5 s past the grace, or a second signal arrives, it exits 1 at once.
 - The only build-time variables are `NEXT_PUBLIC_*` values that are safe to publish, such as the api URL. Server secrets live only in `apps/api` and `apps/worker`.
 
 ## 13. Packaging (validate before building more features)
