@@ -25,6 +25,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun run check-types
+      # Creating a project makes its first commit, which needs an identity. Runners have none.
+      - run: git config --global user.name "Den CI" && git config --global user.email "ci@den.local"
       - run: bun test
       # The desktop app has its own job because it needs Rust and system libraries.
       - run: bunx turbo run build --filter=!desktop
