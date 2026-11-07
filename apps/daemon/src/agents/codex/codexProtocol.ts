@@ -25,6 +25,11 @@ export const AccountResponse = Schema.Struct({
 	requiresOpenaiAuth: Schema.Boolean,
 });
 
+export const ModelListResponse = Schema.Struct({
+	data: Schema.Array(Schema.Struct({ id: Schema.String, displayName: Schema.String, isDefault: Schema.Boolean })),
+	nextCursor: Schema.NullOr(Schema.String),
+});
+
 export const AgentMessageDelta = Schema.Struct({
 	itemId: Schema.String,
 	delta: Schema.String,

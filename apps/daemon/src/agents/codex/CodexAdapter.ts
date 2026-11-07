@@ -6,6 +6,7 @@ import {
 	ErrorNotification,
 	FileChangeApprovalParams,
 	ItemNotification,
+	ModelListResponse,
 	type ThreadItem,
 	ThreadResponse,
 	TurnCompleted,
@@ -14,12 +15,14 @@ import {
 import {
 	type AgentAdapter,
 	type AgentAuthStatus,
+	type AgentModels,
 	AgentProtocolError,
 	CodexVersionMismatchError,
 	type StartSessionInput,
 } from "../AgentAdapter.ts";
 import { type CodexIncoming, type CodexRpcClient, METHOD_NOT_FOUND, makeCodexRpcClient } from "./codexRpcClient.ts";
 import type { CommandExecutionApprovalDecision } from "./generated/v2/CommandExecutionApprovalDecision.ts";
+import type { AgentCapabilities, AgentModel } from "@repo/contracts/AgentSession";
 import type { TurnInterruptParams } from "./generated/v2/TurnInterruptParams.ts";
 import codexVersionFile from "./generated/CODEX_VERSION" with { type: "text" };
 import type { ThreadResumeParams } from "./generated/v2/ThreadResumeParams.ts";
@@ -27,11 +30,11 @@ import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
 import type { ThreadStartParams } from "./generated/v2/ThreadStartParams.ts";
 import type { ApprovalOutcome, ToolCall } from "@repo/contracts/AgentEvent";
 import type { GetAccountParams } from "./generated/v2/GetAccountParams.ts";
+import type { ModelListParams } from "./generated/v2/ModelListParams.ts";
 import type { TurnStartParams } from "./generated/v2/TurnStartParams.ts";
 import type { TurnSteerParams } from "./generated/v2/TurnSteerParams.ts";
 import type { InitializeParams } from "./generated/InitializeParams.ts";
 import packageJson from "../../../package.json" with { type: "json" };
-import type { AgentCapabilities } from "@repo/contracts/AgentSession";
 import { Context, Effect, Layer, Option, Ref, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { keepOutputTail } from "../keepOutputTail.ts";
@@ -262,11 +265,17 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 			const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 			const provide = Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner);
 
-			const checkAuth = Effect.gen(function* () {
+			// A short-lived app-server for questions outside a session. Closing the scope stops it.
+			const connect = Effect.gen(function* () {
 				const { executable } = yield* CodexAdapterConfig;
 				yield* checkVersion(executable);
 				const client = yield* makeCodexRpcClient(appServer(executable));
 				yield* initialize(client);
+				return client;
+			});
+
+			const checkAuth = Effect.gen(function* () {
+				const client = yield* connect;
 				const { account, requiresOpenaiAuth } = yield* client
 					.request("account/read", {
 						refreshToken: false,
@@ -283,6 +292,25 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 							};
 				return status;
 			}).pipe(Effect.scoped, provide, Effect.withSpan("CodexAdapter.checkAuth"));
+
+			// The installed Codex knows which models the account can use, so the list comes from it.
+			const listModels = Effect.gen(function* () {
+				const client = yield* connect;
+				const models: Array<AgentModel> = [];
+				let defaultModel = "";
+				let cursor: string | null = null;
+				do {
+					const page: typeof ModelListResponse.Type = yield* client
+						.request("model/list", { cursor } satisfies ModelListParams)
+						.pipe(Effect.flatMap(decodeCodex(ModelListResponse)));
+					for (const model of page.data) {
+						models.push({ id: model.id, label: model.displayName });
+						if (model.isDefault) defaultModel = model.id;
+					}
+					cursor = page.nextCursor;
+				} while (cursor !== null);
+				return { models, defaultModel: defaultModel || (models[0]?.id ?? "") } satisfies AgentModels;
+			}).pipe(Effect.scoped, provide, Effect.withSpan("CodexAdapter.listModels"));
 
 			const startSession = Effect.fn("CodexAdapter.startSession")(function* (input: StartSessionInput) {
 				const { executable } = yield* CodexAdapterConfig;
@@ -373,6 +401,7 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 				kind: "codex",
 				capabilities,
 				checkAuth,
+				listModels,
 				startSession,
 			});
 		}),

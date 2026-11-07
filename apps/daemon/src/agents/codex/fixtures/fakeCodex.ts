@@ -125,6 +125,14 @@ const serve = async () => {
 					},
 				});
 				break;
+			case "model/list":
+				send({
+					id: message.id,
+					result: message.params.cursor
+						? { data: [{ id: "gpt-later", displayName: "GPT Later", isDefault: false }], nextCursor: null }
+						: { data: [{ id: "gpt-first", displayName: "GPT First", isDefault: true }], nextCursor: "page-2" },
+				});
+				break;
 			case "thread/start":
 			case "thread/resume":
 				if (!hasSwarmPolicy(message.params)) {

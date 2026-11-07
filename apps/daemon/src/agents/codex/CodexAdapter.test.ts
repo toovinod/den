@@ -46,6 +46,17 @@ describe("CodexAdapter", () => {
 		expect(status).toEqual({ status: "loggedIn", account: "dev@example.com" });
 	});
 
+	test("lists models from every model/list page", async () => {
+		const models = await runWithCodex(Effect.flatMap(CodexAdapter, (codex) => codex.listModels));
+		expect(models).toEqual({
+			models: [
+				{ id: "gpt-first", label: "GPT First" },
+				{ id: "gpt-later", label: "GPT Later" },
+			],
+			defaultModel: "gpt-first",
+		});
+	});
+
 	test("streams a turn with deltas", async () => {
 		const events = await runSession((handle) =>
 			Effect.gen(function* () {

@@ -1,5 +1,6 @@
 import type {
 	AgentCapabilities,
+	AgentInfo,
 	AgentKind,
 	ApprovalNotFoundError,
 	SessionBusyError,
@@ -71,6 +72,8 @@ const retryableTags: ReadonlySet<string> = new Set(["AgentProcessError", "Sessio
 export const isRetryableAgentError = (error: SendMessageError | ApprovalError): boolean =>
 	retryableTags.has(error._tag);
 
+export type AgentModels = Pick<AgentInfo, "models" | "defaultModel">;
+
 export interface AgentSessionHandle {
 	// Waits until the agent reports its id, which may only happen after the first message.
 	readonly nativeSessionId: Effect.Effect<string, AgentError>;
@@ -85,5 +88,6 @@ export interface AgentAdapter {
 	readonly kind: AgentKind;
 	readonly capabilities: AgentCapabilities;
 	readonly checkAuth: Effect.Effect<AgentAuthStatus, AgentError>;
+	readonly listModels: Effect.Effect<AgentModels, AgentError>;
 	startSession(input: StartSessionInput): Effect.Effect<AgentSessionHandle, AgentError, Scope.Scope>;
 }

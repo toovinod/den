@@ -1,6 +1,7 @@
 import {
 	type AgentAdapter,
 	type AgentAuthStatus,
+	type AgentModels,
 	AgentProcessError,
 	AgentProtocolError,
 	type StartSessionInput,
@@ -38,6 +39,16 @@ const capabilities: AgentCapabilities = {
 	mcpApprovals: true,
 	// The SDK folds a message sent mid-turn into the running turn.
 	steerWhileRunning: true,
+};
+
+const models: AgentModels = {
+	models: [
+		{ id: "claude-opus-5-5", label: "Claude Opus 5.5" },
+		{ id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
+		{ id: "claude-haiku-5-5", label: "Claude Haiku 5.5" },
+		{ id: "claude-fable-5-1", label: "Claude Fable 5.1" },
+	],
+	defaultModel: "claude-opus-5-5",
 };
 
 // The SDK replaces the whole child environment when `env` is set, so API key mode passes
@@ -365,6 +376,7 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 				kind: "claude",
 				capabilities,
 				checkAuth,
+				listModels: Effect.succeed(models),
 				startSession,
 			});
 		}),
