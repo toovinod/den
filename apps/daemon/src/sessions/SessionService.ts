@@ -214,7 +214,9 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 					break;
 				case "turn.completed":
 					runtime.outstanding = Math.max(0, runtime.outstanding - 1);
-					runtime.resting = event.result.status === "interrupted" ? "interrupted" : "idle";
+					// A failed turn leaves the process usable, so the next message runs as usual. The status still
+					// says it failed, so the UI reports a failure rather than a finished turn.
+					runtime.resting = event.result.status === "completed" ? "idle" : event.result.status;
 					break;
 			}
 			yield* refreshStatus(runtime);

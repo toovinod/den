@@ -178,6 +178,31 @@ describe("SessionService", () => {
 		expect(sequences(received)).toEqual(Array.from({ length: 1 + 452 * 2 - 11 }, (_, index) => index + 11));
 	});
 
+	test("a failed turn leaves the session failed, and the next message still runs", async () => {
+		const recording: Recording = {
+			kind: "codex",
+			nativeSessionId: "thread-failed",
+			turns: [
+				[{ type: "turn.completed", turnId: "broken", result: { status: "failed", message: "Rate limited" } }],
+				messages("retry", 1),
+			],
+		};
+		const statuses = await runWithRecording(recording, (tempDir) =>
+			Effect.gen(function* () {
+				const sessions = yield* SessionService;
+				const session = yield* addSession(tempDir);
+				yield* sessions.sendMessage(session.id, "first", [], false);
+				yield* waitForStatus(session.id, "failed");
+				const afterFailure = yield* statusOf(session.id);
+				yield* sessions.sendMessage(session.id, "again", [], false);
+				yield* waitForStored(session.id, 6);
+				yield* waitForStatus(session.id, "idle");
+				return [afterFailure, yield* statusOf(session.id)];
+			}),
+		);
+		expect(statuses).toEqual(["failed", "idle"]);
+	});
+
 	test("a subscriber that falls behind gets ResubscribeRequiredError with its last sequence", async () => {
 		const recording: Recording = {
 			kind: "codex",
