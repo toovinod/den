@@ -28,6 +28,11 @@ Cloud
 - One daemon binary runs in two homes: as the desktop sidecar and inside a cloud sandbox.
 - The UI talks to both through the same RPC contract (`packages/contracts`). A cloud workspace reaches its daemon through the relay instead of localhost.
 - Local workspace data (code, chats, terminal output) stays on the machine. Neon stores accounts, orgs and cloud workspace records only.
+- **Product bar.** Everything Conductor and Paradev do is the floor, not the target. Someone moving from either tool must not lose a feature they relied on, and should find more.
+- **Workspaces and sessions.** A project has many workspaces, and a workspace has many agent sessions running at once, of either agent.
+  - Sessions in one workspace share its folder and branch, so each sees the others' edits. Use this when agents should work on the same code, for example one implementing while another reviews or fixes tests.
+  - Each session has its own transcript, approvals, turn queue and status.
+  - Work that must not share a checkout goes in separate workspaces.
 
 ## 2. Accounts and agent authentication
 
@@ -190,6 +195,7 @@ Rules:
   - A project cannot be deleted while it has active workspaces. Deleting it cascades to archived ones.
   - A workspace cascades to its sessions, events and script runs.
   - In Neon, deleting an org cascades to its cloud workspaces, and deleting the user who created one is restricted.
+- **Sessions per workspace** are unlimited in the schema. Only the daemon-wide cap on concurrent sessions (section 14) applies.
 - **Event order** is `sequence` per session, never time.
 - **No raw output** is stored. Script output keeps the last 64 KB or 2,000 lines in memory, whichever is smaller.
 

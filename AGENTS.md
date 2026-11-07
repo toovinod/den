@@ -1,7 +1,8 @@
 # Swarm
 
 Swarm is an open-source desktop app for running Claude Code and Codex in parallel.
-Each task runs in its own workspace: a git worktree, or the project folder itself.
+Each workspace is a git worktree or the project folder itself, and runs any number of agent sessions side by side.
+Everything Conductor and Paradev do is the floor for Swarm, not the target.
 This file is the contract for everyone who writes code here, human or agent.
 Architecture decisions will live in `docs/architecture.md`.
 

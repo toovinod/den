@@ -1,9 +1,10 @@
 # Swarm
 
-Run Claude Code and Codex in parallel, one task per workspace.
+Run Claude Code and Codex in parallel, with as many agents as you need in every workspace.
 
 Swarm is an open-source desktop app for working with coding agents.
-Each task gets its own workspace: a git worktree on its own branch, or the project folder itself.
+A workspace is a git worktree on its own branch, or the project folder itself.
+Each workspace runs any number of agent sessions side by side: Claude and Codex together, or one agent writing code while another reviews it.
 Swarm orchestrates the agents' own loops, shows their work as it streams, asks you to approve risky actions, and helps you review the diff and open a pull request.
 It is built to stay small: a Tauri shell, a static UI and one Bun daemon.
 
@@ -13,7 +14,7 @@ It is built to stay small: a Tauri shell, a static UI and one Bun daemon.
 
 - **Projects** are git repositories you add from your machine.
 - **Workspaces** are worktrees of a project. Create as many as you like and run them in parallel.
-- **Agents** run inside a workspace. Swarm talks to `codex app-server` and the Claude Agent SDK, and never implements its own agent loop.
+- **Agents** run inside a workspace, as many as you like. Each session keeps its own chat, approvals and status. Swarm talks to `codex app-server` and the Claude Agent SDK, and never implements its own agent loop.
 - **Your data stays local.** Code, chats and terminal output stay on your machine. The agents you configure still send context to their model providers under those providers' terms.
 - **Bring your own keys.** Agent API keys live in your OS keychain and are passed only to the agent processes.
 
