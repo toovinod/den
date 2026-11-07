@@ -1,0 +1,41 @@
+{
+	"kind": "codex",
+	"nativeSessionId": "thread-replay",
+	"turns": [
+		[
+			{ "type": "message.delta", "itemId": "msg-1", "text": "Running " },
+			{ "type": "message.delta", "itemId": "msg-1", "text": "the tests." },
+			{
+				"type": "message.completed",
+				"itemId": "msg-1",
+				"text": "Running the tests."
+			},
+			{
+				"type": "tool.started",
+				"itemId": "cmd-1",
+				"tool": { "kind": "command", "command": "bun test", "cwd": "/repo" }
+			},
+			{
+				"type": "approval.requested",
+				"requestId": "0",
+				"itemId": "cmd-1",
+				"kind": "command",
+				"summary": "bun test",
+				"reason": null,
+				"choices": ["allowOnce", "allowForSession", "deny"]
+			},
+			{
+				"type": "tool.completed",
+				"itemId": "cmd-1",
+				"tool": { "kind": "command", "command": "bun test", "cwd": "/repo" },
+				"status": "completed",
+				"output": "3 pass"
+			},
+			{
+				"type": "turn.completed",
+				"turnId": "turn-1",
+				"result": { "status": "completed" }
+			}
+		]
+	]
+}
