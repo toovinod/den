@@ -304,14 +304,15 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 						.request("model/list", { cursor } satisfies ModelListParams)
 						.pipe(Effect.flatMap(decodeCodex(ModelListResponse)));
 					for (const model of page.data) {
+						// model/list has no context window. Codex reports it per thread in its token usage instead.
 						models.push({
 							id: model.id,
 							label: model.displayName,
-							description: "",
-							efforts: [],
-							defaultEffort: null,
+							description: model.description,
+							efforts: model.supportedReasoningEfforts.map((option) => option.reasoningEffort),
+							defaultEffort: model.defaultReasoningEffort,
 							contextWindow: null,
-							supportsImages: false,
+							supportsImages: model.inputModalities.includes("image"),
 						});
 						if (model.isDefault) defaultModel = model.id;
 					}

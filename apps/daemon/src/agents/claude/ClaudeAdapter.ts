@@ -16,8 +16,8 @@ import type {
 import { Config, Context, Deferred, Effect, Layer, Option, Queue, Redacted, Ref, Schema, Stream } from "effect";
 import type { ApprovalDecision, ApprovalOutcome, ToolCall } from "@repo/contracts/AgentEvent";
 import { BashInput, ClaudeAuthStatus, ClaudeMessage, FileInput } from "./claudeMessages.ts";
+import type { AgentCapabilities, AgentModel } from "@repo/contracts/AgentSession";
 import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
-import type { AgentCapabilities } from "@repo/contracts/AgentSession";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
@@ -41,44 +41,24 @@ const capabilities: AgentCapabilities = {
 	steerWhileRunning: true,
 };
 
+// supportedModels() needs a running query, so the list is fixed here. The efforts are the SDK's
+// EffortLevel values, and the context window is only known from a turn's usage.
+const claudeModel = (id: string, label: string): AgentModel => ({
+	id,
+	label,
+	description: "",
+	efforts: ["low", "medium", "high", "xhigh", "max"],
+	defaultEffort: null,
+	contextWindow: null,
+	supportsImages: true,
+});
+
 const models: AgentModels = {
 	models: [
-		{
-			id: "claude-opus-5-5",
-			label: "Claude Opus 5.5",
-			description: "",
-			efforts: [],
-			defaultEffort: null,
-			contextWindow: null,
-			supportsImages: false,
-		},
-		{
-			id: "claude-sonnet-5-5",
-			label: "Claude Sonnet 5.5",
-			description: "",
-			efforts: [],
-			defaultEffort: null,
-			contextWindow: null,
-			supportsImages: false,
-		},
-		{
-			id: "claude-haiku-5-5",
-			label: "Claude Haiku 5.5",
-			description: "",
-			efforts: [],
-			defaultEffort: null,
-			contextWindow: null,
-			supportsImages: false,
-		},
-		{
-			id: "claude-fable-5-1",
-			label: "Claude Fable 5.1",
-			description: "",
-			efforts: [],
-			defaultEffort: null,
-			contextWindow: null,
-			supportsImages: false,
-		},
+		claudeModel("claude-opus-5-5", "Claude Opus 5.5"),
+		claudeModel("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+		claudeModel("claude-haiku-5-5", "Claude Haiku 5.5"),
+		claudeModel("claude-fable-5-1", "Claude Fable 5.1"),
 	],
 	defaultModel: "claude-opus-5-5",
 };

@@ -409,6 +409,25 @@ describe("SessionService", () => {
 		expect(after[1]).toMatchObject({ defaultModel: "replay", models: [{ id: "replay", label: "Replay" }] });
 	});
 
+	test("asks each agent for its models once per daemon run", async () => {
+		const replay = makeReplayAdapter(commandWithApproval);
+		let calls = 0;
+		const codex: AgentAdapter = {
+			...replay,
+			listModels: Effect.andThen(
+				Effect.sync(() => calls++),
+				replay.listModels,
+			),
+		};
+		await runInTempDir((tempDir) =>
+			withServices(
+				join(tempDir, "data"),
+				testAgentServices({ claude: makeReplayAdapter({ ...commandWithApproval, kind: "claude" }), codex }),
+			)(Effect.flatMap(SessionService, (sessions) => Effect.repeat(sessions.listAgents, { times: 2 }))),
+		);
+		expect(calls).toBe(1);
+	});
+
 	test("the API key never reaches the database or the logs", async () => {
 		const apiKey = "sk-ant-never-store-me-4f2a";
 		const logs: Array<string> = [];

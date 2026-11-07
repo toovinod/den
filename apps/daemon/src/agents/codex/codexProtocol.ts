@@ -26,7 +26,17 @@ export const AccountResponse = Schema.Struct({
 });
 
 export const ModelListResponse = Schema.Struct({
-	data: Schema.Array(Schema.Struct({ id: Schema.String, displayName: Schema.String, isDefault: Schema.Boolean })),
+	data: Schema.Array(
+		Schema.Struct({
+			id: Schema.String,
+			displayName: Schema.String,
+			description: Schema.String,
+			supportedReasoningEfforts: Schema.Array(Schema.Struct({ reasoningEffort: Schema.String })),
+			defaultReasoningEffort: Schema.String,
+			inputModalities: Schema.Array(Schema.String),
+			isDefault: Schema.Boolean,
+		}),
+	),
 	nextCursor: Schema.NullOr(Schema.String),
 });
 

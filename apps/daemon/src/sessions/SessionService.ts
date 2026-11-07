@@ -32,6 +32,7 @@ import type {
 	AgentAdapter,
 	AgentAuthStatus,
 	AgentError,
+	AgentModels,
 	AgentSessionHandle,
 	StartSessionInput,
 } from "../agents/AgentAdapter.ts";
@@ -543,10 +544,18 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 
 		const watch = Stream.fromPubSub(sessionChanges);
 
+		// Model lists come from the agents and rarely change, so each is fetched once per daemon run.
+		const modelCache = new Map<AgentKind, AgentModels>();
+		const modelsOf = (kind: AgentKind) => {
+			const cached = modelCache.get(kind);
+			if (cached !== undefined) return Effect.succeed(cached);
+			return adapters[kind].listModels.pipe(Effect.tap((models) => Effect.sync(() => modelCache.set(kind, models))));
+		};
+
 		const agentInfo = Effect.fnUntraced(function* (kind: AgentKind) {
 			const adapter = adapters[kind];
 			const hasApiKey = Option.isSome(yield* credentials.get(kind));
-			const listed = yield* Effect.result(adapter.listModels);
+			const listed = yield* Effect.result(modelsOf(kind));
 			if (Result.isFailure(listed)) {
 				yield* Effect.logWarning("Could not list agent models, showing none", listed.failure).pipe(
 					Effect.annotateLogs({ agent: kind }),
