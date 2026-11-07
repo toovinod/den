@@ -4,10 +4,10 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
-		"dev": "next dev --port 3001",
-		"build": "next build",
-		"start": "next start",
-		"check-types": "next typegen && tsc --noEmit"
+		"dev": "bun --bun next dev --port 3001",
+		"build": "bun --bun next build",
+		"start": "bun --bun next start",
+		"check-types": "bun --bun next typegen && bun --bun tsc --noEmit"
 	},
 	"dependencies": {
 		"@repo/ui": "*",
