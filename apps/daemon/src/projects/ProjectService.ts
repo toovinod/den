@@ -53,6 +53,7 @@ export class ProjectService extends Context.Service<ProjectService>()("swarm/dae
 				defaultBranch: yield* detectDefaultBranch(repositoryPath),
 				setupScript: null,
 				runScript: null,
+				trusted: false,
 				createdAt: yield* nowIso,
 			};
 			yield* database.query((db) => db.insert(project).values(row));
@@ -115,7 +116,17 @@ export class ProjectService extends Context.Service<ProjectService>()("swarm/dae
 			return new Project(row);
 		});
 
-		return { get, add, list, remove, updateScripts };
+		const setTrust = Effect.fn("ProjectService.setTrust")(function* (projectId: string, trusted: boolean) {
+			const [row] = yield* database.query((db) =>
+				db.update(project).set({ trusted }).where(eq(project.id, projectId)).returning(),
+			);
+			if (row === undefined) {
+				return yield* new ProjectNotFoundError({ projectId });
+			}
+			return new Project(row);
+		});
+
+		return { get, add, list, remove, updateScripts, setTrust };
 	}),
 }) {
 	static readonly layer = Layer.effect(ProjectService, ProjectService.make);

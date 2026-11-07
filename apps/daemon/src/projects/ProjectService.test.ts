@@ -90,4 +90,20 @@ describe("ProjectService", () => {
 		expect(project.setupScript).toBe("bun install");
 		expect(project.runScript).toBeNull();
 	});
+
+	test("starts untrusted and saves the trust setting", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const projects = yield* ProjectService;
+				const added = yield* projects.add(yield* makeTestRepository(join(tempDir, "repo")));
+				const trusted = yield* projects.setTrust(added.id, true);
+				const missing = yield* Effect.flip(projects.setTrust("missing", true));
+				return { added, trusted, reloaded: yield* projects.get(added.id), missing };
+			}),
+		);
+		expect(result.added.trusted).toBe(false);
+		expect(result.trusted.trusted).toBe(true);
+		expect(result.reloaded.trusted).toBe(true);
+		expect(result.missing._tag).toBe("ProjectNotFoundError");
+	});
 });

@@ -40,4 +40,9 @@ export class ProjectRpcs extends RpcGroup.make(
 		success: Project,
 		error: Schema.Union([ProjectNotFoundError, DaemonInternalError]),
 	}),
+	Rpc.make("setProjectTrust", {
+		payload: { projectId: Schema.String, trusted: Schema.Boolean },
+		success: Project,
+		error: Schema.Union([ProjectNotFoundError, DaemonInternalError]),
+	}),
 ) {}

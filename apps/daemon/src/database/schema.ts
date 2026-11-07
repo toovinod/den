@@ -14,6 +14,8 @@ export const project = sqliteTable(
 		defaultBranch: text().notNull(),
 		setupScript: text(),
 		runScript: text(),
+		// Only a trusted project's own agent settings load, because they can add hooks and allow rules.
+		trusted: integer({ mode: "boolean" }).notNull().default(false),
 		createdAt: text().notNull(),
 	},
 	(table) => [uniqueIndex("projectPathUnique").on(table.path)],

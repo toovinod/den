@@ -7,6 +7,7 @@ export class Project extends Schema.Class<Project>("Project")({
 	defaultBranch: Schema.String,
 	setupScript: Schema.NullOr(Schema.String),
 	runScript: Schema.NullOr(Schema.String),
+	trusted: Schema.Boolean,
 	createdAt: Schema.String,
 }) {}
 
