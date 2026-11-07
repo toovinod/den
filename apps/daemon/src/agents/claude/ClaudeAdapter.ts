@@ -20,6 +20,7 @@ import { BashInput, ClaudeAuthStatus, ClaudeMessage, FileInput } from "./claudeM
 import type { AgentCapabilities, AgentModel } from "@repo/contracts/AgentSession";
 import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { epochSecondsToIso } from "../epochSecondsToIso.ts";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
@@ -144,6 +145,15 @@ const toPermissionResult = (
 	}
 };
 
+const windowNames: Record<string, string> = {
+	five_hour: "5 hours",
+	seven_day: "7 days",
+	seven_day_opus: "7 days (Opus)",
+	seven_day_sonnet: "7 days (Sonnet)",
+	seven_day_overage_included: "7 days (with extra usage)",
+	overage: "Extra usage",
+};
+
 const toolResultText = (
 	content: string | ReadonlyArray<{ readonly type: string; readonly text?: string }> | undefined,
 ) => {
@@ -158,6 +168,8 @@ const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
 	const finishedBlocks = yield* Ref.make({ messageId: "", count: 0 });
 	const tools = new Map<string, ToolCall>();
 	const interrupting = yield* Ref.make(false);
+	// The context after the turn is what its last model call read and wrote.
+	const lastUsage = yield* Ref.make(Option.none<{ readonly model: string; readonly contextTokens: number }>());
 
 	const handle = Effect.fnUntraced(function* (message: ClaudeMessage) {
 		// Subagent frames belong to the Task tool call that started them.
@@ -186,7 +198,15 @@ const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
 			}
 			case "assistant": {
 				if (!("message" in message) || !("id" in message.message)) return;
-				const { id, content } = message.message;
+				const { id, content, model, usage } = message.message;
+				if (usage !== undefined) {
+					const contextTokens =
+						usage.input_tokens +
+						(usage.cache_creation_input_tokens ?? 0) +
+						(usage.cache_read_input_tokens ?? 0) +
+						usage.output_tokens;
+					yield* Ref.set(lastUsage, Option.some({ model: model ?? "", contextTokens }));
+				}
 				const previous = yield* Ref.get(finishedBlocks);
 				let index = previous.messageId === id ? previous.count : 0;
 				for (const block of content) {
@@ -232,6 +252,14 @@ const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
 			}
 			case "result": {
 				if (!("uuid" in message)) return;
+				const usage = yield* Ref.getAndSet(lastUsage, Option.none());
+				if (Option.isSome(usage)) {
+					yield* session.emit({
+						type: "usage.updated",
+						contextTokens: usage.value.contextTokens,
+						contextWindow: message.modelUsage?.[usage.value.model]?.contextWindow ?? null,
+					});
+				}
 				const interrupted = yield* Ref.getAndSet(interrupting, false);
 				return yield* session.emit({
 					type: "turn.completed",
@@ -244,6 +272,18 @@ const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
 									status: "failed",
 									message: message.errors?.join("; ") || message.subtype,
 								},
+				});
+			}
+			case "rate_limit_event": {
+				if (!("rate_limit_info" in message)) return;
+				const { status, resetsAt, rateLimitType, utilization } = message.rate_limit_info;
+				return yield* session.emit({
+					type: "rateLimit.updated",
+					window: (rateLimitType && windowNames[rateLimitType]) ?? "Usage limit",
+					status: status === "allowed_warning" ? "warning" : status,
+					// The SDK reports utilization as a fraction of the window.
+					usedPercent: utilization === undefined ? null : utilization * 100,
+					resetsAt: resetsAt === undefined ? null : epochSecondsToIso(resetsAt),
 				});
 			}
 			default:

@@ -8,8 +8,10 @@ import {
 	ItemNotification,
 	LoginResponse,
 	ModelListResponse,
+	RateLimitsUpdated,
 	type ThreadItem,
 	ThreadResponse,
+	TokenUsageUpdated,
 	TurnCompleted,
 	TurnResponse,
 } from "./codexProtocol.ts";
@@ -43,6 +45,7 @@ import type { InitializeParams } from "./generated/InitializeParams.ts";
 import packageJson from "../../../package.json" with { type: "json" };
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import type { UserInput } from "./generated/v2/UserInput.ts";
+import { epochSecondsToIso } from "../epochSecondsToIso.ts";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 
@@ -141,6 +144,13 @@ const appServer = (executable: string, cwd?: string, env?: ChildProcess.CommandO
 		extendEnv: true,
 	});
 
+// Codex sends window lengths in minutes, like 300 for five hours.
+const describeWindow = (minutes: number) => {
+	const [amount, unit] =
+		minutes % 1440 === 0 ? [minutes / 1440, "day"] : minutes % 60 === 0 ? [minutes / 60, "hour"] : [minutes, "minute"];
+	return `${amount} ${unit}${amount === 1 ? "" : "s"}`;
+};
+
 const handleNotification = Effect.fnUntraced(function* (
 	session: AgentSession,
 	currentTurn: Ref.Ref<Option.Option<string>>,
@@ -201,6 +211,30 @@ const handleNotification = Effect.fnUntraced(function* (
 								}
 							: { status: "completed" },
 			});
+		}
+		case "thread/tokenUsage/updated": {
+			const { tokenUsage } = yield* decodeCodex(TokenUsageUpdated)(params);
+			return yield* session.emit({
+				type: "usage.updated",
+				contextTokens: tokenUsage.last.totalTokens,
+				contextWindow: tokenUsage.modelContextWindow,
+			});
+		}
+		case "account/rateLimits/updated": {
+			const { rateLimits } = yield* decodeCodex(RateLimitsUpdated)(params);
+			const reached = (rateLimits.rateLimitReachedType ?? null) !== null;
+			for (const window of [rateLimits.primary, rateLimits.secondary]) {
+				if (window === null) continue;
+				// Codex reports no warning level, so a window is either open or used up.
+				yield* session.emit({
+					type: "rateLimit.updated",
+					window: window.windowDurationMins === null ? "Usage limit" : describeWindow(window.windowDurationMins),
+					status: reached || window.usedPercent >= 100 ? "rejected" : "allowed",
+					usedPercent: window.usedPercent,
+					resetsAt: window.resetsAt === null ? null : epochSecondsToIso(window.resetsAt),
+				});
+			}
+			return;
 		}
 		case "error": {
 			const { error, willRetry } = yield* decodeCodex(ErrorNotification)(params);

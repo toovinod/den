@@ -55,6 +55,43 @@ const runTurn = async (
 		});
 		return completeTurn("completed");
 	}
+	if (text.includes("usage")) {
+		notify("thread/tokenUsage/updated", {
+			threadId,
+			turnId,
+			tokenUsage: {
+				total: {
+					totalTokens: 9000,
+					inputTokens: 0,
+					cachedInputTokens: 0,
+					cacheWriteInputTokens: 0,
+					outputTokens: 0,
+					reasoningOutputTokens: 0,
+				},
+				last: {
+					totalTokens: 1200,
+					inputTokens: 0,
+					cachedInputTokens: 0,
+					cacheWriteInputTokens: 0,
+					outputTokens: 0,
+					reasoningOutputTokens: 0,
+				},
+				modelContextWindow: 272000,
+			},
+		});
+		notify("account/rateLimits/updated", {
+			rateLimits: {
+				limitId: null,
+				limitName: null,
+				primary: { usedPercent: 42, windowDurationMins: 300, resetsAt: 1700000000 },
+				secondary: { usedPercent: 100, windowDurationMins: 10080, resetsAt: null },
+				credits: null,
+				planType: null,
+				rateLimitReachedType: null,
+			},
+		});
+		return completeTurn("completed");
+	}
 	if (text.includes("settings")) {
 		notify("item/completed", {
 			item: { type: "agentMessage", id: "msg-1", text: `${params.model}/${params.effort}` },

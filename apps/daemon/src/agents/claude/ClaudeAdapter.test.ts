@@ -72,6 +72,39 @@ const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 						parent_tool_use_id: null,
 						message: { id: "msg_1", content: [{ type: "text", text: "Hi" }] },
 					};
+					if (text.includes("usage")) {
+						yield {
+							type: "assistant",
+							parent_tool_use_id: null,
+							message: {
+								id: "msg_2",
+								model: "claude-opus-5-5",
+								content: [],
+								usage: {
+									input_tokens: 10,
+									output_tokens: 5,
+									cache_creation_input_tokens: 100,
+									cache_read_input_tokens: 1000,
+								},
+							},
+						};
+						yield {
+							type: "rate_limit_event",
+							rate_limit_info: {
+								status: "allowed_warning",
+								resetsAt: 1700000000,
+								rateLimitType: "five_hour",
+								utilization: 0.8,
+							},
+						};
+						yield {
+							type: "result",
+							subtype: "success",
+							uuid: `result-${turn}`,
+							modelUsage: { "claude-opus-5-5": { contextWindow: 200000 } },
+						};
+						continue;
+					}
 					if (text.includes("approve")) {
 						const input = { command: "bun test" };
 						yield {
@@ -364,6 +397,25 @@ describe("sessionAllowRules", () => {
 		expect(prompts.at(-1)?.message.content).toEqual([
 			{ type: "image", source: { type: "base64", media_type: "image/png", data: "aGk=" } },
 			{ type: "text", text: "what is this" },
+		]);
+	});
+
+	test("reports context usage at the end of a turn and plan limits as they arrive", async () => {
+		const events = await runSession((handle) =>
+			Effect.gen(function* () {
+				yield* handle.sendMessage(userMessage("usage"));
+				return yield* takeUntil(handle, "turn.completed");
+			}),
+		);
+		expect(events.filter((event) => event.type === "usage.updated" || event.type === "rateLimit.updated")).toEqual([
+			{
+				type: "rateLimit.updated",
+				window: "5 hours",
+				status: "warning",
+				usedPercent: 80,
+				resetsAt: "2023-11-14T22:13:20.000Z",
+			},
+			{ type: "usage.updated", contextTokens: 1115, contextWindow: 200000 },
 		]);
 	});
 });

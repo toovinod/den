@@ -224,4 +224,24 @@ describe("CodexAdapter", () => {
 		const reply = events.find((event) => event.type === "message.completed");
 		expect(reply).toMatchObject({ text: JSON.stringify([{ type: "localImage", path: "/data/image-1" }]) });
 	});
+
+	test("reports context usage and plan limits with readable windows", async () => {
+		const events = await runSession((handle) =>
+			Effect.gen(function* () {
+				yield* handle.sendMessage(userMessage("usage"));
+				return yield* takeUntil(handle, "turn.completed");
+			}),
+		);
+		expect(events.filter((event) => event.type === "usage.updated" || event.type === "rateLimit.updated")).toEqual([
+			{ type: "usage.updated", contextTokens: 1200, contextWindow: 272000 },
+			{
+				type: "rateLimit.updated",
+				window: "5 hours",
+				status: "allowed",
+				usedPercent: 42,
+				resetsAt: "2023-11-14T22:13:20.000Z",
+			},
+			{ type: "rateLimit.updated", window: "7 days", status: "rejected", usedPercent: 100, resetsAt: null },
+		]);
+	});
 });

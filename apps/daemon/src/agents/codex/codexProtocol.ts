@@ -99,6 +99,29 @@ export const TurnCompleted = Schema.Struct({
 	}),
 });
 
+export const TokenUsageUpdated = Schema.Struct({
+	tokenUsage: Schema.Struct({
+		last: Schema.Struct({ totalTokens: Schema.Int }),
+		modelContextWindow: Schema.NullOr(Schema.Int),
+	}),
+});
+
+const RateLimitWindow = Schema.NullOr(
+	Schema.Struct({
+		usedPercent: Schema.Number,
+		windowDurationMins: Schema.NullOr(Schema.Number),
+		resetsAt: Schema.NullOr(Schema.Number),
+	}),
+);
+
+export const RateLimitsUpdated = Schema.Struct({
+	rateLimits: Schema.Struct({
+		primary: RateLimitWindow,
+		secondary: RateLimitWindow,
+		rateLimitReachedType: Schema.optionalKey(Schema.NullOr(Schema.String)),
+	}),
+});
+
 export const ErrorNotification = Schema.Struct({
 	error: Schema.Struct({ message: Schema.String }),
 	willRetry: Schema.Boolean,
