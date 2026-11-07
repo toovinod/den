@@ -132,7 +132,8 @@ Follow Effect's own guide, [`LLMS.md`](https://github.com/Effect-TS/effect/blob/
 - Neon holds what is shared: users, orgs, members, invitations and cloud features.
 - Never send local code, chats or terminal output to Neon.
 - Secrets (API keys, auth tokens) live in the OS keychain. Never in a database, a log or a committed file.
-- We use Drizzle, not `effect/sql`. Each database is a `Context.Service` whose methods wrap Drizzle calls in `Effect.tryPromise` and map failures to tagged errors.
+- We use Drizzle, not `effect/sql`, through its official Effect drivers: `drizzle-orm/effect-sqlite-bun` locally and `drizzle-orm/effect-postgres` for Neon.
+- Each database is a `Context.Service`. Its methods run Drizzle queries as effects and map driver failures to tagged errors. Never wrap a Drizzle promise in `Effect.tryPromise`.
 - Change schemas only through Drizzle migrations. Never edit a migration that has been applied.
 - Wrap multi-row writes in a transaction at the isolation level the invariant needs.
 - Cache only what is measured to be slow. Partition or shard only when the data demands it.
