@@ -129,6 +129,19 @@
         "typescript": "7.0.2",
       },
     },
+    "packages/import-order": {
+      "name": "@repo/import-order",
+      "version": "0.0.0",
+      "dependencies": {
+        "@effect/platform-bun": "4.1.2",
+        "effect": "4.1.2",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "*",
+        "@types/bun": "1.4.4",
+        "typescript": "7.0.2",
+      },
+    },
     "packages/typescript-config": {
       "name": "@repo/typescript-config",
       "version": "0.0.0",
@@ -403,6 +416,8 @@
     "@repo/db-cloud": ["@repo/db-cloud@workspace:packages/db-cloud"],
 
     "@repo/email": ["@repo/email@workspace:packages/email"],
+
+    "@repo/import-order": ["@repo/import-order@workspace:packages/import-order"],
 
     "@repo/typescript-config": ["@repo/typescript-config@workspace:packages/typescript-config"],
 

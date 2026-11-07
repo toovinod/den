@@ -60,6 +60,7 @@ Look the version up on the registry when adding or upgrading, never from memory,
 - Use string literal unions and `as const` objects, not `enum`.
 - Use `satisfies` to check config objects without widening them.
 - Never loosen compiler settings to silence an error. Fix the type.
+- Order imports from the longest line to the shortest. `bun run format` does it, and `bun run lint` fails when the order is wrong.
 
 ## Effect
 

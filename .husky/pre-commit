@@ -1,2 +1,3 @@
 bun x biome check --staged --no-errors-on-unmatched
+bun packages/import-order/src/main.ts
 bun run check-types
