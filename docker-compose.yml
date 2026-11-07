@@ -1,0 +1,21 @@
+# Local Postgres for contributors. Production and previews use Neon.
+# Keep the major version equal to the Neon project's.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: swarm
+      POSTGRES_PASSWORD: swarm
+      POSTGRES_DB: swarm
+    ports:
+      - "5432:5432"
+    volumes:
+      - swarm-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U swarm -d swarm"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  swarm-postgres:

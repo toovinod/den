@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "bun --watch src/main.ts",
+		"dev": "bun run --cwd ../../packages/db-cloud db:migrate && bun --env-file=../../.env --watch src/main.ts",
 		"check-types": "bun --bun tsc --noEmit",
 		"test": "bun test"
 	},

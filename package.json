@@ -8,7 +8,11 @@
 		"lint": "biome check .",
 		"format": "biome check --write .",
 		"check-types": "turbo run check-types",
-		"prepare": "husky"
+		"prepare": "husky",
+		"setup": "bun install && bun run db:up && bun run db:migrate",
+		"db:up": "docker compose up -d --wait",
+		"db:down": "docker compose down",
+		"db:migrate": "bun run --cwd packages/db-cloud db:migrate"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.6",
