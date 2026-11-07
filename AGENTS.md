@@ -17,6 +17,8 @@ Architecture decisions will live in `docs/architecture.md`.
 ## Stack
 
 Do not swap any of these without a discussion first.
+Always use the latest stable release of every tool and dependency.
+Look the version up on the registry when adding or upgrading, never from memory, and use beta, rc or canary releases only when agreed.
 
 | Concern                                  | Choice                                                                    |
 | ---------------------------------------- | ------------------------------------------------------------------------- |
