@@ -1,29 +1,31 @@
 {
-  "name": "swarm",
-  "private": true,
-  "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types"
-  },
-  "devDependencies": {
-    "prettier": "3.9.6",
-    "turbo": "^2.11.10",
-    "typescript": "7.0.2"
-  },
-  "engines": {
-    "node": ">=24"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "bun",
-      "version": "1.4.4"
-    }
-  },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ]
+	"name": "swarm",
+	"private": true,
+	"scripts": {
+		"build": "turbo run build",
+		"dev": "turbo run dev",
+		"lint": "biome check .",
+		"format": "biome check --write .",
+		"check-types": "turbo run check-types",
+		"prepare": "husky"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.6.6",
+		"husky": "9.1.7",
+		"turbo": "^2.11.10",
+		"typescript": "7.0.2"
+	},
+	"engines": {
+		"node": ">=24"
+	},
+	"devEngines": {
+		"packageManager": {
+			"name": "bun",
+			"version": "1.4.4"
+		}
+	},
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	]
 }
