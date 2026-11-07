@@ -1,4 +1,6 @@
+import { TrackedChildProcessSpawner } from "../processes/TrackedChildProcessSpawner.ts";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
+import { ProcessRegistry } from "../processes/ProcessRegistry.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
 import { BunServices } from "@effect/platform-bun";
@@ -7,8 +9,11 @@ import { Layer } from "effect";
 
 // The services behind the RPC handlers. Opening the database runs pending migrations,
 // and starting WorkspaceService recovers setup scripts cut off by a restart.
+// Every child they spawn goes through the tracked spawner.
 export const DaemonServices = WorkspaceService.layer.pipe(
 	Layer.provideMerge(ProjectService.layer),
+	Layer.provide(TrackedChildProcessSpawner),
+	Layer.provideMerge(ProcessRegistry.layer),
 	Layer.provideMerge(LocalDatabase.layer),
 	Layer.provide([BunServices.layer, SecureRandom.layerWebCrypto]),
 );

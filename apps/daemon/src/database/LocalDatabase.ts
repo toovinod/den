@@ -26,7 +26,7 @@ export class LocalDatabaseError extends Schema.TaggedError<LocalDatabaseError>()
 export const DATABASE_FILE_NAME = "swarm.db";
 
 export const PRIVATE_DIRECTORY_MODE = 0o700;
-const PRIVATE_FILE_MODE = 0o600;
+export const PRIVATE_FILE_MODE = 0o600;
 
 // SQLite creates the -wal and -shm files with the process umask; only the owner may read them.
 const restrictDatabaseFiles = Effect.gen(function* () {

@@ -1,8 +1,8 @@
+import { Effect, FileSystem, Layer, Schedule, type Scope } from "effect";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import type { ProjectService } from "../projects/ProjectService.ts";
 import type { LocalDatabase } from "../database/LocalDatabase.ts";
 import { DaemonServices } from "../server/DaemonServices.ts";
-import { Effect, FileSystem, Layer, Schedule } from "effect";
 import { testDaemonConfig } from "./testDaemonConfig.ts";
 import { BunServices } from "@effect/platform-bun";
 import { join } from "node:path";
@@ -14,7 +14,9 @@ export const withServices =
 	<A, E>(program: Effect.Effect<A, E, Services>) =>
 		program.pipe(Effect.provide(DaemonServices.pipe(Layer.provide(testDaemonConfig(dataDir)))));
 
-export const runInTempDir = <A, E>(program: (tempDir: string) => Effect.Effect<A, E, BunServices.BunServices>) =>
+export const runInTempDir = <A, E>(
+	program: (tempDir: string) => Effect.Effect<A, E, BunServices.BunServices | Scope.Scope>,
+) =>
 	Effect.gen(function* () {
 		const fs = yield* FileSystem.FileSystem;
 		return yield* program(yield* fs.makeTempDirectoryScoped());
