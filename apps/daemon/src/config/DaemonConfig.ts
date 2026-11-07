@@ -2,10 +2,7 @@ import { Config, Context, Effect, Layer, Option, Redacted, Schema, Stdio, Stream
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export class DaemonTokenMissingError extends Schema.TaggedError<DaemonTokenMissingError>()(
-	"DaemonTokenMissingError",
-	{},
-) {
+class DaemonTokenMissingError extends Schema.TaggedError<DaemonTokenMissingError>()("DaemonTokenMissingError", {}) {
 	override get message() {
 		return "swarmd reads its token from the first line of stdin. Start it from the Swarm app.";
 	}

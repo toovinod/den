@@ -37,7 +37,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 
-export const CODEX_VERSION = codexVersionFile.trim();
+const CODEX_VERSION = codexVersionFile.trim();
 
 // Releases bundle a pinned codex binary and point this at it.
 export const CodexAdapterConfig = Context.Reference<{

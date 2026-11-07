@@ -17,6 +17,8 @@ export class AgentSession extends Schema.Class<AgentSession>("AgentSession")({
 	model: Schema.String,
 	nativeSessionId: Schema.NullOr(Schema.String),
 	authMode: AgentAuthMode,
+	// Effort names differ per agent and model, so they come from AgentModel.efforts.
+	effort: Schema.NullOr(Schema.String),
 	status: AgentSessionStatus,
 	title: Schema.NullOr(Schema.String),
 	createdAt: Schema.String,
@@ -26,6 +28,11 @@ export class AgentSession extends Schema.Class<AgentSession>("AgentSession")({
 export const AgentModel = Schema.Struct({
 	id: Schema.String,
 	label: Schema.String,
+	description: Schema.String,
+	efforts: Schema.Array(Schema.String),
+	defaultEffort: Schema.NullOr(Schema.String),
+	contextWindow: Schema.NullOr(Schema.Int),
+	supportsImages: Schema.Boolean,
 });
 export type AgentModel = typeof AgentModel.Type;
 
@@ -52,6 +59,9 @@ export class AgentInfo extends Schema.Class<AgentInfo>("AgentInfo")({
 	kind: AgentKind,
 	availability: AgentAvailability,
 	capabilities: AgentCapabilities,
+	// The modes the user may pick. Claude offers only apiKey until Anthropic approves subscription use (architecture 2.1).
+	authModes: Schema.Array(AgentAuthMode),
+	authMode: AgentAuthMode,
 	models: Schema.Array(AgentModel),
 	defaultModel: Schema.String,
 }) {}
@@ -119,5 +129,37 @@ export class ResubscribeRequiredError extends Schema.TaggedError<ResubscribeRequ
 ) {
 	override get message() {
 		return "The chat fell behind and is reloading.";
+	}
+}
+
+export const ImageMediaType = Schema.Literals(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+export type ImageMediaType = typeof ImageMediaType.Type;
+
+// 5 MB of image data as base64.
+export const MAX_IMAGE_BASE64_LENGTH = 7_000_000;
+export const MAX_IMAGES_PER_MESSAGE = 10;
+
+export const ImageData = Schema.Struct({
+	mediaType: ImageMediaType,
+	base64: Schema.String.check(Schema.isMaxLength(MAX_IMAGE_BASE64_LENGTH)),
+});
+export type ImageData = typeof ImageData.Type;
+
+export class AttachmentNotFoundError extends Schema.TaggedError<AttachmentNotFoundError>()("AttachmentNotFoundError", {
+	attachmentId: Schema.String,
+}) {
+	override get message() {
+		return "This image is no longer available.";
+	}
+}
+
+export class AuthModeNotAllowedError extends Schema.TaggedError<AuthModeNotAllowedError>()("AuthModeNotAllowedError", {
+	agent: AgentKind,
+	mode: AgentAuthMode,
+}) {
+	override get message() {
+		return this.agent === "claude"
+			? "Claude subscriptions cannot be used in other apps yet. Add an Anthropic API key instead."
+			: `Codex cannot use ${this.mode} sign-in here.`;
 	}
 }

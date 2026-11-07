@@ -56,3 +56,32 @@ export const sortImports = (source: string): string => {
 
 	return [...lines.slice(0, start), ...sortRuns(statements), ...lines.slice(end)].join("\n");
 };
+
+// `bun run lint` checks the order and `bun run format` fixes it, like Biome does for the rest.
+// Biome's force-ignored paths ("!!path") are generated files, so they are skipped here too.
+if (import.meta.main) {
+	const root = `${import.meta.dir}/..`;
+	const biome: { files: { includes: Array<string> } } = await Bun.file(`${root}/biome.json`).json();
+	const ignored = biome.files.includes.filter((pattern) => pattern.startsWith("!!")).map((pattern) => pattern.slice(2));
+	const listed = await Bun.$`git ls-files --cached --others --exclude-standard ${["*.ts", "*.tsx"]}`.cwd(root).text();
+	const files = listed
+		.split("\n")
+		.filter((file) => file !== "" && !ignored.some((path) => file === path || file.startsWith(`${path}/`)));
+	const write = Bun.argv.includes("--write");
+	const unsorted: Array<string> = [];
+	for (const file of files) {
+		const handle = Bun.file(`${root}/${file}`);
+		if (!(await handle.exists())) continue;
+		const source = await handle.text();
+		const sorted = sortImports(source);
+		if (sorted === source) continue;
+		if (write) await Bun.write(handle, sorted);
+		else unsorted.push(file);
+	}
+	if (unsorted.length > 0) {
+		console.error(
+			`Imports must go from the longest to the shortest. Run \`bun run format\` to fix:\n${unsorted.join("\n")}`,
+		);
+		process.exitCode = 1;
+	}
+}
