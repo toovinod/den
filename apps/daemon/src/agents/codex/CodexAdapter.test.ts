@@ -9,6 +9,7 @@ const fakeCodex = `${import.meta.dir}/fixtures/fakeCodex.ts`;
 const newSession: StartSessionInput = {
 	cwd: import.meta.dir,
 	model: "gpt-5",
+	trustProjectSettings: false,
 	auth: { mode: "subscription" },
 };
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type {
 	CanUseTool,
+	Options,
 	PermissionResult,
 	PermissionUpdate,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -8,12 +9,17 @@ import { BunServices } from "@effect/platform-bun";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
 import { Effect, Layer, Stream } from "effect";
 import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
-import { ClaudeAdapter, ClaudeAdapterConfig } from "./ClaudeAdapter.ts";
+import {
+	ClaudeAdapter,
+	ClaudeAdapterConfig,
+	sessionAllowRules,
+} from "./ClaudeAdapter.ts";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
 
 const newSession: StartSessionInput = {
 	cwd: "/repo",
 	model: "claude-opus-4-5",
+	trustProjectSettings: false,
 	auth: { mode: "subscription" },
 };
 
@@ -26,9 +32,13 @@ const bashSuggestion: PermissionUpdate = {
 
 // A scripted stand-in for the SDK's query(). "approve" in a message asks for a Bash
 // approval, and "session" adds a permission suggestion so allowForSession is offered.
+// Every options object the fake was started with, newest last.
+const startedWith: Array<Options> = [];
+
 const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 	ClaudeQuery.of({
 		start: ({ prompt, options }) => {
+			startedWith.push(options);
 			let resolveInterrupt = () => {};
 			let turn = 0;
 			async function* messages() {
@@ -301,5 +311,50 @@ describe("ClaudeAdapter", () => {
 			{ input: { ...newSession, resumeId: "claude-old" } },
 		);
 		expect(id).toBe("claude-old");
+	});
+
+	test("loads only user settings and the default mode for an untrusted project", async () => {
+		await runSession(() => Effect.void);
+		expect(startedWith.at(-1)?.settingSources).toEqual(["user"]);
+		expect(startedWith.at(-1)?.permissionMode).toBe("default");
+	});
+
+	test("loads project settings only when the project is trusted", async () => {
+		await runSession(() => Effect.void, {
+			input: { ...newSession, trustProjectSettings: true },
+		});
+		expect(startedWith.at(-1)?.settingSources).toEqual([
+			"user",
+			"project",
+			"local",
+		]);
+		expect(startedWith.at(-1)?.permissionMode).toBe("default");
+	});
+});
+
+describe("sessionAllowRules", () => {
+	test("keeps allow rules, forced to this session, and drops everything else", () => {
+		const rules = sessionAllowRules([
+			{ ...bashSuggestion, destination: "projectSettings" },
+			{ type: "setMode", mode: "bypassPermissions", destination: "session" },
+			{
+				type: "addDirectories",
+				directories: ["/"],
+				destination: "session",
+			},
+			{
+				type: "replaceRules",
+				rules: [{ toolName: "Bash" }],
+				behavior: "allow",
+				destination: "session",
+			},
+			{
+				type: "addRules",
+				rules: [{ toolName: "Bash" }],
+				behavior: "deny",
+				destination: "session",
+			},
+		]);
+		expect(rules).toEqual([{ ...bashSuggestion, destination: "session" }]);
 	});
 });

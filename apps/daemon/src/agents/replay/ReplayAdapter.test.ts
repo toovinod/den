@@ -12,6 +12,7 @@ const recording = Schema.decodeUnknownSync(Recording)(recordingJson);
 const input = {
 	cwd: "/repo",
 	model: "gpt-5",
+	trustProjectSettings: false,
 	auth: { mode: "subscription" },
 } as const;
 

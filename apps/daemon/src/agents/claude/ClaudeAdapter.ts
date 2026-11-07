@@ -118,6 +118,17 @@ const toToolCall = (name: string, input: unknown): ToolCall => {
 	return { kind: "other", name };
 };
 
+// "Allow for session" may only add allow rules for this session. Suggestions that switch
+// the permission mode, add directories, replace rules or write a settings file are dropped.
+export const sessionAllowRules = (
+	suggestions: ReadonlyArray<PermissionUpdate>,
+): ReadonlyArray<PermissionUpdate> =>
+	suggestions.flatMap((suggestion) =>
+		suggestion.type === "addRules" && suggestion.behavior === "allow"
+			? [{ ...suggestion, destination: "session" }]
+			: [],
+	);
+
 const toPermissionResult = (
 	outcome: ApprovalOutcome,
 	input: Record<string, unknown>,
@@ -308,7 +319,7 @@ export class ClaudeAdapter extends Context.Service<
 				const canUseTool: CanUseTool = (toolName, toolInput, request) =>
 					runPromise(
 						Effect.gen(function* () {
-							const suggestions = request.suggestions ?? [];
+							const suggestions = sessionAllowRules(request.suggestions ?? []);
 							const choices: ReadonlyArray<ApprovalDecision> =
 								suggestions.length > 0 && !request.suppressAlwaysAllowRule
 									? ["allowOnce", "allowForSession", "deny"]
@@ -335,6 +346,11 @@ export class ClaudeAdapter extends Context.Service<
 					model: input.model,
 					includePartialMessages: true,
 					canUseTool,
+					// Never inherit a mode such as bypassPermissions from a settings file.
+					permissionMode: "default",
+					settingSources: input.trustProjectSettings
+						? ["user", "project", "local"]
+						: ["user"],
 					...(input.resumeId === undefined ? {} : { resume: input.resumeId }),
 					...(executablePath === undefined
 						? {}

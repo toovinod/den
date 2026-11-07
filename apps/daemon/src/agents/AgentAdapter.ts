@@ -8,6 +8,9 @@ export const StartSessionInput = Schema.Struct({
 	cwd: Schema.String,
 	model: Schema.String,
 	resumeId: Schema.optionalKey(Schema.String),
+	// A repo's own agent settings can add hooks that run commands and allow rules that
+	// skip approvals, so they load only when the user has trusted the project.
+	trustProjectSettings: Schema.Boolean,
 	// Subscription mode uses the CLI's own login. An API key is passed to the child process
 	// as an environment variable and nowhere else.
 	auth: Schema.Union([
