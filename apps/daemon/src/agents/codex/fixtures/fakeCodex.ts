@@ -43,7 +43,15 @@ const ask = (id: number, method: string, params: object) =>
 		send({ id, method, params });
 	});
 
-const runTurn = async (text: string) => {
+const runTurn = async (text: string, params: { model?: string; effort?: string | null }) => {
+	if (text.includes("settings")) {
+		notify("item/completed", {
+			item: { type: "agentMessage", id: "msg-1", text: `${params.model}/${params.effort}` },
+			threadId,
+			turnId,
+		});
+		return completeTurn("completed");
+	}
 	if (text.includes("approve")) {
 		notify("item/started", { item: command, threadId, turnId });
 		const answer = await ask(100, "item/commandExecution/requestApproval", {
@@ -179,7 +187,7 @@ const serve = async () => {
 				break;
 			case "turn/start":
 				send({ id: message.id, result: { turn: { id: turnId } } });
-				void runTurn(message.params.input[0].text);
+				void runTurn(message.params.input[0].text, message.params);
 				break;
 			case "turn/interrupt":
 				send({ id: message.id, result: {} });

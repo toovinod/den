@@ -78,6 +78,7 @@ export const makeReplayAdapter = (recording: Recording): AgentAdapter => ({
 					yield* FiberHandle.run(playback, Effect.forEach(turn, play, { discard: true }));
 				}),
 			steerTurn: () => Effect.void,
+			updateSettings: () => Effect.void,
 			interruptTurn: Effect.gen(function* () {
 				yield* FiberHandle.clear(playback);
 				const index = (yield* Ref.get(nextTurn)) - 1;

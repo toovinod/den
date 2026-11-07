@@ -9,6 +9,7 @@ const fakeCodex = `${import.meta.dir}/fixtures/fakeCodex.ts`;
 const newSession: StartSessionInput = {
 	cwd: import.meta.dir,
 	model: "gpt-5",
+	effort: null,
 	trustProjectSettings: false,
 	auth: { mode: "subscription" },
 };
@@ -182,5 +183,19 @@ describe("CodexAdapter", () => {
 	test("reports a missing executable as not installed", async () => {
 		const error = await runWithCodex(Effect.flip(checkAuth), "/nonexistent/codex");
 		expect(error._tag).toBe("AgentNotInstalledError");
+	});
+
+	test("sends the current model and effort with every turn", async () => {
+		const texts = await runSession((handle) =>
+			Effect.gen(function* () {
+				yield* handle.sendMessage("settings");
+				const first = yield* takeUntil(handle, "turn.completed");
+				yield* handle.updateSettings({ model: "gpt-later", effort: "high" });
+				yield* handle.sendMessage("settings");
+				const second = yield* takeUntil(handle, "turn.completed");
+				return [...first, ...second].flatMap((event) => (event.type === "message.completed" ? [event.text] : []));
+			}),
+		);
+		expect(texts).toEqual(["gpt-5/null", "gpt-later/high"]);
 	});
 });

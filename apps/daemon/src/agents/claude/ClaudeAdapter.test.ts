@@ -10,6 +10,7 @@ import { Effect, Layer, Stream } from "effect";
 const newSession: StartSessionInput = {
 	cwd: "/repo",
 	model: "claude-opus-4-5",
+	effort: null,
 	trustProjectSettings: false,
 	auth: { mode: "subscription" },
 };
@@ -24,6 +25,7 @@ const bashSuggestion: PermissionUpdate = {
 // A scripted stand-in for the SDK's query(). "approve" in a message asks for a Bash
 // approval, and "session" adds a permission suggestion so allowForSession is offered.
 const startedWith: Array<Options> = [];
+const settingsChanges: Array<unknown> = [];
 
 const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 	ClaudeQuery.of({
@@ -113,6 +115,8 @@ const makeFakeQuery = (permissions: Array<PermissionResult>) =>
 			return {
 				messages: messages(),
 				interrupt: async () => resolveInterrupt(),
+				setModel: async (model) => void settingsChanges.push({ model }),
+				setEffort: async (effort) => void settingsChanges.push({ effort }),
 				close: () => {},
 			};
 		},
@@ -326,5 +330,13 @@ describe("sessionAllowRules", () => {
 			},
 		]);
 		expect(rules).toEqual([{ ...bashSuggestion, destination: "session" }]);
+	});
+
+	test("passes the effort at start and changes model and effort for later turns", async () => {
+		await runSession((handle) => handle.updateSettings({ model: "claude-haiku-5-5", effort: "low" }), {
+			input: { ...newSession, effort: "high" },
+		});
+		expect(startedWith.at(-1)?.effort).toBe("high");
+		expect(settingsChanges.slice(-2)).toEqual([{ model: "claude-haiku-5-5" }, { effort: "low" }]);
 	});
 });

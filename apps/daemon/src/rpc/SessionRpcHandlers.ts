@@ -32,7 +32,8 @@ export const SessionRpcHandlers = SessionRpcs.toLayer(
 			watchSessions: () => sessions.watch,
 			setAgentAuthMode: () => Effect.die("setAgentAuthMode is not implemented yet"),
 			startAgentLogin: () => Effect.die("startAgentLogin is not implemented yet"),
-			updateSessionSettings: () => Effect.die("updateSessionSettings is not implemented yet"),
+			updateSessionSettings: ({ sessionId, model, effort }) =>
+				sessions.updateSettings(sessionId, { model, effort }).pipe(orInternalError("change the model")),
 			getAttachment: () => Effect.die("getAttachment is not implemented yet"),
 		});
 	}),

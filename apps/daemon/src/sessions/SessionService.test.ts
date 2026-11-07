@@ -377,6 +377,42 @@ describe("SessionService", () => {
 		expect(result.approval._tag).toBe("ApprovalNotFoundError");
 	});
 
+	test("stores model and effort and hands changes to the running agent", async () => {
+		const replay = makeReplayAdapter(commandWithApproval);
+		const changes: Array<unknown> = [];
+		const inputs: Array<StartSessionInput> = [];
+		const codex: AgentAdapter = {
+			...replay,
+			startSession: (input) =>
+				Effect.map(replay.startSession(input), (handle) => {
+					inputs.push(input);
+					return { ...handle, updateSettings: (settings) => Effect.sync(() => void changes.push(settings)) };
+				}),
+		};
+		const updated = await runInTempDir((tempDir) =>
+			withServices(
+				join(tempDir, "data"),
+				testAgentServices({ claude: makeReplayAdapter({ ...commandWithApproval, kind: "claude" }), codex }),
+			)(
+				Effect.gen(function* () {
+					const sessions = yield* SessionService;
+					const workspace = yield* addWorkspace(tempDir);
+					const session = yield* sessions.create({
+						workspaceId: workspace.id,
+						agent: "codex",
+						model: "replay",
+						effort: "low",
+					});
+					yield* sessions.sendMessage(session.id, "run the tests", false);
+					return yield* sessions.updateSettings(session.id, { model: "other", effort: "high" });
+				}),
+			),
+		);
+		expect(inputs[0]).toMatchObject({ model: "replay", effort: "low" });
+		expect(changes).toEqual([{ model: "other", effort: "high" }]);
+		expect(updated).toMatchObject({ model: "other", effort: "high" });
+	});
+
 	test("Claude needs an API key before it starts", async () => {
 		const error = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {

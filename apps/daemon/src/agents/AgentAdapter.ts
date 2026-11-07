@@ -11,6 +11,8 @@ import { type Effect, Schema, type Scope, type Stream } from "effect";
 export const StartSessionInput = Schema.Struct({
 	cwd: Schema.String,
 	model: Schema.String,
+	// Effort names differ per agent. Adapters ignore one their agent does not know.
+	effort: Schema.NullOr(Schema.String),
 	resumeId: Schema.optionalKey(Schema.String),
 	// A repo's own agent settings can add hooks that run commands and allow rules that
 	// skip approvals, so they load only when the user has trusted the project.
@@ -69,6 +71,11 @@ type ApprovalError = AgentError | ApprovalNotFoundError | ApprovalChoiceError;
 
 export type AgentModels = Pick<AgentInfo, "models" | "defaultModel">;
 
+export interface SessionSettings {
+	readonly model: string;
+	readonly effort: string | null;
+}
+
 export interface AgentSessionHandle {
 	// Waits until the agent reports its id, which may only happen after the first message.
 	readonly nativeSessionId: Effect.Effect<string, AgentError>;
@@ -81,6 +88,8 @@ export interface AgentSessionHandle {
 	respondToApproval(requestId: string, decision: ApprovalDecision): Effect.Effect<void, ApprovalError>;
 	// Cancels pending approvals first, then stops the running turn.
 	readonly interrupt: Effect.Effect<void, AgentError>;
+	// Applies from the next turn.
+	updateSettings(settings: SessionSettings): Effect.Effect<void, AgentError>;
 }
 
 export interface AgentAdapter {

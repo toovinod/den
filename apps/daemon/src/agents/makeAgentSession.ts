@@ -1,5 +1,5 @@
+import { type AgentError, type AgentSessionHandle, ApprovalChoiceError, type SessionSettings } from "./AgentAdapter.ts";
 import { type AgentCapabilities, ApprovalNotFoundError, SessionBusyError } from "@repo/contracts/AgentSession";
-import { type AgentError, type AgentSessionHandle, ApprovalChoiceError } from "./AgentAdapter.ts";
 import type { AgentEvent, ApprovalDecision, ApprovalOutcome } from "@repo/contracts/AgentEvent";
 import { type Cause, Deferred, Effect, Option, Queue, Ref, type Scope, Stream } from "effect";
 
@@ -18,6 +18,7 @@ export interface TurnDriver {
 	startTurn(text: string): Effect.Effect<void, AgentError>;
 	steerTurn(text: string): Effect.Effect<void, AgentError>;
 	readonly interruptTurn: Effect.Effect<void, AgentError>;
+	updateSettings(settings: SessionSettings): Effect.Effect<void, AgentError>;
 }
 
 export interface AgentSession {
@@ -128,6 +129,7 @@ export const makeAgentSession = Effect.fnUntraced(function* (capabilities: Agent
 						yield* driver.interruptTurn;
 					}
 				}),
+				updateSettings: driver.updateSettings,
 			} satisfies AgentSessionHandle;
 		});
 

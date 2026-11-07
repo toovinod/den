@@ -43,11 +43,15 @@ const capabilities: AgentCapabilities = {
 
 // supportedModels() needs a running query, so the list is fixed here. The efforts are the SDK's
 // EffortLevel values, and the context window is only known from a turn's usage.
+const ClaudeEffort = Schema.Literals(["low", "medium", "high", "xhigh", "max"]);
+const decodeEffort = (effort: string | null) =>
+	effort === null ? Option.none() : Schema.decodeUnknownOption(ClaudeEffort)(effort);
+
 const claudeModel = (id: string, label: string): AgentModel => ({
 	id,
 	label,
 	description: "",
-	efforts: ["low", "medium", "high", "xhigh", "max"],
+	efforts: ClaudeEffort.literals,
 	defaultEffort: null,
 	contextWindow: null,
 	supportsImages: true,
@@ -317,6 +321,7 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 					// Never inherit a mode such as bypassPermissions from a settings file.
 					permissionMode: "default",
 					settingSources: input.trustProjectSettings ? ["user", "project", "local"] : ["user"],
+					...Option.match(decodeEffort(input.effort), { onNone: () => ({}), onSome: (effort) => ({ effort }) }),
 					...(input.resumeId === undefined ? {} : { resume: input.resumeId }),
 					...(executablePath === undefined ? {} : { pathToClaudeCodeExecutable: executablePath }),
 					...(input.auth.mode === "apiKey"
@@ -370,6 +375,14 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 				return yield* session.start({
 					startTurn: sendText,
 					steerTurn: sendText,
+					updateSettings: ({ model, effort }) =>
+						Effect.tryPromise({
+							try: async () => {
+								await run.setModel(model);
+								await run.setEffort(Option.getOrNull(decodeEffort(effort)));
+							},
+							catch: (cause) => new AgentProcessError({ message: "Could not change the model.", cause }),
+						}),
 					interruptTurn: Effect.gen(function* () {
 						yield* Ref.set(interrupting, true);
 						yield* Effect.tryPromise({

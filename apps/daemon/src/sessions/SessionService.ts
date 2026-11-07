@@ -11,6 +11,15 @@ import {
 	SessionLimitReachedError,
 	SessionNotFoundError,
 } from "@repo/contracts/AgentSession";
+import type {
+	AgentAdapter,
+	AgentAuthStatus,
+	AgentError,
+	AgentModels,
+	AgentSessionHandle,
+	SessionSettings,
+	StartSessionInput,
+} from "../agents/AgentAdapter.ts";
 import {
 	type Cause,
 	Context,
@@ -28,14 +37,6 @@ import {
 	Semaphore,
 	Stream,
 } from "effect";
-import type {
-	AgentAdapter,
-	AgentAuthStatus,
-	AgentError,
-	AgentModels,
-	AgentSessionHandle,
-	StartSessionInput,
-} from "../agents/AgentAdapter.ts";
 import { agentSession, project, sessionEvent, workspace } from "../database/schema.ts";
 import { AgentEvent, type ApprovalDecision } from "@repo/contracts/AgentEvent";
 import { WorkspaceNotFoundError } from "@repo/contracts/Workspace";
@@ -149,7 +150,7 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 
 		const updateSession = Effect.fnUntraced(function* (
 			sessionId: string,
-			patch: Partial<Pick<SessionRow, "status" | "nativeSessionId" | "authMode" | "title">>,
+			patch: Partial<Pick<SessionRow, "status" | "nativeSessionId" | "authMode" | "title" | "model" | "effort">>,
 		) {
 			const updatedAt = yield* nowIso;
 			const [row] = yield* database.query((db) =>
@@ -300,6 +301,7 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 				.startSession({
 					cwd: target.path,
 					model: row.model,
+					effort: row.effort,
 					trustProjectSettings: target.trusted,
 					auth,
 					...(row.nativeSessionId === null ? {} : { resumeId: row.nativeSessionId }),
@@ -461,6 +463,21 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 			return session;
 		});
 
+		const updateSettings = Effect.fn("SessionService.updateSettings")(function* (
+			sessionId: string,
+			settings: SessionSettings,
+		) {
+			const session = yield* updateSession(sessionId, settings);
+			if (session === undefined) {
+				return yield* new SessionNotFoundError({ sessionId });
+			}
+			const runtime = runtimes.get(sessionId);
+			if (runtime !== undefined) {
+				yield* runtime.handle.updateSettings(settings);
+			}
+			return session;
+		});
+
 		const historyPage = (sessionId: string, afterSequence: number) =>
 			database
 				.query((db) =>
@@ -617,6 +634,7 @@ export class SessionService extends Context.Service<SessionService>()("swarm/dae
 			create,
 			list,
 			rename,
+			updateSettings,
 			sendMessage,
 			respondToApproval,
 			interrupt,

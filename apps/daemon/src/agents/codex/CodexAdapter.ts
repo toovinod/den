@@ -18,6 +18,7 @@ import {
 	type AgentModels,
 	AgentProtocolError,
 	CodexVersionMismatchError,
+	type SessionSettings,
 	type StartSessionInput,
 } from "../AgentAdapter.ts";
 import { type CodexIncoming, type CodexRpcClient, METHOD_NOT_FOUND, makeCodexRpcClient } from "./codexRpcClient.ts";
@@ -326,6 +327,8 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 				yield* checkVersion(executable);
 				const session = yield* makeAgentSession(capabilities);
 				const currentTurn = yield* Ref.make(Option.none<string>());
+				// Sent with every turn, so a change applies from the next one.
+				const settings = yield* Ref.make<SessionSettings>({ model: input.model, effort: input.effort });
 				const client = yield* makeCodexRpcClient(
 					appServer(
 						executable,
@@ -370,9 +373,12 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 					startTurn: (text) =>
 						Effect.gen(function* () {
 							const threadId = yield* session.nativeSessionId;
+							const { model, effort } = yield* Ref.get(settings);
 							const { turn } = yield* client
 								.request("turn/start", {
 									threadId,
+									model,
+									effort,
 									input: textInput(text),
 								} satisfies TurnStartParams)
 								.pipe(Effect.flatMap(decodeCodex(TurnResponse)));
@@ -394,6 +400,7 @@ export class CodexAdapter extends Context.Service<CodexAdapter, AgentAdapter>()(
 								expectedTurnId: turnId.value,
 							} satisfies TurnSteerParams);
 						}),
+					updateSettings: (next) => Ref.set(settings, next),
 					interruptTurn: Effect.gen(function* () {
 						const threadId = yield* session.nativeSessionId;
 						const turnId = yield* Ref.get(currentTurn);
