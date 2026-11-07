@@ -387,13 +387,11 @@ export const updateSessionSettings = async (sessionId: string, model: string, ef
 	setState((current) => ({ sessions: { ...current.sessions, [sessionId]: saved ?? before } }));
 };
 
-// Closing a tab stops its agent. The chat stays in the sidebar.
+// Closing a tab only hides the chat. A running agent keeps working in the background, its chat stays in the
+// sidebar, and it notifies when it finishes or needs approval. The composer's stop button is what interrupts it.
 export const closeTab = (sessionId: string) => {
 	const session = state.sessions[sessionId];
 	if (session === undefined) return;
-	if (session.status === "running" || session.status === "awaitingApproval") {
-		void attempt(() => callDaemon((daemon) => daemon.stopSession({ sessionId })));
-	}
 	const remaining = workspaceTabs(state.sessions, state.closedTabs, session.workspaceId).filter(
 		(tab) => tab.id !== sessionId,
 	);
