@@ -6,6 +6,7 @@ import {
 	setAgentApiKey,
 	setAgentAuthMode,
 	startAgentLogin,
+	toast,
 	updateSettings,
 	useAppState,
 } from "../lib/store.ts";
@@ -13,7 +14,7 @@ import type { AgentAvailability, AgentInfo } from "@repo/contracts/AgentSession"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import type { Settings } from "../lib/settings.ts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@repo/ui/components/dialog";
-import { playChime } from "../lib/desktop.ts";
+import { openExternal, playChime } from "../lib/desktop.ts";
 import { Switch } from "@repo/ui/components/switch";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
@@ -138,7 +139,9 @@ const AgentAccount = ({ agent }: { readonly agent: AgentInfo }) => {
 							const started = await startAgentLogin(agent.kind);
 							if (started === null) return;
 							setLogin(started.authUrl);
-							window.open(started.authUrl, "_blank", "noreferrer");
+							openExternal(started.authUrl).catch(() =>
+								toast("Could not open the sign-in page. Open the link below instead."),
+							);
 						}}
 					>
 						Sign in with ChatGPT

@@ -332,10 +332,14 @@ const defaultChoice = () => {
 	return model === undefined ? null : { agent, model };
 };
 
-export const newChat = async (workspaceId = state.selectedWorkspaceId, agentKind?: AgentKind) => {
+// Returns the new chat's session id, or null after telling the user why none was created.
+export const newChat = async (
+	workspaceId = state.selectedWorkspaceId,
+	agentKind?: AgentKind,
+): Promise<string | null> => {
 	if (workspaceId === null) {
 		toast("Pick a workspace first.", "info");
-		return;
+		return null;
 	}
 	const choice = defaultChoice();
 	const agent = agentKind === undefined ? choice?.agent : state.agents.find((info) => info.kind === agentKind);
@@ -347,16 +351,17 @@ export const newChat = async (workspaceId = state.selectedWorkspaceId, agentKind
 				: agent.models.find((item) => item.id === agent.defaultModel);
 	if (agent === undefined || model === undefined) {
 		toast("No agent is available. Check Settings.", "info");
-		return;
+		return null;
 	}
 	const session = await attempt(() =>
 		callDaemon((daemon) =>
 			daemon.createSession({ workspaceId, agent: agent.kind, model: model.id, effort: model.defaultEffort }),
 		),
 	);
-	if (session === null) return;
+	if (session === null) return null;
 	setState((current) => ({ sessions: { ...current.sessions, [session.id]: session } }));
 	selectSession(session.id);
+	return session.id;
 };
 
 export const renameSession = async (sessionId: string, title: string) => {
@@ -416,6 +421,10 @@ export const respondToApproval = (sessionId: string, requestId: string, decision
 let stopChat: (() => void) | null = null;
 let pending: Array<SessionEvent> = [];
 let flushScheduled = false;
+// Bumped each time a chat stream starts or stops. Interrupting a stream is asynchronous, so a stopped stream can
+// still deliver events or end with an error. Checking its generation drops those instead of mixing them into the
+// next chat or resubscribing a chat that was closed.
+let chatGeneration = 0;
 
 // Deltas can arrive hundreds of times a second. Applying them once per frame keeps typing and scrolling smooth.
 const flush = () => {
@@ -428,8 +437,12 @@ const flush = () => {
 };
 
 const follow = (sessionId: string, afterSequence: number) => {
-	stopChat = followDaemon((daemon) => daemon.subscribeSession({ sessionId, afterSequence }), {
+	stopChat?.();
+	const generation = ++chatGeneration;
+	const isCurrent = () => generation === chatGeneration;
+	const stop = followDaemon((daemon) => daemon.subscribeSession({ sessionId, afterSequence }), {
 		onItem: (event) => {
+			if (!isCurrent()) return;
 			pending.push(event);
 			if (!flushScheduled) {
 				flushScheduled = true;
@@ -437,16 +450,20 @@ const follow = (sessionId: string, afterSequence: number) => {
 			}
 		},
 		onEnd: (error) => {
-			if (state.chat?.sessionId !== sessionId) return;
+			if (!isCurrent()) return;
 			flush();
 			const resume = () => {
-				if (state.chat?.sessionId === sessionId) follow(sessionId, state.chat.lastSequence);
+				if (isCurrent() && state.chat?.sessionId === sessionId) follow(sessionId, state.chat.lastSequence);
 			};
 			// Too far behind, or the socket dropped: pick up after the last event we hold, without clearing the chat.
 			if (errorTag(error) === "ResubscribeRequiredError") resume();
 			else if (error !== null && errorTag(error) !== "SessionNotFoundError") setTimeout(resume, 1000);
 		},
 	});
+	stopChat = () => {
+		if (isCurrent()) chatGeneration++;
+		stop();
+	};
 };
 
 const openChat = (sessionId: string) => {

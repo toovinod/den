@@ -54,13 +54,17 @@ export const emptyChat = (sessionId: string): ChatState => ({
 // Applies a batch of events with one copy of the item list, however many events arrive.
 export const applyEvents = (state: ChatState, events: ReadonlyArray<SessionEvent>): ChatState => {
 	const items = state.items.slice();
-	const positions = { ...state.positions };
+	// Copied only when a new item arrives. Most batches are deltas to a message that already has a position.
+	let positions = state.positions;
+	let ownPositions: Record<string, number> | null = null;
 	let { lastSequence, usage, rateLimit } = state;
 
 	const put = (item: ChatItem) => {
 		const at = positions[item.key];
 		if (at === undefined) {
-			positions[item.key] = items.length;
+			ownPositions ??= { ...positions };
+			ownPositions[item.key] = items.length;
+			positions = ownPositions;
 			items.push(item);
 		} else {
 			items[at] = item;

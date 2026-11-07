@@ -1,4 +1,5 @@
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
 import { isTauri } from "@tauri-apps/api/core";
 
@@ -8,6 +9,13 @@ export const isDesktop = () => isTauri();
 export const pickFolder = async (title: string) => {
 	const picked = await open({ directory: true, multiple: false, title });
 	return typeof picked === "string" ? picked : null;
+};
+
+// Links go to the system browser. Navigating the app's own window would hand the page, and the IPC bridge it
+// holds, to whatever site the link points at.
+export const openExternal = async (url: string) => {
+	if (isDesktop()) await openUrl(url);
+	else window.open(url, "_blank", "noreferrer");
 };
 
 let permission: Promise<boolean> | null = null;

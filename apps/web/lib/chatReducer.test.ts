@@ -69,3 +69,24 @@ describe("applyEvents", () => {
 		expect(state.rateLimit).toMatchObject({ status: "warning", usedPercent: 80 });
 	});
 });
+
+describe("applyEvents positions", () => {
+	test("reuses the positions map when a batch only updates existing items", () => {
+		nextSequence = 0;
+		const state = applyEvents(emptyChat("s"), [live({ type: "message.delta", itemId: "m1", text: "Hel" })]);
+		const next = applyEvents(state, [live({ type: "message.delta", itemId: "m1", text: "lo" })]);
+		expect(next.positions).toBe(state.positions);
+		expect(next.items[0]).toMatchObject({ text: "Hello" });
+	});
+
+	test("adds new items without changing the previous state's positions", () => {
+		nextSequence = 0;
+		const state = applyEvents(emptyChat("s"), [live({ type: "message.delta", itemId: "m1", text: "Hi" })]);
+		const next = applyEvents(state, [
+			stored({ type: "tool.started", itemId: "c1", tool: command }),
+			stored({ type: "tool.started", itemId: "c2", tool: command }),
+		]);
+		expect(state.positions).toEqual({ "message:m1": 0 });
+		expect(next.positions).toEqual({ "message:m1": 0, "tool:c1": 1, "tool:c2": 2 });
+	});
+});

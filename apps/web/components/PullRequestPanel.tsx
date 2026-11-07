@@ -37,6 +37,8 @@ import { Hint } from "./Hint.tsx";
 import { Switch } from "@repo/ui/components/switch";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
+import { feedbackMessage } from "../lib/feedbackMessage.ts";
+import { ExternalLink } from "./ExternalLink.tsx";
 import { useState } from "react";
 
 const MERGE_METHODS = ["squash", "merge", "rebase"] as const;
@@ -188,10 +190,10 @@ const PullRequestDetails = ({
 					)}
 					<div className="flex-1" />
 					<Button asChild variant="ghost" size="xs" className="text-muted-foreground">
-						<a href={pullRequest.url} target="_blank" rel="noreferrer">
+						<ExternalLink href={pullRequest.url}>
 							GitHub
 							<ExternalLinkIcon />
-						</a>
+						</ExternalLink>
 					</Button>
 				</div>
 				<p className="font-medium">{pullRequest.title}</p>
@@ -253,31 +255,15 @@ const Checks = ({ conversation }: { readonly conversation: PullRequestConversati
 						{check.url === null ? (
 							<span className="truncate">{check.name}</span>
 						) : (
-							<a href={check.url} target="_blank" rel="noreferrer" className="truncate hover:underline">
+							<ExternalLink href={check.url} className="truncate hover:underline">
 								{check.name}
-							</a>
+							</ExternalLink>
 						)}
 					</li>
 				))}
 			</ul>
 		</Section>
 	);
-
-// Review feedback as one message, so the agent can work through it.
-const feedbackMessage = (conversation: PullRequestConversation) => {
-	const lineComments = conversation.reviewComments.map(
-		(comment) =>
-			`- ${comment.path}${comment.line === null ? "" : `:${comment.line}`} (${comment.author}): ${comment.body}`,
-	);
-	const reviews = conversation.reviews
-		.filter((review) => review.body.trim() !== "")
-		.map((review) => `- ${review.author} (${review.state.toLowerCase().replace("_", " ")}): ${review.body}`);
-	return [
-		"Address this review feedback on the pull request.",
-		...(lineComments.length === 0 ? [] : ["", "Comments on the code:", ...lineComments]),
-		...(reviews.length === 0 ? [] : ["", "Reviews:", ...reviews]),
-	].join("\n");
-};
 
 const Conversation = ({
 	workspace,
@@ -315,12 +301,10 @@ const Conversation = ({
 
 	const sendToAgent = async () => {
 		const message = feedbackMessage(conversation);
-		if (sessionId === null) {
-			toast("Open a chat in this workspace first, then send the feedback.", "info");
-			await newChat(workspace.id);
-			return;
-		}
-		await sendMessage(sessionId, message, [], false).then(
+		// With no chat open here, start one so the click still delivers the feedback. newChat explains a failure.
+		const target = sessionId ?? (await newChat(workspace.id));
+		if (target === null) return;
+		await sendMessage(target, message, [], false).then(
 			() => toast("Sent the review feedback to the agent.", "info"),
 			(error: unknown) => toast(errorMessage(error)),
 		);

@@ -15,9 +15,11 @@ import type { ApprovalDecision, ApprovalOutcome, ToolCall } from "@repo/contract
 import { respondToApproval } from "../lib/store.ts";
 import type { ChatItem } from "../lib/chatReducer.ts";
 import { callDaemon } from "../lib/daemonRuntime.ts";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import { ExternalLink } from "./ExternalLink.tsx";
+import { Predicate } from "effect";
 import { Button } from "@repo/ui/components/button";
-import Markdown from "react-markdown";
+import Markdown, { type Components } from "react-markdown";
 import { cn } from "@repo/ui/lib/utils";
 
 const DECISION_LABELS: Record<ApprovalDecision, string> = {
@@ -52,11 +54,7 @@ export const ChatItemView = memo(({ item, sessionId }: { readonly item: ChatItem
 				</div>
 			);
 		case "assistant":
-			return (
-				<div className="prose prose-sm max-w-none text-foreground dark:prose-invert prose-p:my-2 prose-headings:my-2 prose-headings:text-sm prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-a:text-running prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-pre:my-2 prose-pre:border prose-pre:bg-sidebar prose-pre:text-foreground [&_pre_code]:bg-transparent [&_pre_code]:p-0 [overflow-wrap:anywhere]">
-					<Markdown>{item.text}</Markdown>
-				</div>
-			);
+			return <AssistantMessage text={item.text} streaming={item.streaming} />;
 		case "tool":
 			return <ToolCard item={item} />;
 		case "approval":
@@ -76,12 +74,77 @@ export const ChatItemView = memo(({ item, sessionId }: { readonly item: ChatItem
 	}
 });
 
-const Attachment = ({ sessionId, attachmentId }: { readonly sessionId: string; readonly attachmentId: string }) => {
-	const [src, setSrc] = useState<string | null>(null);
+const markdownComponents: Components = {
+	a: ({ href, children }) => <ExternalLink href={href}>{children}</ExternalLink>,
+	// A remote image would load as soon as it renders, so a prompt-injected agent could leak data through its URL.
+	img: ({ src, alt }) => (Predicate.isString(src) ? <ExternalLink href={src}>{alt || src}</ExternalLink> : null),
+};
+
+const MarkdownText = memo(({ text }: { readonly text: string }) => (
+	<Markdown components={markdownComponents}>{text}</Markdown>
+));
+
+// How often a streaming message is parsed again. Parsing the whole message on every frame is the slowest part
+// of streaming a long reply.
+const STREAMING_RENDER_MS = 150;
+
+const useThrottledText = (text: string) => {
+	const [shown, setShown] = useState(text);
+	const latest = useRef(text);
 	useEffect(() => {
+		latest.current = text;
+	});
+	// Keyed on what is shown rather than on the text, so new deltas do not keep pushing the timer back.
+	const behind = shown === text ? null : shown;
+	useEffect(() => {
+		if (behind === null) return;
+		const timer = setTimeout(() => setShown(latest.current), STREAMING_RENDER_MS);
+		return () => clearTimeout(timer);
+	}, [behind]);
+	return shown;
+};
+
+const AssistantMessage = ({ text, streaming }: { readonly text: string; readonly streaming: boolean }) => {
+	const throttled = useThrottledText(text);
+	return (
+		<div className="prose prose-sm max-w-none text-foreground dark:prose-invert prose-p:my-2 prose-headings:my-2 prose-headings:text-sm prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-a:text-running prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-pre:my-2 prose-pre:border prose-pre:bg-sidebar prose-pre:text-foreground [&_pre_code]:bg-transparent [&_pre_code]:p-0 [overflow-wrap:anywhere]">
+			<MarkdownText text={streaming ? throttled : text} />
+		</div>
+	);
+};
+
+// Rows unmount when they scroll out of view, so without this every scroll back downloads the image again.
+// Bounded because each image can be megabytes of base64.
+const ATTACHMENT_CACHE_SIZE = 20;
+const attachmentCache = new Map<string, string>();
+
+const cachedAttachment = (attachmentId: string) => {
+	const src = attachmentCache.get(attachmentId);
+	if (src !== undefined) {
+		// Re-inserting marks it as recently used, so the oldest entry is the first in the map.
+		attachmentCache.delete(attachmentId);
+		attachmentCache.set(attachmentId, src);
+	}
+	return src ?? null;
+};
+
+const cacheAttachment = (attachmentId: string, src: string) => {
+	attachmentCache.set(attachmentId, src);
+	const oldest = attachmentCache.keys().next().value;
+	if (attachmentCache.size > ATTACHMENT_CACHE_SIZE && oldest !== undefined) attachmentCache.delete(oldest);
+};
+
+const Attachment = ({ sessionId, attachmentId }: { readonly sessionId: string; readonly attachmentId: string }) => {
+	const [src, setSrc] = useState(() => cachedAttachment(attachmentId));
+	useEffect(() => {
+		if (attachmentCache.has(attachmentId)) return;
 		let live = true;
 		callDaemon((daemon) => daemon.getAttachment({ sessionId, attachmentId })).then(
-			(image) => live && setSrc(`data:${image.mediaType};base64,${image.base64}`),
+			(image) => {
+				const url = `data:${image.mediaType};base64,${image.base64}`;
+				cacheAttachment(attachmentId, url);
+				if (live) setSrc(url);
+			},
 			() => undefined,
 		);
 		return () => {

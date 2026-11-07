@@ -27,7 +27,7 @@ import { Hint } from "./Hint.tsx";
 import { StatusDot } from "./StatusDot.tsx";
 import { Button } from "@repo/ui/components/button";
 import { Composer } from "./Composer.tsx";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { cn } from "@repo/ui/lib/utils";
 
 export const ChatView = () => {
@@ -36,17 +36,22 @@ export const ChatView = () => {
 	const project = useAppState((current) =>
 		workspace === undefined ? undefined : current.projects[workspace.projectId],
 	);
-	const sessions = useAppState((current) => current.sessions);
-	const closedTabs = useAppState((current) => current.closedTabs);
-	const selectedSessionId = useAppState((current) => current.selectedSessionId);
-	const chat = useAppState((current) => current.chat);
-	const agents = useAppState((current) => current.agents);
-	const panelOpen = useAppState((current) => current.panel.open);
-	const tabs = useMemo(
-		() => (workspaceId === null ? [] : workspaceTabs(sessions, closedTabs, workspaceId)),
-		[sessions, closedTabs, workspaceId],
+	// The tab list as one string, so this view re-renders when tabs open, close or reorder, not when a session's
+	// status changes or the open chat streams. Each tab reads its own session.
+	const tabIds = useAppState((current) =>
+		workspaceId === null
+			? ""
+			: workspaceTabs(current.sessions, current.closedTabs, workspaceId)
+					.map((tab) => tab.id)
+					.join(" "),
 	);
-	const session = selectedSessionId === null ? undefined : sessions[selectedSessionId];
+	const selectedSessionId = useAppState((current) => current.selectedSessionId);
+	const session = useAppState((current) =>
+		selectedSessionId === null ? undefined : current.sessions[selectedSessionId],
+	);
+	const chatSessionId = useAppState((current) => current.chat?.sessionId ?? null);
+	const panelOpen = useAppState((current) => current.panel.open);
+	const tabs = useMemo(() => (tabIds === "" ? [] : tabIds.split(" ")), [tabIds]);
 
 	if (workspace === undefined || project === undefined) {
 		return <Welcome />;
@@ -56,8 +61,8 @@ export const ChatView = () => {
 		<section className="flex h-full min-w-0 flex-col bg-background">
 			<header className="flex h-10 shrink-0 items-center gap-1 border-b border-border px-2">
 				<div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" role="tablist" aria-label="Chats">
-					{tabs.map((tab) => (
-						<ChatTab key={tab.id} session={tab} selected={tab.id === selectedSessionId} />
+					{tabs.map((tabId) => (
+						<ChatTab key={tabId} sessionId={tabId} selected={tabId === selectedSessionId} />
 					))}
 					<NewChatMenu />
 				</div>
@@ -76,37 +81,44 @@ export const ChatView = () => {
 					</Button>
 				</Hint>
 			</header>
-			{session === undefined || chat === null || chat.sessionId !== session.id ? (
+			{session === undefined || chatSessionId !== session.id ? (
 				<EmptyWorkspace name={workspace.kind === "inPlace" ? project.name : workspace.name} />
 			) : (
-				<>
-					<ChatTimeline
-						chat={chat}
-						footer={
-							chat.items.length === 0 ? (
-								<p className="mx-auto max-w-3xl px-6 text-center text-muted-foreground">
-									{session.agent === "claude" ? "Claude Code" : "Codex"} works in {workspace.path}
-								</p>
-							) : session.status === "running" ? (
-								<p className="mx-auto max-w-3xl px-6 pb-3 text-xs text-muted-foreground">Working</p>
-							) : null
-						}
-					/>
-					<Composer
-						key={session.id}
-						session={session}
-						agent={agents.find((agent) => agent.kind === session.agent)}
-						chat={chat}
-					/>
-				</>
+				<OpenChat session={session} workspacePath={workspace.path} />
 			)}
 		</section>
 	);
 };
 
-const ChatTab = ({ session, selected }: { readonly session: AgentSession; readonly selected: boolean }) => {
-	const attention = useAppState((current) => current.attention[session.id]);
+// The only part of the view that re-renders on every streamed frame.
+const OpenChat = ({ session, workspacePath }: { readonly session: AgentSession; readonly workspacePath: string }) => {
+	const chat = useAppState((current) => current.chat);
+	const agent = useAppState((current) => current.agents.find((info) => info.kind === session.agent));
+	if (chat === null) return null;
+	return (
+		<>
+			<ChatTimeline
+				chat={chat}
+				footer={
+					chat.items.length === 0 ? (
+						<p className="mx-auto max-w-3xl px-6 text-center text-muted-foreground">
+							{session.agent === "claude" ? "Claude Code" : "Codex"} works in {workspacePath}
+						</p>
+					) : session.status === "running" ? (
+						<p className="mx-auto max-w-3xl px-6 pb-3 text-xs text-muted-foreground">Working</p>
+					) : null
+				}
+			/>
+			<Composer key={session.id} session={session} agent={agent} usage={chat.usage} rateLimit={chat.rateLimit} />
+		</>
+	);
+};
+
+const ChatTab = memo(({ sessionId, selected }: { readonly sessionId: string; readonly selected: boolean }) => {
+	const session = useAppState((current) => current.sessions[sessionId]);
+	const attention = useAppState((current) => current.attention[sessionId]);
 	const [editing, setEditing] = useState(false);
+	if (session === undefined) return null;
 	return (
 		<div
 			className={cn(
@@ -155,7 +167,7 @@ const ChatTab = ({ session, selected }: { readonly session: AgentSession; readon
 			</Button>
 		</div>
 	);
-};
+});
 
 const NewChatMenu = () => {
 	const agents = useAppState((current) => current.agents);
