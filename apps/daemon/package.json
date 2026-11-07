@@ -5,7 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"check-types": "bun --bun tsc --noEmit",
-		"test": "bun test"
+		"test": "bun test",
+		"generate:codex": "rm -rf src/agents/codex/generated && codex app-server generate-ts --out src/agents/codex/generated && codex --version | awk '{print $2}' > src/agents/codex/generated/CODEX_VERSION"
 	},
 	"devDependencies": {
 		"@repo/typescript-config": "*",
