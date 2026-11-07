@@ -16,7 +16,10 @@ export class GitCommandError extends Schema.TaggedError<GitCommandError>()("GitC
 export const runGit = Effect.fn("runGit")(
 	function* (cwd: string, args: ReadonlyArray<string>) {
 		const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-		const handle = yield* spawner.spawn(ChildProcess.make("git", args, { cwd }));
+		// Git must never wait for a password on a terminal nobody sees.
+		const handle = yield* spawner.spawn(
+			ChildProcess.make("git", args, { cwd, env: { GIT_TERMINAL_PROMPT: "0" }, extendEnv: true }),
+		);
 		const [stdout, stderr, exitCode] = yield* Effect.all(
 			[
 				Stream.mkString(Stream.decodeText(handle.stdout)),

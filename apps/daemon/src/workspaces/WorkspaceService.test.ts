@@ -1,11 +1,12 @@
 import { runInTempDir, runServiceTest, waitForScriptRun, withServices } from "../testing/runServiceTest.ts";
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
+import { Duration, Effect, Fiber, FileSystem, Stream } from "effect";
+import { TerminalService } from "../terminals/TerminalService.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
 import { scriptRun, workspace } from "../database/schema.ts";
 import { WorkspaceService } from "./WorkspaceService.ts";
-import { Duration, Effect, FileSystem } from "effect";
 import { describe, expect, test } from "bun:test";
 import { runGit } from "../git/runGit.ts";
 import { eq, sql } from "drizzle-orm";
@@ -406,5 +407,109 @@ describe("WorkspaceService", () => {
 			}),
 		);
 		expect(results.map((archived) => archived.status)).toEqual(["archived", "archived", "archived", "archived"]);
+	});
+
+	test("runs the run script, streams its output, and stops it", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const projects = yield* ProjectService;
+				const workspaces = yield* WorkspaceService;
+				const project = yield* addProject(tempDir);
+				yield* projects.updateScripts(project.id, { setupScript: null, runScript: "echo serving; sleep 30" });
+				const created = yield* workspaces.create({ kind: "inPlace", projectId: project.id });
+				const started = yield* workspaces.startRunScript(created.id);
+				const again = yield* workspaces.startRunScript(created.id);
+				const firstLine = yield* workspaces.followScriptRunOutput(started.id).pipe(Stream.take(1), Stream.runCollect);
+				// A follower that stays attached sees the stream end when the script stops.
+				const follower = yield* Effect.forkChild(Stream.runCollect(workspaces.followScriptRunOutput(started.id)));
+				yield* workspaces.stopRunScript(created.id);
+				return {
+					started,
+					again,
+					firstLine,
+					followed: yield* Fiber.join(follower),
+					runs: yield* workspaces.listScriptRuns(created.id),
+				};
+			}),
+		);
+		expect(result.again.id).toBe(result.started.id);
+		expect(result.firstLine).toEqual(["serving"]);
+		expect(result.followed).toEqual(["serving"]);
+		expect(result.runs).toMatchObject([{ kind: "run", status: "failed", lastError: "Stopped." }]);
+	});
+
+	test("a run script that exits records its exit code", async () => {
+		const run = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const projects = yield* ProjectService;
+				const workspaces = yield* WorkspaceService;
+				const project = yield* addProject(tempDir);
+				yield* projects.updateScripts(project.id, { setupScript: null, runScript: "exit 4" });
+				const created = yield* workspaces.create({ kind: "inPlace", projectId: project.id });
+				const started = yield* workspaces.startRunScript(created.id);
+				yield* Stream.runDrain(workspaces.followScriptRunOutput(started.id));
+				return yield* waitForScriptRun(created.id);
+			}),
+		);
+		expect(run).toMatchObject({
+			kind: "run",
+			status: "failed",
+			exitCode: 4,
+			lastError: "The run script exited with code 4.",
+		});
+	});
+
+	test("refuses to start a run script the project does not have", async () => {
+		const error = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const workspaces = yield* WorkspaceService;
+				const project = yield* addProject(tempDir);
+				const created = yield* workspaces.create({ kind: "inPlace", projectId: project.id });
+				return yield* Effect.flip(workspaces.startRunScript(created.id));
+			}),
+		);
+		expect(error._tag).toBe("RunScriptMissingError");
+	});
+
+	test("on startup, a run script cut off by a restart is stopped, not started again", async () => {
+		const runs = await runInTempDir((tempDir) =>
+			Effect.gen(function* () {
+				const dataDir = join(tempDir, "data");
+				const workspaceId = yield* withServices(dataDir)(
+					Effect.gen(function* () {
+						const projects = yield* ProjectService;
+						const project = yield* addProject(tempDir);
+						yield* projects.updateScripts(project.id, { setupScript: null, runScript: "sleep 30" });
+						const created = yield* Effect.flatMap(WorkspaceService, (workspaces) =>
+							workspaces.create({ kind: "inPlace", projectId: project.id }),
+						);
+						yield* Effect.flatMap(WorkspaceService, (workspaces) => workspaces.startRunScript(created.id));
+						return created.id;
+					}),
+				);
+				return yield* withServices(dataDir)(
+					Effect.flatMap(WorkspaceService, (workspaces) => workspaces.listScriptRuns(workspaceId)),
+				);
+			}),
+		);
+		expect(runs).toMatchObject([
+			{ kind: "run", status: "failed", lastError: "The daemon restarted, so the run script stopped." },
+		]);
+	});
+
+	test("archiving a workspace closes its terminals", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const terminals = yield* TerminalService;
+				const workspaces = yield* WorkspaceService;
+				const project = yield* addProject(tempDir);
+				const created = yield* workspaces.create({ kind: "worktree", projectId: project.id, name: "feature" });
+				yield* terminals.open(created.id, created.path, { cols: 80, rows: 24 });
+				const before = terminals.list(created.id).length;
+				yield* workspaces.archive(created.id, { force: false });
+				return { before, after: terminals.list(created.id).length };
+			}),
+		);
+		expect(result).toEqual({ before: 1, after: 0 });
 	});
 });

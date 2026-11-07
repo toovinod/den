@@ -1,6 +1,7 @@
 import {
 	BranchAlreadyExistsError,
 	Workspace,
+	WorkspaceArchivedError,
 	WorkspaceHasUnsavedWorkError,
 	WorkspaceName,
 	WorkspaceNotFoundError,
@@ -8,8 +9,8 @@ import {
 	WorktreeCreateError,
 	WorktreeRemoveError,
 } from "./Workspace.ts";
+import { RunScriptMissingError, ScriptRun, ScriptRunOutput } from "./ScriptRun.ts";
 import { DaemonInternalError } from "./DaemonInternalError.ts";
-import { ScriptRun, ScriptRunOutput } from "./ScriptRun.ts";
 import { ProjectNotFoundError } from "./Project.ts";
 import { Rpc, RpcGroup } from "effect/rpc";
 import { Schema } from "effect";
@@ -62,5 +63,27 @@ export class WorkspaceRpcs extends RpcGroup.make(
 	Rpc.make("getScriptRunOutput", {
 		payload: { scriptRunId: Schema.String },
 		success: ScriptRunOutput,
+	}),
+	// Starts the project's run script in the workspace, or returns the run already going.
+	Rpc.make("startRunScript", {
+		payload: { workspaceId: Schema.String },
+		success: ScriptRun,
+		error: Schema.Union([
+			WorkspaceNotFoundError,
+			WorkspaceArchivedError,
+			RunScriptMissingError,
+			ProjectNotFoundError,
+			DaemonInternalError,
+		]),
+	}),
+	Rpc.make("stopRunScript", {
+		payload: { workspaceId: Schema.String },
+		error: DaemonInternalError,
+	}),
+	// The kept output first, then new lines as the script prints them. Ends when the run ends.
+	Rpc.make("followScriptRunOutput", {
+		payload: { scriptRunId: Schema.String },
+		success: Schema.String,
+		stream: true,
 	}),
 ) {}

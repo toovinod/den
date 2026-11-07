@@ -3,7 +3,6 @@ import { Duration, Effect, Schedule, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
-import type { CappedOutput } from "./CappedOutput.ts";
 import { scriptRun } from "../database/schema.ts";
 import { nowIso } from "../database/nowIso.ts";
 import { and, eq } from "drizzle-orm";
@@ -85,14 +84,14 @@ export const applyScriptRunEvent = Effect.fn("applyScriptRunEvent")(function* (
 	}
 });
 
-const executeScript = Effect.fn("executeScript")(
-	function* (script: string, cwd: string, output: CappedOutput) {
+export const executeScript = Effect.fn("executeScript")(
+	function* (script: string, cwd: string, onLine: (line: string) => void) {
 		const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 		const handle = yield* spawner.spawn(ChildProcess.make(script, { cwd, shell: true }));
 		yield* handle.all.pipe(
 			Stream.decodeText(),
 			Stream.splitLines,
-			Stream.runForEach((line) => Effect.sync(() => output.append(line))),
+			Stream.runForEach((line) => Effect.sync(() => onLine(line))),
 		);
 		const exitCode = yield* handle.exitCode;
 		if (exitCode !== 0) {
@@ -109,13 +108,13 @@ export const runSetupScript = Effect.fn("runSetupScript")(
 		readonly scriptRunId: string;
 		readonly script: string;
 		readonly cwd: string;
-		readonly output: CappedOutput;
+		readonly onLine: (line: string) => void;
 	}) {
 		const settings = yield* SetupScriptSettings;
 
 		const attempt = Effect.gen(function* () {
 			yield* applyScriptRunEvent(run.scriptRunId, { _tag: "Started" });
-			const result = yield* executeScript(run.script, run.cwd, run.output).pipe(
+			const result = yield* executeScript(run.script, run.cwd, run.onLine).pipe(
 				Effect.timeoutOrElse({
 					duration: settings.timeout,
 					orElse: () =>

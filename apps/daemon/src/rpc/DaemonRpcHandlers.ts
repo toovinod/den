@@ -1,8 +1,11 @@
 import { DaemonHealth, HealthRpcs } from "@repo/contracts/DaemonRpcs";
 import packageJson from "../../package.json" with { type: "json" };
 import { WorkspaceRpcHandlers } from "./WorkspaceRpcHandlers.ts";
+import { TerminalRpcHandlers } from "./TerminalRpcHandlers.ts";
 import { ProjectRpcHandlers } from "./ProjectRpcHandlers.ts";
 import { SessionRpcHandlers } from "./SessionRpcHandlers.ts";
+import { FileRpcHandlers } from "./FileRpcHandlers.ts";
+import { GitRpcHandlers } from "./GitRpcHandlers.ts";
 import { Effect, Layer } from "effect";
 
 const HealthRpcHandlers = HealthRpcs.toLayer({
@@ -14,4 +17,7 @@ export const DaemonRpcHandlers = Layer.mergeAll(
 	ProjectRpcHandlers,
 	WorkspaceRpcHandlers,
 	SessionRpcHandlers,
+	TerminalRpcHandlers,
+	GitRpcHandlers,
+	FileRpcHandlers,
 );

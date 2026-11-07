@@ -14,6 +14,11 @@ export const WorkspaceRpcHandlers = WorkspaceRpcs.toLayer(
 			listScriptRuns: ({ workspaceId }) =>
 				workspaces.listScriptRuns(workspaceId).pipe(orInternalError("list script runs")),
 			getScriptRunOutput: ({ scriptRunId }) => Effect.succeed(workspaces.getScriptRunOutput(scriptRunId)),
+			startRunScript: ({ workspaceId }) =>
+				workspaces.startRunScript(workspaceId).pipe(orInternalError("start the run script")),
+			stopRunScript: ({ workspaceId }) =>
+				workspaces.stopRunScript(workspaceId).pipe(orInternalError("stop the run script")),
+			followScriptRunOutput: ({ scriptRunId }) => workspaces.followScriptRunOutput(scriptRunId),
 		});
 	}),
 );

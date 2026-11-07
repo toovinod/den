@@ -2,10 +2,13 @@ import {
 	NotAGitRepositoryError,
 	Project,
 	ProjectAlreadyAddedError,
+	ProjectCreateError,
+	ProjectFolderExistsError,
 	ProjectFolderNotFoundError,
 	ProjectHasActiveWorkspacesError,
 	ProjectNotFoundError,
 } from "@repo/contracts/Project";
+import { type GitCommandError, type GitSpawnError, runGit } from "../git/runGit.ts";
 import { detectDefaultBranch } from "./detectDefaultBranch.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
 import { Context, Effect, FileSystem, Layer } from "effect";
@@ -15,8 +18,7 @@ import type { SecureRandom } from "effect/crypto";
 import { nowIso } from "../database/nowIso.ts";
 import { newId } from "../database/newId.ts";
 import { and, asc, eq } from "drizzle-orm";
-import { runGit } from "../git/runGit.ts";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 
 const normalizeScript = (script: string | null) => script?.trim() || null;
 
@@ -126,7 +128,29 @@ export class ProjectService extends Context.Service<ProjectService>()("swarm/dae
 			return new Project(row);
 		});
 
-		return { get, add, list, remove, updateScripts, setTrust };
+		const create = Effect.fn("ProjectService.create")(function* (parentPath: string, name: string) {
+			if (!(yield* fs.exists(parentPath).pipe(Effect.orDie))) {
+				return yield* new ProjectFolderNotFoundError({ path: parentPath });
+			}
+			const path = join(parentPath, name);
+			if (yield* fs.exists(path).pipe(Effect.orDie)) {
+				return yield* new ProjectFolderExistsError({ path });
+			}
+			yield* fs.makeDirectory(path).pipe(Effect.orDie);
+			const giveUp = (cause: GitCommandError | GitSpawnError) =>
+				Effect.logError("Could not create a repository", cause).pipe(
+					// The folder is new and holds nothing of the user's, so it goes too.
+					Effect.andThen(fs.remove(path, { recursive: true }).pipe(Effect.ignore)),
+					Effect.andThen(Effect.fail(new ProjectCreateError({ path }))),
+				);
+			yield* Effect.gen(function* () {
+				yield* runGit(path, ["init", "--initial-branch=main"]);
+				yield* runGit(path, ["commit", "--allow-empty", "--message", "Initial commit"]);
+			}).pipe(Effect.provide(services), Effect.catchTags({ GitCommandError: giveUp, GitSpawnError: giveUp }));
+			return yield* add(path);
+		});
+
+		return { get, add, create, list, remove, updateScripts, setTrust };
 	}),
 }) {
 	static readonly layer = Layer.effect(ProjectService, ProjectService.make);

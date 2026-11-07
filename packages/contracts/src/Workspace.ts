@@ -82,6 +82,6 @@ export class WorkspaceArchivedError extends Schema.TaggedError<WorkspaceArchived
 	workspaceId: Schema.String,
 }) {
 	override get message() {
-		return "This workspace is archived, so its agents cannot run. Start a new workspace to keep working.";
+		return "This workspace is archived. Start a new workspace to keep working.";
 	}
 }

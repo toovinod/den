@@ -50,6 +50,7 @@ Look the version up on the registry when adding or upgrading, never from memory,
 - Package folders use kebab-case to match their npm name (`packages/db-local`), because npm names must be lowercase.
 - Framework-reserved files keep the framework's names: `page.tsx`, `layout.tsx`, `route.ts`.
 - Tests sit next to the code they test: `createWorktree.test.ts`.
+- Generated shadcn components in `packages/ui` keep shadcn's file names (`button.tsx`, `use-mobile.ts`). Our own composed components stay PascalCase in `apps/web`.
 
 ## TypeScript
 

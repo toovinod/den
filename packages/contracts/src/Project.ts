@@ -11,6 +11,9 @@ export class Project extends Schema.Class<Project>("Project")({
 	createdAt: Schema.String,
 }) {}
 
+// A new project's folder name. One path segment, so it can never climb out of the parent folder.
+export const ProjectFolderName = Schema.String.check(Schema.isPattern(/^(?!\.\.?$)[^/\\\0]{1,255}$/));
+
 export class ProjectFolderNotFoundError extends Schema.TaggedError<ProjectFolderNotFoundError>()(
 	"ProjectFolderNotFoundError",
 	{ path: Schema.String },
@@ -60,5 +63,22 @@ export class ProjectHasActiveWorkspacesError extends Schema.TaggedError<ProjectH
 ) {
 	override get message() {
 		return `This project has ${this.activeWorkspaces} active workspace(s). Archive them before removing the project.`;
+	}
+}
+
+export class ProjectFolderExistsError extends Schema.TaggedError<ProjectFolderExistsError>()(
+	"ProjectFolderExistsError",
+	{ path: Schema.String },
+) {
+	override get message() {
+		return `${this.path} already exists. Pick another name, or add the existing folder instead.`;
+	}
+}
+
+export class ProjectCreateError extends Schema.TaggedError<ProjectCreateError>()("ProjectCreateError", {
+	path: Schema.String,
+}) {
+	override get message() {
+		return `Swarm could not create a repository at ${this.path}. Set your name and email for commits (user.name and user.email), then try again.`;
 	}
 }

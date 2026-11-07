@@ -1,25 +1,29 @@
 import {
 	Workspace,
+	WorkspaceArchivedError,
 	WorkspaceHasUnsavedWorkError,
 	WorkspaceNotFoundError,
 	WorkspacePathInUseError,
 } from "@repo/contracts/Workspace";
+import { Context, Effect, FiberMap, FileSystem, Layer, PubSub, Semaphore, Stream } from "effect";
+import { RunScriptMissingError, ScriptRun, ScriptRunOutput } from "@repo/contracts/ScriptRun";
 import { discardWorktree, findUnsavedWork, removeWorktree } from "./removeWorktree.ts";
 import { LocalDatabase, PRIVATE_DIRECTORY_MODE } from "../database/LocalDatabase.ts";
-import { Context, Effect, FiberMap, FileSystem, Layer, Semaphore } from "effect";
 import { applyScriptRunEvent, runSetupScript } from "./runSetupScript.ts";
 import type { CreateWorkspaceInput } from "@repo/contracts/WorkspaceRpcs";
-import { ScriptRun, ScriptRunOutput } from "@repo/contracts/ScriptRun";
 import { project, scriptRun, workspace } from "../database/schema.ts";
+import { TerminalService } from "../terminals/TerminalService.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { SessionService } from "../sessions/SessionService.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
+import type { ScriptRunKind } from "@repo/contracts/ScriptRun";
 import type { ChildProcessSpawner } from "effect/process";
 import { DaemonConfig } from "../config/DaemonConfig.ts";
 import { createWorktree } from "./createWorktree.ts";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { SecureRandom } from "effect/crypto";
 import { CappedOutput } from "./CappedOutput.ts";
+import { runRunScript } from "./runRunScript.ts";
 import { nowIso } from "../database/nowIso.ts";
 import { newId } from "../database/newId.ts";
 import { basename, join } from "node:path";
@@ -27,8 +31,23 @@ import { runGit } from "../git/runGit.ts";
 
 type WorkspaceRow = typeof workspace.$inferSelect;
 type ScriptRunRow = typeof scriptRun.$inferInsert;
+type ScriptServices = LocalDatabase | ChildProcessSpawner.ChildProcessSpawner | SecureRandom.SecureRandom;
 
 const UNFINISHED = ["pending", "processing"] as const;
+
+// The kept tail of a run's output, plus live lines for clients following it.
+// A null line marks the end of the run.
+type LiveLine = { readonly index: number; readonly line: string | null };
+
+interface ScriptOutput {
+	readonly lines: CappedOutput;
+	readonly live: PubSub.PubSub<LiveLine>;
+	count: number;
+	finished: boolean;
+}
+
+// A slow follower loses old lines rather than growing the daemon's memory.
+const LIVE_LINES = 1000;
 
 export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm/daemon/workspaces/WorkspaceService", {
 	make: Effect.gen(function* () {
@@ -36,29 +55,55 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 		const database = yield* LocalDatabase;
 		const projects = yield* ProjectService;
 		const sessions = yield* SessionService;
+		const terminals = yield* TerminalService;
 		const fs = yield* FileSystem.FileSystem;
-		const services = yield* Effect.context<
-			LocalDatabase | ChildProcessSpawner.ChildProcessSpawner | SecureRandom.SecureRandom
-		>();
+		const services = yield* Effect.context<ScriptServices>();
 		// One fiber per running script, interrupted when its workspace is archived
 		// and when the daemon stops.
 		const runningScripts = yield* FiberMap.make<string>();
 		// Archiving runs git on the worktree folder, so two archives at once could both try to remove it.
 		const archiveLock = yield* Semaphore.make(1);
-		const outputs = new Map<string, CappedOutput>();
+		// Two quick clicks on Run must not start the run script twice.
+		const runScriptLock = yield* Semaphore.make(1);
+		const outputs = new Map<string, ScriptOutput>();
 
-		const startSetupScript = (scriptRunId: string, script: string, cwd: string) => {
-			const output = new CappedOutput();
+		const startScript = Effect.fn("WorkspaceService.startScript")(function* (
+			scriptRunId: string,
+			job: (onLine: (line: string) => void) => Effect.Effect<void, unknown, ScriptServices>,
+		) {
+			const output: ScriptOutput = {
+				lines: new CappedOutput(),
+				live: yield* PubSub.sliding<LiveLine>(LIVE_LINES),
+				count: 0,
+				finished: false,
+			};
 			outputs.set(scriptRunId, output);
-			return FiberMap.run(
+			const publish = (line: string | null) => {
+				output.count++;
+				PubSub.publishUnsafe(output.live, { index: output.count, line });
+			};
+			const onLine = (line: string) => {
+				output.lines.append(line);
+				publish(line);
+			};
+			return yield* FiberMap.run(
 				runningScripts,
 				scriptRunId,
-				runSetupScript({ scriptRunId, script, cwd, output }).pipe(
-					Effect.catch((error) => Effect.logError("Setup script job stopped", error)),
+				job(onLine).pipe(
+					Effect.catch((error) => Effect.logError("Script job stopped", error)),
+					Effect.ensuring(
+						Effect.sync(() => {
+							output.finished = true;
+							publish(null);
+						}),
+					),
 					Effect.provide(services),
 				),
 			);
-		};
+		});
+
+		const startSetupScript = (scriptRunId: string, script: string, cwd: string) =>
+			startScript(scriptRunId, (onLine) => runSetupScript({ scriptRunId, script, cwd, onLine }));
 
 		const insertWorkspace = (row: WorkspaceRow, setupRun: ScriptRunRow | null) =>
 			database.query((db) =>
@@ -190,20 +235,42 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 				)
 				.pipe(Effect.map((rows) => rows.map((row) => new Workspace(row))));
 
-		const cancelScripts = Effect.fn("WorkspaceService.cancelScripts")(function* (workspaceId: string, reason: string) {
-			// Agent processes run in the workspace folder, so they stop before it can be removed.
-			yield* sessions.archiveWorkspace(workspaceId);
+		const cancelScripts = Effect.fn("WorkspaceService.cancelScripts")(function* (
+			workspaceId: string,
+			reason: string,
+			kinds: ReadonlyArray<ScriptRunKind> = ["setup", "run"],
+		) {
 			const unfinished = yield* database.query((db) =>
 				db
 					.select({ id: scriptRun.id })
 					.from(scriptRun)
-					.where(and(eq(scriptRun.workspaceId, workspaceId), inArray(scriptRun.status, UNFINISHED))),
+					.where(
+						and(
+							eq(scriptRun.workspaceId, workspaceId),
+							inArray(scriptRun.status, UNFINISHED),
+							inArray(scriptRun.kind, kinds),
+						),
+					),
 			);
 			for (const run of unfinished) {
 				yield* FiberMap.remove(runningScripts, run.id);
-				yield* applyScriptRunEvent(run.id, { _tag: "Cancelled", reason });
+				yield* applyScriptRunEvent(run.id, { _tag: "Cancelled", reason }).pipe(
+					// The script finished on its own between the query and the interrupt.
+					Effect.catchTag("IllegalJobTransitionError", (error) =>
+						Effect.logDebug("Script run ended before it was cancelled", error),
+					),
+				);
 			}
 		}, Effect.provide(services));
+
+		// Agents, terminals and scripts all run in the workspace folder, so they stop before it can be
+		// removed. Only once archiving goes ahead: a refused archive leaves them running.
+		const stopWorkspaceProcesses = (workspaceId: string) =>
+			Effect.gen(function* () {
+				yield* sessions.archiveWorkspace(workspaceId);
+				yield* terminals.closeWorkspace(workspaceId);
+				yield* cancelScripts(workspaceId, "The workspace was archived.");
+			});
 
 		const archive = Effect.fn("WorkspaceService.archive")(
 			function* (workspaceId: string, options: { readonly force: boolean }) {
@@ -225,7 +292,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 								...unsaved,
 							});
 						}
-						yield* cancelScripts(workspaceId, "The workspace was archived.");
+						yield* stopWorkspaceProcesses(workspaceId);
 						yield* removeWorktree({
 							repositoryPath: owner.path,
 							worktreePath: current.path,
@@ -236,12 +303,12 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 						yield* Effect.logWarning("Worktree folder is missing, pruning it").pipe(
 							Effect.annotateLogs({ workspaceId, path: current.path }),
 						);
-						yield* cancelScripts(workspaceId, "The workspace was archived.");
+						yield* stopWorkspaceProcesses(workspaceId);
 						yield* runGit(owner.path, ["worktree", "prune"]);
 					}
 				} else {
 					// In place: the folder is the project itself, so nothing is removed.
-					yield* cancelScripts(workspaceId, "The workspace was archived.");
+					yield* stopWorkspaceProcesses(workspaceId);
 				}
 
 				const archivedAt = yield* nowIso;
@@ -269,27 +336,135 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 		const getScriptRunOutput = (scriptRunId: string) =>
 			new ScriptRunOutput({
 				scriptRunId,
-				output: outputs.get(scriptRunId)?.toString() ?? "",
+				output: outputs.get(scriptRunId)?.lines.toString() ?? "",
 			});
+
+		// The kept output as one chunk, then each new line, until the run ends.
+		const followScriptRunOutput = (scriptRunId: string): Stream.Stream<string> =>
+			Stream.unwrap(
+				Effect.gen(function* () {
+					const output = outputs.get(scriptRunId);
+					if (output === undefined) {
+						return Stream.empty;
+					}
+					// Subscribe before the snapshot, then skip the lines it already holds.
+					const subscription = yield* PubSub.subscribe(output.live);
+					const snapshotIndex = output.count;
+					const snapshot = output.lines.toString();
+					const kept = snapshot === "" ? Stream.empty : Stream.succeed(snapshot);
+					if (output.finished) {
+						return kept;
+					}
+					return Stream.concat(
+						kept,
+						Stream.fromSubscription(subscription).pipe(
+							Stream.filter((item) => item.index > snapshotIndex),
+							Stream.takeWhile((item) => item.line !== null),
+							Stream.map((item) => item.line ?? ""),
+						),
+					);
+				}),
+			);
+
+		const findRunningRunScript = (workspaceId: string) =>
+			database
+				.query((db) =>
+					db
+						.select()
+						.from(scriptRun)
+						.where(
+							and(
+								eq(scriptRun.workspaceId, workspaceId),
+								eq(scriptRun.kind, "run"),
+								inArray(scriptRun.status, UNFINISHED),
+							),
+						),
+				)
+				.pipe(Effect.map(([row]) => (row === undefined ? null : new ScriptRun(row))));
+
+		const startRunScript = Effect.fn("WorkspaceService.startRunScript")(
+			function* (workspaceId: string) {
+				const current = yield* get(workspaceId);
+				if (current.status === "archived") {
+					return yield* new WorkspaceArchivedError({ workspaceId });
+				}
+				const owner = yield* projects.get(current.projectId);
+				const script = owner.runScript;
+				if (script === null) {
+					return yield* new RunScriptMissingError({ projectId: owner.id });
+				}
+				const running = yield* findRunningRunScript(workspaceId);
+				if (running !== null) {
+					return running;
+				}
+				const now = yield* nowIso;
+				const scriptRunId = yield* newId;
+				yield* database.query((db) =>
+					db.insert(scriptRun).values({
+						id: scriptRunId,
+						workspaceId,
+						kind: "run",
+						status: "pending",
+						attempts: 0,
+						createdAt: now,
+						updatedAt: now,
+					}),
+				);
+				yield* startScript(scriptRunId, (onLine) => runRunScript({ scriptRunId, script, cwd: current.path, onLine }));
+				yield* Effect.logInfo("Started run script").pipe(Effect.annotateLogs({ workspaceId, scriptRunId }));
+				return new ScriptRun({
+					id: scriptRunId,
+					workspaceId,
+					kind: "run",
+					status: "pending",
+					attempts: 0,
+					lastError: null,
+					exitCode: null,
+					createdAt: now,
+					updatedAt: now,
+					startedAt: null,
+					finishedAt: null,
+				});
+			},
+			Semaphore.withPermit(runScriptLock),
+			Effect.provide(services),
+		);
+
+		const stopRunScript = (workspaceId: string) => cancelScripts(workspaceId, "Stopped.", ["run"]);
+
+		const setPullRequestUrl = Effect.fn("WorkspaceService.setPullRequestUrl")(function* (
+			workspaceId: string,
+			pullRequestUrl: string,
+		) {
+			yield* database.query((db) => db.update(workspace).set({ pullRequestUrl }).where(eq(workspace.id, workspaceId)));
+			return yield* get(workspaceId);
+		});
 
 		// Startup recovery: runs left in processing were cut off by a restart, which is a
 		// retryable failure. Then every pending run of an active workspace starts again.
 		const recoverScriptRuns = Effect.gen(function* () {
 			const { maxAttempts } = yield* SetupScriptSettings;
 			const cutOff = yield* database.query((db) =>
-				db.select({ id: scriptRun.id }).from(scriptRun).where(eq(scriptRun.status, "processing")),
+				db.select({ id: scriptRun.id, kind: scriptRun.kind }).from(scriptRun).where(eq(scriptRun.status, "processing")),
 			);
 			for (const run of cutOff) {
-				yield* applyScriptRunEvent(run.id, {
-					_tag: "FailedRetryably",
-					error: "The daemon restarted while the setup script was running.",
-					maxAttempts,
-				});
+				yield* applyScriptRunEvent(
+					run.id,
+					run.kind === "setup"
+						? {
+								_tag: "FailedRetryably",
+								error: "The daemon restarted while the setup script was running.",
+								maxAttempts,
+							}
+						: // The user starts run scripts, so a restart stops them instead of running them again.
+							{ _tag: "Cancelled", reason: "The daemon restarted, so the run script stopped." },
+				);
 			}
 			const pending = yield* database.query((db) =>
 				db
 					.select({
 						id: scriptRun.id,
+						kind: scriptRun.kind,
 						path: workspace.path,
 						workspaceStatus: workspace.status,
 						script: project.setupScript,
@@ -300,7 +475,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 					.where(eq(scriptRun.status, "pending")),
 			);
 			for (const run of pending) {
-				if (run.workspaceStatus === "active" && run.script !== null) {
+				if (run.kind === "setup" && run.workspaceStatus === "active" && run.script !== null) {
 					yield* startSetupScript(run.id, run.script, run.path);
 				} else {
 					yield* applyScriptRunEvent(run.id, {
@@ -320,7 +495,18 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("swarm
 		});
 		yield* recoverScriptRuns.pipe(Effect.provide(services));
 
-		return { create, get, list, archive, listScriptRuns, getScriptRunOutput };
+		return {
+			create,
+			get,
+			list,
+			archive,
+			listScriptRuns,
+			getScriptRunOutput,
+			followScriptRunOutput,
+			startRunScript,
+			stopRunScript,
+			setPullRequestUrl,
+		};
 	}),
 }) {
 	static readonly layer = Layer.effect(WorkspaceService, WorkspaceService.make);

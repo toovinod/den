@@ -1,4 +1,5 @@
 import { Effect, FileSystem, Layer, Schedule, type Scope } from "effect";
+import type { TerminalService } from "../terminals/TerminalService.ts";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import type { CredentialStore } from "../agents/CredentialStore.ts";
 import type { ProjectService } from "../projects/ProjectService.ts";
@@ -7,7 +8,9 @@ import type { LocalDatabase } from "../database/LocalDatabase.ts";
 import { testProcessRegistry } from "./testProcessRegistry.ts";
 import { DaemonServices } from "../server/DaemonServices.ts";
 import { testAgentServices } from "./testAgentServices.ts";
+import type { FileService } from "../files/FileService.ts";
 import { testDaemonConfig } from "./testDaemonConfig.ts";
+import type { GitService } from "../git/GitService.ts";
 import { BunServices } from "@effect/platform-bun";
 import { join } from "node:path";
 
@@ -17,6 +20,9 @@ export type Services =
 	| WorkspaceService
 	| SessionService
 	| CredentialStore
+	| TerminalService
+	| GitService
+	| FileService
 	| BunServices.BunServices;
 
 export const withServices =
