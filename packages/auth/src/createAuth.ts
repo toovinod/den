@@ -48,12 +48,20 @@ export const createAuth = ({
 		},
 		plugins: [
 			organization({
-				sendInvitationEmail: ({ id, email, organization, inviter }) =>
+				sendInvitationEmail: ({
+					id,
+					email,
+					organization,
+					inviter,
+					invitation,
+				}) =>
 					sendInvitation({
 						to: email,
 						organizationName: organization.name,
 						inviterName: inviter.user.name,
 						acceptUrl: `${config.webOrigin}/invite?id=${encodeURIComponent(id)}`,
+						// Resending an invitation moves its expiry, so a deliberate resend still gets through.
+						idempotencyKey: `invitation/${id}/${invitation.expiresAt.toISOString()}`,
 					}),
 				organizationHooks: membershipHooks(publishMembershipEvent),
 			}),

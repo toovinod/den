@@ -42,7 +42,11 @@ export class EmailService extends Context.Service<
 				function* (input: InvitationEmailInput) {
 					const message = invitationEmail(input);
 					const response = yield* Effect.tryPromise({
-						try: () => resend.emails.send({ from, ...message }),
+						try: () =>
+							resend.emails.send(
+								{ from, ...message },
+								{ idempotencyKey: input.idempotencyKey },
+							),
 						catch: (cause) =>
 							new EmailSendError({
 								message: "Could not reach Resend",

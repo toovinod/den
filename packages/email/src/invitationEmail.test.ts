@@ -27,6 +27,7 @@ describe("invitationEmail", () => {
 			organizationName: "Acme\nClick here",
 			inviterName: "Grace",
 			acceptUrl: "https://swarm.test/invite?id=abc",
+			idempotencyKey: "invitation/abc",
 		});
 		expect(email.subject).toBe("Join Acme Click here on Swarm");
 		expect(email.text).toContain("https://swarm.test/invite?id=abc");

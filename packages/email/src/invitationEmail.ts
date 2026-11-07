@@ -3,6 +3,8 @@ export interface InvitationEmailInput {
 	readonly organizationName: string;
 	readonly inviterName: string;
 	readonly acceptUrl: string;
+	// Resend drops a second send with the same key, so a retried request cannot email twice.
+	readonly idempotencyKey: string;
 }
 
 export interface EmailMessage {

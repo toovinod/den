@@ -11,6 +11,7 @@ describe("EmailService", () => {
 				organizationName: "Acme",
 				inviterName: "Grace",
 				acceptUrl: "https://swarm.test/invite/abc",
+				idempotencyKey: "invitation/abc",
 			});
 			return yield* Ref.get(yield* SentEmails);
 		}).pipe(Effect.provide(EmailServiceTest), Effect.runPromise);
