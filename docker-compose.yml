@@ -1,5 +1,5 @@
-# Local Postgres for contributors. Production and previews use Neon.
-# Keep the major version equal to the Neon project's.
+# Local services for contributors. Production uses Neon and a managed Redis.
+# Keep the Postgres major version equal to the Neon project's.
 services:
   postgres:
     image: postgres:17-alpine
@@ -17,5 +17,20 @@ services:
       timeout: 5s
       retries: 15
 
+  # BullMQ queues for the cloud worker.
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - swarm-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
 volumes:
   swarm-postgres:
+  swarm-redis:
