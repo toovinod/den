@@ -60,7 +60,7 @@ It never authenticates Claude or Codex, and Swarm never sends agent credentials 
 
 ### 3.1 Start-up
 
-1. Tauri generates a 32-byte token and spawns `swarmd` with `SWARM_DAEMON_TOKEN`.
+1. Tauri generates a 32-byte token, spawns `swarmd` and writes the token as the first line on its stdin. It never goes in the environment, which every agent, script and git process inherits.
 2. `swarmd` opens SQLite (WAL, foreign keys, 5 s busy timeout), runs embedded migrations, then recovers interrupted work (section 6).
 3. It binds `127.0.0.1` on a random port and prints `SWARM_DAEMON_READY <url>`.
 4. Tauri hands `{ url, token }` to the UI through the `daemon_connection` command.

@@ -41,11 +41,9 @@ fn generate_token() -> Result<String, getrandom::Error> {
 
 fn spawn_daemon(app: &tauri::App) -> Result<Daemon, Box<dyn std::error::Error>> {
   let token = generate_token()?;
-  let (mut events, child) = app
-    .shell()
-    .sidecar("swarmd")?
-    .env("SWARM_DAEMON_TOKEN", &token)
-    .spawn()?;
+  let (mut events, mut child) = app.shell().sidecar("swarmd")?.spawn()?;
+  // Through stdin, not the environment: agents, scripts and git inherit the daemon's environment.
+  child.write(format!("{token}\n").as_bytes())?;
   let (ready, connection) = watch::channel(None);
 
   tauri::async_runtime::spawn(async move {

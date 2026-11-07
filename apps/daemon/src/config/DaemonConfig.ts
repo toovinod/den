@@ -1,6 +1,42 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Config, Context, Effect, Layer, type Redacted } from "effect";
+import {
+	Config,
+	Context,
+	Effect,
+	Layer,
+	Option,
+	Redacted,
+	Schema,
+	Stdio,
+	Stream,
+} from "effect";
+
+export class DaemonTokenMissingError extends Schema.TaggedError<DaemonTokenMissingError>()(
+	"DaemonTokenMissingError",
+	{},
+) {
+	override get message() {
+		return "swarmd reads its token from the first line of stdin. Start it from the Swarm app.";
+	}
+}
+
+// The desktop shell writes the token on stdin rather than in the environment, because every
+// agent, script and git process the daemon starts inherits its environment.
+const readTokenFromStdin = Effect.gen(function* () {
+	const stdio = yield* Stdio.Stdio;
+	const firstLine = yield* stdio.stdin.pipe(
+		Stream.decodeText(),
+		Stream.splitLines,
+		Stream.runHead,
+		Effect.orDie,
+	);
+	const token = Option.getOrElse(firstLine, () => "").trim();
+	if (token === "") {
+		return yield* new DaemonTokenMissingError();
+	}
+	return Redacted.make(token);
+});
 
 export class DaemonConfig extends Context.Service<
 	DaemonConfig,
@@ -16,7 +52,7 @@ export class DaemonConfig extends Context.Service<
 			const port = yield* Config.Port("SWARM_DAEMON_PORT").pipe(
 				Config.withDefault(0),
 			);
-			const token = yield* Config.Redacted("SWARM_DAEMON_TOKEN");
+			const token = yield* readTokenFromStdin;
 			const dataDir = yield* Config.String("SWARM_DATA_DIR").pipe(
 				Config.withDefault(join(homedir(), ".swarm")),
 			);
