@@ -23,3 +23,11 @@ export class ScriptRunOutput extends Schema.Class<ScriptRunOutput>("ScriptRunOut
 	// The capped tail captured while this daemon was running. Empty after a restart.
 	output: Schema.String,
 }) {}
+
+export class RunScriptMissingError extends Schema.TaggedError<RunScriptMissingError>()("RunScriptMissingError", {
+	projectId: Schema.String,
+}) {
+	override get message() {
+		return "This project has no run script. Add one in the project settings.";
+	}
+}
