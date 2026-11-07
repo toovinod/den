@@ -1,5 +1,5 @@
+import { CODEX_VERSION, CodexAdapter, CodexAdapterConfig } from "./CodexAdapter.ts";
 import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
-import { CodexAdapter, CodexAdapterConfig } from "./CodexAdapter.ts";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
 import { BunServices } from "@effect/platform-bun";
 import { describe, expect, test } from "bun:test";
@@ -150,10 +150,16 @@ describe("CodexAdapter", () => {
 			_tag: "CodexVersionMismatchError",
 			actual: "0.0.1",
 		});
+		expect(error.message).toBe(
+			`Swarm needs Codex ${CODEX_VERSION}, but the installed codex is 0.0.1. Install Codex ${CODEX_VERSION} to use it with Swarm.`,
+		);
 	});
 
 	test("reports a missing executable as not installed", async () => {
 		const error = await runWithCodex(Effect.flip(checkAuth), "/nonexistent/codex");
 		expect(error._tag).toBe("AgentNotInstalledError");
+		expect(error.message).toBe(
+			"Swarm could not find /nonexistent/codex. Install it, or add its folder to the PATH your login shell sets.",
+		);
 	});
 });
