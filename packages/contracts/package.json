@@ -1,0 +1,19 @@
+{
+	"name": "@repo/contracts",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./*": "./src/*.ts"
+	},
+	"scripts": {
+		"check-types": "bun --bun tsc --noEmit"
+	},
+	"dependencies": {
+		"effect": "4.1.2"
+	},
+	"devDependencies": {
+		"@repo/typescript-config": "*",
+		"typescript": "7.0.2"
+	}
+}
