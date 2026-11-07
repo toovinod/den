@@ -1,5 +1,6 @@
-import { CODEX_VERSION, CodexAdapter, CodexAdapterConfig } from "./CodexAdapter.ts";
 import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
+import codexVersionFile from "./generated/CODEX_VERSION" with { type: "text" };
+import { CodexAdapter, CodexAdapterConfig } from "./CodexAdapter.ts";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
 import { BunServices } from "@effect/platform-bun";
 import { describe, expect, test } from "bun:test";
@@ -150,8 +151,9 @@ describe("CodexAdapter", () => {
 			_tag: "CodexVersionMismatchError",
 			actual: "0.0.1",
 		});
+		const pinned = codexVersionFile.trim();
 		expect(error.message).toBe(
-			`Swarm needs Codex ${CODEX_VERSION}, but the installed codex is 0.0.1. Install Codex ${CODEX_VERSION} to use it with Swarm.`,
+			`Swarm needs Codex ${pinned}, but the installed codex is 0.0.1. Install Codex ${pinned} to use it with Swarm.`,
 		);
 	});
 
