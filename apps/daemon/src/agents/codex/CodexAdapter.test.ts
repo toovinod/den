@@ -151,10 +151,13 @@ describe("CodexAdapter", () => {
 	});
 
 	test("fails when the installed version differs from the generated types", async () => {
-		const error = await runWithCodex(Effect.flip(checkAuth), "/bin/echo");
+		const error = await runWithCodex(
+			Effect.flip(checkAuth),
+			`${import.meta.dir}/fixtures/outdatedCodex.ts`,
+		);
 		expect(error).toMatchObject({
 			_tag: "CodexVersionMismatchError",
-			actual: "--version",
+			actual: "0.0.1",
 		});
 	});
 
