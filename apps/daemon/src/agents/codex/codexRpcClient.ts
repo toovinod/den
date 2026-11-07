@@ -1,6 +1,6 @@
+import { type AgentError, AgentProcessError, AgentProtocolError } from "../AgentAdapter.ts";
 import { type Cause, Deferred, Effect, Queue, Schema, Stream } from "effect";
 import { type ChildProcess, ChildProcessSpawner } from "effect/process";
-import { type AgentError, AgentProcessError, AgentProtocolError } from "../AgentAdapter.ts";
 import { toAgentError } from "../toAgentError.ts";
 
 // Codex app-server speaks JSON-RPC 2.0 without the "jsonrpc" field, one message per line.

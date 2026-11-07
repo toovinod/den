@@ -1,5 +1,5 @@
-import { Schema } from "effect";
 import { JobStatus } from "./JobStatus.ts";
+import { Schema } from "effect";
 
 export const ScriptRunKind = Schema.Literals(["setup", "run"]);
 export type ScriptRunKind = typeof ScriptRunKind.Type;

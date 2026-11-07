@@ -1,6 +1,6 @@
-import type { MigrationMeta } from "drizzle-orm/migrator";
-import { formatToMillis } from "drizzle-orm/migrator.utils";
 import init from "./migrations/20261107072057_init/migration.sql" with { type: "text" };
+import { formatToMillis } from "drizzle-orm/migrator.utils";
+import type { MigrationMeta } from "drizzle-orm/migrator";
 
 // A compiled daemon has no migrations folder on disk, so the SQL is imported into the bundle.
 // Add one line here per folder drizzle-kit generates; embeddedMigrations.test.ts fails if one is missing.

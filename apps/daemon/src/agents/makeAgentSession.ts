@@ -1,5 +1,3 @@
-import type { AgentEvent, ApprovalDecision, ApprovalOutcome } from "@repo/contracts/AgentEvent";
-import { type Cause, Deferred, Effect, Option, Queue, Ref, type Scope, Stream } from "effect";
 import {
 	type AgentCapabilities,
 	type AgentError,
@@ -8,6 +6,8 @@ import {
 	ApprovalNotFoundError,
 	SessionBusyError,
 } from "./AgentAdapter.ts";
+import type { AgentEvent, ApprovalDecision, ApprovalOutcome } from "@repo/contracts/AgentEvent";
+import { type Cause, Deferred, Effect, Option, Queue, Ref, type Scope, Stream } from "effect";
 
 // Events wait here until the consumer reads them. A full buffer slows the agent reader
 // down instead of growing memory.

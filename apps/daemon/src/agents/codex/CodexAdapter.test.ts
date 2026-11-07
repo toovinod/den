@@ -1,9 +1,9 @@
-import { describe, expect, test } from "bun:test";
-import { BunServices } from "@effect/platform-bun";
-import type { AgentEvent } from "@repo/contracts/AgentEvent";
-import { Effect, Stream } from "effect";
 import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
 import { CodexAdapter, CodexAdapterConfig } from "./CodexAdapter.ts";
+import type { AgentEvent } from "@repo/contracts/AgentEvent";
+import { BunServices } from "@effect/platform-bun";
+import { describe, expect, test } from "bun:test";
+import { Effect, Stream } from "effect";
 
 const fakeCodex = `${import.meta.dir}/fixtures/fakeCodex.ts`;
 const newSession: StartSessionInput = {

@@ -1,13 +1,3 @@
-import type {
-	CanUseTool,
-	Options,
-	PermissionResult,
-	PermissionUpdate,
-	SDKUserMessage,
-} from "@anthropic-ai/claude-agent-sdk";
-import type { ApprovalDecision, ApprovalOutcome, ToolCall } from "@repo/contracts/AgentEvent";
-import { Config, Context, Deferred, Effect, Layer, Option, Queue, Redacted, Ref, Schema, Stream } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import {
 	type AgentAdapter,
 	type AgentAuthStatus,
@@ -16,11 +6,21 @@ import {
 	AgentProtocolError,
 	type StartSessionInput,
 } from "../AgentAdapter.ts";
-import { keepOutputTail } from "../keepOutputTail.ts";
+import type {
+	CanUseTool,
+	Options,
+	PermissionResult,
+	PermissionUpdate,
+	SDKUserMessage,
+} from "@anthropic-ai/claude-agent-sdk";
+import { Config, Context, Deferred, Effect, Layer, Option, Queue, Redacted, Ref, Schema, Stream } from "effect";
+import type { ApprovalDecision, ApprovalOutcome, ToolCall } from "@repo/contracts/AgentEvent";
+import { BashInput, ClaudeAuthStatus, ClaudeMessage, FileInput } from "./claudeMessages.ts";
 import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
-import { BashInput, ClaudeAuthStatus, ClaudeMessage, FileInput } from "./claudeMessages.ts";
 
 // Inside a `bun build --compile` binary the SDK cannot find its bundled CLI, so releases
 // extract it and set this path. Unset, the SDK uses its bundled CLI and `checkAuth`

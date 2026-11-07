@@ -1,11 +1,11 @@
 import { authRelations } from "@repo/db-cloud/authSchema";
-import { EmailService } from "@repo/email/EmailService";
-import { SQL } from "bun";
-import { drizzle } from "drizzle-orm/bun-sql/postgres";
 import { Context, Effect, Layer, Redacted } from "effect";
+import { MembershipEvents } from "./MembershipEvents.ts";
+import { EmailService } from "@repo/email/EmailService";
+import { drizzle } from "drizzle-orm/bun-sql/postgres";
 import { AuthConfig } from "./AuthConfig.ts";
 import { createAuth } from "./createAuth.ts";
-import { MembershipEvents } from "./MembershipEvents.ts";
+import { SQL } from "bun";
 
 export class Auth extends Context.Service<
 	Auth,

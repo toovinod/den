@@ -1,15 +1,15 @@
-import { describe, expect, test } from "bun:test";
-import { join } from "node:path";
-import { eq } from "drizzle-orm";
-import { Duration, Effect, FileSystem } from "effect";
+import { runInTempDir, runServiceTest, waitForScriptRun, withServices } from "../testing/runServiceTest.ts";
+import { makeTestRepository } from "../testing/makeTestRepository.ts";
+import { ProjectService } from "../projects/ProjectService.ts";
+import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
 import { scriptRun, workspace } from "../database/schema.ts";
-import { runGit } from "../git/runGit.ts";
-import { ProjectService } from "../projects/ProjectService.ts";
-import { makeTestRepository } from "../testing/makeTestRepository.ts";
-import { runInTempDir, runServiceTest, waitForScriptRun, withServices } from "../testing/runServiceTest.ts";
-import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import { WorkspaceService } from "./WorkspaceService.ts";
+import { Duration, Effect, FileSystem } from "effect";
+import { describe, expect, test } from "bun:test";
+import { runGit } from "../git/runGit.ts";
+import { eq } from "drizzle-orm";
+import { join } from "node:path";
 
 const addProject = Effect.fn("addProject")(function* (tempDir: string, setupScript: string | null = null) {
 	const projects = yield* ProjectService;

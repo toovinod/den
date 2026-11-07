@@ -1,11 +1,11 @@
-import { describe, expect, test } from "bun:test";
-import { join } from "node:path";
-import { BunServices } from "@effect/platform-bun";
-import { sql } from "drizzle-orm";
-import { Effect, FileSystem, Layer } from "effect";
-import { testDaemonConfig } from "../testing/testDaemonConfig.ts";
 import { DATABASE_FILE_NAME, LocalDatabase } from "./LocalDatabase.ts";
+import { testDaemonConfig } from "../testing/testDaemonConfig.ts";
+import { BunServices } from "@effect/platform-bun";
+import { Effect, FileSystem, Layer } from "effect";
+import { describe, expect, test } from "bun:test";
 import { project } from "./schema.ts";
+import { sql } from "drizzle-orm";
+import { join } from "node:path";
 
 const withDatabase = <A, E>(program: Effect.Effect<A, E, LocalDatabase>, dataDir: string) =>
 	program.pipe(Effect.provide(LocalDatabase.layer.pipe(Layer.provide([testDaemonConfig(dataDir), BunServices.layer]))));

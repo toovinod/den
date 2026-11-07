@@ -1,13 +1,13 @@
-import { describe, expect, test } from "bun:test";
-import { join } from "node:path";
-import { BunServices } from "@effect/platform-bun";
-import { DaemonClient } from "@repo/contracts/DaemonClient";
-import { Effect, FileSystem, Layer } from "effect";
-import { HttpServer } from "effect/http";
-import packageJson from "../../package.json" with { type: "json" };
-import { makeTestRepository } from "../testing/makeTestRepository.ts";
 import { TEST_TOKEN, testDaemonConfig } from "../testing/testDaemonConfig.ts";
+import { makeTestRepository } from "../testing/makeTestRepository.ts";
+import packageJson from "../../package.json" with { type: "json" };
+import { DaemonClient } from "@repo/contracts/DaemonClient";
+import { BunServices } from "@effect/platform-bun";
+import { Effect, FileSystem, Layer } from "effect";
+import { describe, expect, test } from "bun:test";
 import { DaemonServer } from "./DaemonServer.ts";
+import { HttpServer } from "effect/http";
+import { join } from "node:path";
 
 const runWithDaemon = <A, E>(
 	program: (baseUrl: string, tempDir: string) => Effect.Effect<A, E, BunServices.BunServices>,

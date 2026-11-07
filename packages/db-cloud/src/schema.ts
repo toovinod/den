@@ -1,5 +1,5 @@
-import { authRelations } from "./authSchema.ts";
 import { cloudWorkspaceRelations } from "./cloudWorkspace.ts";
+import { authRelations } from "./authSchema.ts";
 
 export * from "./authSchema.ts";
 export * from "./cloudWorkspace.ts";

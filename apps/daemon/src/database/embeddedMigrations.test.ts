@@ -1,7 +1,7 @@
+import { embeddedMigrations } from "./embeddedMigrations.ts";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { readMigrationFiles } from "drizzle-orm/migrator";
-import { embeddedMigrations } from "./embeddedMigrations.ts";
 
 describe("embeddedMigrations", () => {
 	test("embeds every migration drizzle-kit generated, with the same hashes", () => {

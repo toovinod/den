@@ -1,6 +1,6 @@
 import { DefaultBranchNotFoundError } from "@repo/contracts/Project";
-import { Effect } from "effect";
 import { runGit } from "../git/runGit.ts";
+import { Effect } from "effect";
 
 // A git command that fails or prints nothing means "not set" here, so the next source is tried.
 const readGit = (cwd: string, args: ReadonlyArray<string>) =>

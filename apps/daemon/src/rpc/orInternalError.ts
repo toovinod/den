@@ -1,8 +1,8 @@
 import { DaemonInternalError } from "@repo/contracts/DaemonInternalError";
-import { Effect, Predicate } from "effect";
-import type { LocalDatabaseError } from "../database/LocalDatabase.ts";
-import type { GitCommandError, GitSpawnError } from "../git/runGit.ts";
 import type { IllegalJobTransitionError } from "../jobs/transitionJob.ts";
+import type { GitCommandError, GitSpawnError } from "../git/runGit.ts";
+import type { LocalDatabaseError } from "../database/LocalDatabase.ts";
+import { Effect, Predicate } from "effect";
 
 type InternalFailure = LocalDatabaseError | GitSpawnError | GitCommandError | IllegalJobTransitionError;
 

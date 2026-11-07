@@ -1,7 +1,7 @@
-import { describe, expect, test } from "bun:test";
-import { Effect, PubSub } from "effect";
 import { MembershipEvents } from "./MembershipEvents.ts";
 import { membershipHooks } from "./membershipHooks.ts";
+import { describe, expect, test } from "bun:test";
+import { Effect, PubSub } from "effect";
 
 // Better Auth's own types require Date fields.
 const epoch = new Date(0);

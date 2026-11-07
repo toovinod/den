@@ -1,6 +1,6 @@
+import { Config, Context, Effect, Layer, Option, Redacted, Schema, Stdio, Stream } from "effect";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Config, Context, Effect, Layer, Option, Redacted, Schema, Stdio, Stream } from "effect";
 
 export class DaemonTokenMissingError extends Schema.TaggedError<DaemonTokenMissingError>()(
 	"DaemonTokenMissingError",

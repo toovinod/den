@@ -1,8 +1,8 @@
 import { DaemonHealth, HealthRpcs } from "@repo/contracts/DaemonRpcs";
-import { Effect, Layer } from "effect";
 import packageJson from "../../package.json" with { type: "json" };
-import { ProjectRpcHandlers } from "./ProjectRpcHandlers.ts";
 import { WorkspaceRpcHandlers } from "./WorkspaceRpcHandlers.ts";
+import { ProjectRpcHandlers } from "./ProjectRpcHandlers.ts";
+import { Effect, Layer } from "effect";
 
 const HealthRpcHandlers = HealthRpcs.toLayer({
 	health: () => Effect.succeed(new DaemonHealth({ version: packageJson.version })),

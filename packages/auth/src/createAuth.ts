@@ -1,13 +1,13 @@
-import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
-import * as authSchema from "@repo/db-cloud/authSchema";
-import type { InvitationEmailInput } from "@repo/email/invitationEmail";
-import { type Auth, betterAuth } from "better-auth";
 import { bearer, deviceAuthorization, organization } from "better-auth/plugins";
-import type { BunSQLDatabase } from "drizzle-orm/bun-sql/postgres";
-import { Redacted } from "effect";
-import type { AuthConfig } from "./AuthConfig.ts";
-import type { MembershipEvent } from "./MembershipEvents.ts";
 import { leaveOrganizationHook, membershipHooks } from "./membershipHooks.ts";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
+import type { InvitationEmailInput } from "@repo/email/invitationEmail";
+import type { BunSQLDatabase } from "drizzle-orm/bun-sql/postgres";
+import type { MembershipEvent } from "./MembershipEvents.ts";
+import * as authSchema from "@repo/db-cloud/authSchema";
+import { type Auth, betterAuth } from "better-auth";
+import type { AuthConfig } from "./AuthConfig.ts";
+import { Redacted } from "effect";
 
 export const DESKTOP_CLIENT_ID = "swarm-desktop";
 

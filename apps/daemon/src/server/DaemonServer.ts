@@ -1,12 +1,12 @@
-import { BunHttpServer } from "@effect/platform-bun";
-import { DaemonRpcs } from "@repo/contracts/DaemonRpcs";
-import { Console, Duration, Effect, Layer } from "effect";
-import { HttpRouter, HttpServer } from "effect/http";
-import { RpcSerialization, RpcServer } from "effect/rpc";
-import { DaemonConfig } from "../config/DaemonConfig.ts";
 import { DaemonRpcHandlers } from "../rpc/DaemonRpcHandlers.ts";
 import { RpcWebSocketRoute } from "../rpc/RpcWebSocketRoute.ts";
+import { Console, Duration, Effect, Layer } from "effect";
+import { DaemonConfig } from "../config/DaemonConfig.ts";
+import { RpcSerialization, RpcServer } from "effect/rpc";
+import { DaemonRpcs } from "@repo/contracts/DaemonRpcs";
+import { BunHttpServer } from "@effect/platform-bun";
 import { DaemonServices } from "./DaemonServices.ts";
+import { HttpRouter, HttpServer } from "effect/http";
 
 // The desktop shell waits for this exact line on stdout to learn the daemon's address.
 export const READY_LINE_PREFIX = "SWARM_DAEMON_READY ";

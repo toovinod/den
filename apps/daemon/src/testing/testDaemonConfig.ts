@@ -1,5 +1,5 @@
-import { Layer, Redacted } from "effect";
 import { DaemonConfig } from "../config/DaemonConfig.ts";
+import { Layer, Redacted } from "effect";
 
 export const TEST_TOKEN = "test-token";
 

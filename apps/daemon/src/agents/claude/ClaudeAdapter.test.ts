@@ -1,11 +1,11 @@
-import { describe, expect, test } from "bun:test";
 import type { CanUseTool, Options, PermissionResult, PermissionUpdate } from "@anthropic-ai/claude-agent-sdk";
-import { BunServices } from "@effect/platform-bun";
-import type { AgentEvent } from "@repo/contracts/AgentEvent";
-import { Effect, Layer, Stream } from "effect";
-import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
 import { ClaudeAdapter, ClaudeAdapterConfig, sessionAllowRules } from "./ClaudeAdapter.ts";
+import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
+import type { AgentEvent } from "@repo/contracts/AgentEvent";
+import { BunServices } from "@effect/platform-bun";
+import { describe, expect, test } from "bun:test";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
+import { Effect, Layer, Stream } from "effect";
 
 const newSession: StartSessionInput = {
 	cwd: "/repo",

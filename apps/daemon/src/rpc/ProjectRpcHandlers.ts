@@ -1,7 +1,7 @@
-import { ProjectRpcs } from "@repo/contracts/ProjectRpcs";
-import { Effect } from "effect";
 import { ProjectService } from "../projects/ProjectService.ts";
+import { ProjectRpcs } from "@repo/contracts/ProjectRpcs";
 import { orInternalError } from "./orInternalError.ts";
+import { Effect } from "effect";
 
 export const ProjectRpcHandlers = ProjectRpcs.toLayer(
 	Effect.gen(function* () {

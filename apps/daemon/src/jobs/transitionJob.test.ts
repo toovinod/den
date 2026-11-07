@@ -1,7 +1,7 @@
-import { describe, expect, test } from "bun:test";
-import type { JobStatus } from "@repo/contracts/JobStatus";
-import { Result } from "effect";
 import { type JobEvent, transitionJob } from "./transitionJob.ts";
+import type { JobStatus } from "@repo/contracts/JobStatus";
+import { describe, expect, test } from "bun:test";
+import { Result } from "effect";
 
 const NOW = "2026-11-07T10:00:00.000Z";
 

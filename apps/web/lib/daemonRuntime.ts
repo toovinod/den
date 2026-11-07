@@ -1,6 +1,6 @@
+import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { DaemonClient } from "@repo/contracts/DaemonClient";
 import { invoke } from "@tauri-apps/api/core";
-import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 
 const DaemonConnection = Schema.Struct({
 	url: Schema.String,

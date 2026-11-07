@@ -1,10 +1,10 @@
-import { describe, expect, test } from "bun:test";
-import type { AgentEvent } from "@repo/contracts/AgentEvent";
-import { Effect, Schema, Stream } from "effect";
-import type { AgentSessionHandle } from "../AgentAdapter.ts";
-import { MAX_QUEUED_MESSAGES } from "../makeAgentSession.ts";
 import recordingJson from "./fixtures/commandWithApproval.json" with { type: "json" };
 import { makeReplayAdapter, Recording } from "./ReplayAdapter.ts";
+import { MAX_QUEUED_MESSAGES } from "../makeAgentSession.ts";
+import type { AgentEvent } from "@repo/contracts/AgentEvent";
+import type { AgentSessionHandle } from "../AgentAdapter.ts";
+import { describe, expect, test } from "bun:test";
+import { Effect, Schema, Stream } from "effect";
 
 const recording = Schema.decodeUnknownSync(Recording)(recordingJson);
 const input = {

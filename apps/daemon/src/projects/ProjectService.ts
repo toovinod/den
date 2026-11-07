@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import {
 	NotAGitRepositoryError,
 	Project,
@@ -7,16 +6,17 @@ import {
 	ProjectHasActiveWorkspacesError,
 	ProjectNotFoundError,
 } from "@repo/contracts/Project";
-import { and, asc, eq } from "drizzle-orm";
-import { Context, Effect, FileSystem, Layer } from "effect";
-import type { SecureRandom } from "effect/crypto";
-import type { ChildProcessSpawner } from "effect/process";
-import { LocalDatabase } from "../database/LocalDatabase.ts";
-import { newId } from "../database/newId.ts";
-import { nowIso } from "../database/nowIso.ts";
-import { project, workspace } from "../database/schema.ts";
-import { runGit } from "../git/runGit.ts";
 import { detectDefaultBranch } from "./detectDefaultBranch.ts";
+import { LocalDatabase } from "../database/LocalDatabase.ts";
+import { Context, Effect, FileSystem, Layer } from "effect";
+import { project, workspace } from "../database/schema.ts";
+import type { ChildProcessSpawner } from "effect/process";
+import type { SecureRandom } from "effect/crypto";
+import { nowIso } from "../database/nowIso.ts";
+import { newId } from "../database/newId.ts";
+import { and, asc, eq } from "drizzle-orm";
+import { runGit } from "../git/runGit.ts";
+import { basename } from "node:path";
 
 const normalizeScript = (script: string | null) => script?.trim() || null;
 

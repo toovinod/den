@@ -1,7 +1,7 @@
-import { Context, Layer } from "effect";
 import { RpcClient, type RpcClientError, type RpcGroup, RpcSerialization } from "effect/rpc";
-import { Socket } from "effect/socket";
 import { DaemonRpcs } from "./DaemonRpcs.ts";
+import { Context, Layer } from "effect";
+import { Socket } from "effect/socket";
 
 export class DaemonClient extends Context.Service<
 	DaemonClient,

@@ -1,5 +1,5 @@
-import { defineRelationsPart, sql } from "drizzle-orm";
 import { index, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { defineRelationsPart, sql } from "drizzle-orm";
 import { organization, user } from "./authSchema.ts";
 
 // What the user asked for. The worker drives observedState towards it.

@@ -1,12 +1,12 @@
-import { join } from "node:path";
-import { SqliteClient } from "@effect/sql-sqlite-bun";
+import { Context, Duration, Effect, FileSystem, Layer, Schema } from "effect";
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
 import * as SQLiteBunDrizzle from "drizzle-orm/effect-sqlite-bun";
-import { migrate } from "drizzle-orm/sqlite-core/effect";
-import { Context, Duration, Effect, FileSystem, Layer, Schema } from "effect";
-import { SqlError } from "effect/sql/SqlError";
-import { DaemonConfig } from "../config/DaemonConfig.ts";
 import { embeddedMigrations } from "./embeddedMigrations.ts";
+import { DaemonConfig } from "../config/DaemonConfig.ts";
+import { migrate } from "drizzle-orm/sqlite-core/effect";
+import { SqliteClient } from "@effect/sql-sqlite-bun";
+import { SqlError } from "effect/sql/SqlError";
+import { join } from "node:path";
 
 export type LocalDrizzle = SQLiteBunDrizzle.EffectSQLiteBunDatabase;
 

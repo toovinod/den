@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
 import { invitationEmail, plainName } from "./invitationEmail.ts";
+import { describe, expect, test } from "bun:test";
 
 describe("plainName", () => {
 	test("removes line breaks and control characters", () => {

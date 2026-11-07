@@ -1,6 +1,6 @@
+import { EmailService, EmailServiceTest, SentEmails } from "./EmailService.ts";
 import { describe, expect, test } from "bun:test";
 import { Effect, Ref } from "effect";
-import { EmailService, EmailServiceTest, SentEmails } from "./EmailService.ts";
 
 describe("EmailService", () => {
 	test("the test layer records invitation emails instead of sending them", async () => {

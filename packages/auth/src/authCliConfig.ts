@@ -3,8 +3,8 @@
 
 import { authRelations } from "@repo/db-cloud/authSchema";
 import { drizzle } from "drizzle-orm/bun-sql/postgres";
-import { Redacted } from "effect";
 import { createAuth } from "./createAuth.ts";
+import { Redacted } from "effect";
 
 const placeholder = Redacted.make("schema-generation-only");
 const oauthClient = {

@@ -1,9 +1,9 @@
-import { Auth } from "@repo/auth/Auth";
-import { AuthConfig } from "@repo/auth/AuthConfig";
+import { Config, Effect, Layer, ManagedRuntime } from "effect";
 import { MembershipEvents } from "@repo/auth/MembershipEvents";
 import { EmailService } from "@repo/email/EmailService";
-import { Config, Effect, Layer, ManagedRuntime } from "effect";
+import { AuthConfig } from "@repo/auth/AuthConfig";
 import { createApp } from "./createApp.ts";
+import { Auth } from "@repo/auth/Auth";
 
 const AppLayer = Auth.layer.pipe(
 	Layer.provideMerge(Layer.mergeAll(AuthConfig.layer, EmailService.layer, MembershipEvents.layer)),

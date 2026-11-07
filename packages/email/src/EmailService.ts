@@ -1,6 +1,6 @@
+import { type EmailMessage, type InvitationEmailInput, invitationEmail } from "./invitationEmail.ts";
 import { Config, Context, Effect, Layer, Redacted, Ref, Schema } from "effect";
 import { Resend } from "resend";
-import { type EmailMessage, type InvitationEmailInput, invitationEmail } from "./invitationEmail.ts";
 
 export class EmailSendError extends Schema.TaggedError<EmailSendError>()("EmailSendError", {
 	message: Schema.String,

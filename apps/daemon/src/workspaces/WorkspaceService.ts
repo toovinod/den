@@ -1,28 +1,28 @@
-import { basename, join } from "node:path";
-import { ScriptRun, ScriptRunOutput } from "@repo/contracts/ScriptRun";
 import {
 	Workspace,
 	WorkspaceHasUnsavedWorkError,
 	WorkspaceNotFoundError,
 	WorkspacePathInUseError,
 } from "@repo/contracts/Workspace";
+import { LocalDatabase, PRIVATE_DIRECTORY_MODE } from "../database/LocalDatabase.ts";
+import { applyScriptRunEvent, runSetupScript } from "./runSetupScript.ts";
 import type { CreateWorkspaceInput } from "@repo/contracts/WorkspaceRpcs";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { ScriptRun, ScriptRunOutput } from "@repo/contracts/ScriptRun";
 import { Context, Effect, FiberMap, FileSystem, Layer } from "effect";
-import type { SecureRandom } from "effect/crypto";
+import { findUnsavedWork, removeWorktree } from "./removeWorktree.ts";
+import { project, scriptRun, workspace } from "../database/schema.ts";
+import { ProjectService } from "../projects/ProjectService.ts";
+import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import type { ChildProcessSpawner } from "effect/process";
 import { DaemonConfig } from "../config/DaemonConfig.ts";
-import { LocalDatabase, PRIVATE_DIRECTORY_MODE } from "../database/LocalDatabase.ts";
-import { newId } from "../database/newId.ts";
-import { nowIso } from "../database/nowIso.ts";
-import { project, scriptRun, workspace } from "../database/schema.ts";
-import { runGit } from "../git/runGit.ts";
-import { ProjectService } from "../projects/ProjectService.ts";
-import { CappedOutput } from "./CappedOutput.ts";
 import { createWorktree } from "./createWorktree.ts";
-import { findUnsavedWork, removeWorktree } from "./removeWorktree.ts";
-import { applyScriptRunEvent, runSetupScript } from "./runSetupScript.ts";
-import { SetupScriptSettings } from "./SetupScriptSettings.ts";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import type { SecureRandom } from "effect/crypto";
+import { CappedOutput } from "./CappedOutput.ts";
+import { nowIso } from "../database/nowIso.ts";
+import { newId } from "../database/newId.ts";
+import { basename, join } from "node:path";
+import { runGit } from "../git/runGit.ts";
 
 type WorkspaceRow = typeof workspace.$inferSelect;
 type ScriptRunRow = typeof scriptRun.$inferInsert;

@@ -1,6 +1,6 @@
-import { join } from "node:path";
 import { Effect, FileSystem } from "effect";
 import { runGit } from "../git/runGit.ts";
+import { join } from "node:path";
 
 // A real git repository on `main` with one commit, isolated from the user's git identity.
 export const makeTestRepository = Effect.fn("makeTestRepository")(function* (path: string) {

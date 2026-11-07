@@ -1,7 +1,7 @@
-import { Schema } from "effect";
-import { Rpc, RpcGroup } from "effect/rpc";
-import { ProjectRpcs } from "./ProjectRpcs.ts";
 import { WorkspaceRpcs } from "./WorkspaceRpcs.ts";
+import { ProjectRpcs } from "./ProjectRpcs.ts";
+import { Rpc, RpcGroup } from "effect/rpc";
+import { Schema } from "effect";
 
 export class DaemonHealth extends Schema.Class<DaemonHealth>("DaemonHealth")({
 	version: Schema.String,

@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
 import { Effect, Redacted, Stdio, Stream } from "effect";
+import { describe, expect, test } from "bun:test";
 import { DaemonConfig } from "./DaemonConfig.ts";
 
 const encoder = new TextEncoder();

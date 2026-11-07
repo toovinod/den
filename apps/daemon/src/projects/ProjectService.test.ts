@@ -1,10 +1,10 @@
-import { describe, expect, test } from "bun:test";
-import { join } from "node:path";
-import { Effect } from "effect";
-import { runGit } from "../git/runGit.ts";
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
 import { runServiceTest } from "../testing/runServiceTest.ts";
 import { ProjectService } from "./ProjectService.ts";
+import { describe, expect, test } from "bun:test";
+import { runGit } from "../git/runGit.ts";
+import { join } from "node:path";
+import { Effect } from "effect";
 
 describe("ProjectService", () => {
 	test("rejects a folder that is not a git repository", async () => {

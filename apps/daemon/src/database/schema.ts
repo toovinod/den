@@ -1,9 +1,9 @@
 import { AgentAuthMode, AgentKind, AgentSessionStatus } from "@repo/contracts/AgentSession";
-import { JobStatus } from "@repo/contracts/JobStatus";
-import { ScriptRunKind } from "@repo/contracts/ScriptRun";
-import { WorkspaceKind, WorkspaceStatus } from "@repo/contracts/Workspace";
-import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { WorkspaceKind, WorkspaceStatus } from "@repo/contracts/Workspace";
+import { ScriptRunKind } from "@repo/contracts/ScriptRun";
+import { JobStatus } from "@repo/contracts/JobStatus";
+import { sql } from "drizzle-orm";
 
 export const project = sqliteTable(
 	"project",

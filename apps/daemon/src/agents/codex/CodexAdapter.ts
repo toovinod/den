@@ -1,18 +1,3 @@
-import type { ApprovalOutcome, ToolCall } from "@repo/contracts/AgentEvent";
-import { Context, Effect, Layer, Option, Ref, Stream } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import packageJson from "../../../package.json" with { type: "json" };
-import {
-	type AgentAdapter,
-	type AgentAuthStatus,
-	type AgentCapabilities,
-	AgentProtocolError,
-	CodexVersionMismatchError,
-	type StartSessionInput,
-} from "../AgentAdapter.ts";
-import { keepOutputTail } from "../keepOutputTail.ts";
-import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
-import { toAgentError } from "../toAgentError.ts";
 import {
 	AccountResponse,
 	AgentMessageDelta,
@@ -26,16 +11,31 @@ import {
 	TurnCompleted,
 	TurnResponse,
 } from "./codexProtocol.ts";
+import {
+	type AgentAdapter,
+	type AgentAuthStatus,
+	type AgentCapabilities,
+	AgentProtocolError,
+	CodexVersionMismatchError,
+	type StartSessionInput,
+} from "../AgentAdapter.ts";
 import { type CodexIncoming, type CodexRpcClient, METHOD_NOT_FOUND, makeCodexRpcClient } from "./codexRpcClient.ts";
-import codexVersionFile from "./generated/CODEX_VERSION" with { type: "text" };
-import type { InitializeParams } from "./generated/InitializeParams.ts";
 import type { CommandExecutionApprovalDecision } from "./generated/v2/CommandExecutionApprovalDecision.ts";
-import type { GetAccountParams } from "./generated/v2/GetAccountParams.ts";
-import type { ThreadResumeParams } from "./generated/v2/ThreadResumeParams.ts";
-import type { ThreadStartParams } from "./generated/v2/ThreadStartParams.ts";
 import type { TurnInterruptParams } from "./generated/v2/TurnInterruptParams.ts";
+import codexVersionFile from "./generated/CODEX_VERSION" with { type: "text" };
+import type { ThreadResumeParams } from "./generated/v2/ThreadResumeParams.ts";
+import { type AgentSession, makeAgentSession } from "../makeAgentSession.ts";
+import type { ThreadStartParams } from "./generated/v2/ThreadStartParams.ts";
+import type { ApprovalOutcome, ToolCall } from "@repo/contracts/AgentEvent";
+import type { GetAccountParams } from "./generated/v2/GetAccountParams.ts";
 import type { TurnStartParams } from "./generated/v2/TurnStartParams.ts";
 import type { TurnSteerParams } from "./generated/v2/TurnSteerParams.ts";
+import type { InitializeParams } from "./generated/InitializeParams.ts";
+import packageJson from "../../../package.json" with { type: "json" };
+import { Context, Effect, Layer, Option, Ref, Stream } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { keepOutputTail } from "../keepOutputTail.ts";
+import { toAgentError } from "../toAgentError.ts";
 
 export const CODEX_VERSION = codexVersionFile.trim();
 

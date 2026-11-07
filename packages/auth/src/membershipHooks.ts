@@ -1,7 +1,7 @@
-import { createAuthMiddleware } from "better-auth/api";
 import type { OrganizationOptions } from "better-auth/plugins";
-import { Option, Schema } from "effect";
 import type { MembershipEvent } from "./MembershipEvents.ts";
+import { createAuthMiddleware } from "better-auth/api";
+import { Option, Schema } from "effect";
 
 export const membershipHooks = (publish: (event: MembershipEvent) => Promise<void>) =>
 	({

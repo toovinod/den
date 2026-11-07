@@ -1,5 +1,5 @@
-import { Effect, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { Effect, Schema, Stream } from "effect";
 
 export class GitSpawnError extends Schema.TaggedError<GitSpawnError>()("GitSpawnError", {
 	args: Schema.Array(Schema.String),

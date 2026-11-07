@@ -1,5 +1,5 @@
-import { Effect, Schema } from "effect";
 import { AgentProtocolError } from "../AgentAdapter.ts";
+import { Effect, Schema } from "effect";
 
 // The fields Swarm reads from Codex app-server messages. The full shapes are the generated
 // types in ./generated. Extra fields are ignored, so Codex can add fields without breaking us.

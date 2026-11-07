@@ -1,7 +1,7 @@
-import { describe, expect, test } from "bun:test";
-import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
 import { ConnectionError, SqlError, UniqueViolation } from "effect/sql/SqlError";
+import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
 import { toCloudDatabaseError } from "./CloudDatabase.ts";
+import { describe, expect, test } from "bun:test";
 
 const connectionLost = new SqlError({
 	reason: new ConnectionError({ cause: "socket closed" }),

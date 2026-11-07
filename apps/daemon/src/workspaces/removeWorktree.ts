@@ -1,6 +1,6 @@
 import { WorktreeRemoveError } from "@repo/contracts/Workspace";
-import { Effect } from "effect";
 import { runGit } from "../git/runGit.ts";
+import { Effect } from "effect";
 
 export const findUnsavedWork = Effect.fn("findUnsavedWork")(function* (worktreePath: string, baseBranch: string) {
 	const status = yield* runGit(worktreePath, ["status", "--porcelain"]);

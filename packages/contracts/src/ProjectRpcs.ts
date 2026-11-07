@@ -1,6 +1,3 @@
-import { Schema } from "effect";
-import { Rpc, RpcGroup } from "effect/rpc";
-import { DaemonInternalError } from "./DaemonInternalError.ts";
 import {
 	DefaultBranchNotFoundError,
 	NotAGitRepositoryError,
@@ -10,6 +7,9 @@ import {
 	ProjectHasActiveWorkspacesError,
 	ProjectNotFoundError,
 } from "./Project.ts";
+import { DaemonInternalError } from "./DaemonInternalError.ts";
+import { Rpc, RpcGroup } from "effect/rpc";
+import { Schema } from "effect";
 
 export class ProjectRpcs extends RpcGroup.make(
 	Rpc.make("addProject", {

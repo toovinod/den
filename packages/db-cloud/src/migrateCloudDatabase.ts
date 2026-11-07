@@ -1,10 +1,10 @@
-import { join } from "node:path";
+import { migrate } from "drizzle-orm/effect-postgres/migrator";
+import * as PgDrizzle from "drizzle-orm/effect-postgres";
 import { BunRuntime } from "@effect/platform-bun";
 import { PgClient } from "@effect/sql-pg";
-import * as PgDrizzle from "drizzle-orm/effect-postgres";
-import { migrate } from "drizzle-orm/effect-postgres/migrator";
 import { Config, Effect } from "effect";
 import { relations } from "./schema.ts";
+import { join } from "node:path";
 
 const MIGRATIONS_FOLDER = join(import.meta.dir, "..", "drizzle");
 

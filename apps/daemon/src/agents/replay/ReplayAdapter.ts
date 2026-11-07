@@ -1,6 +1,6 @@
+import { type AgentAdapter, type AgentCapabilities, AgentKind } from "../AgentAdapter.ts";
 import { AgentEvent, type ApprovalOutcome } from "@repo/contracts/AgentEvent";
 import { Deferred, Effect, FiberHandle, Ref, Schema } from "effect";
-import { type AgentAdapter, type AgentCapabilities, AgentKind } from "../AgentAdapter.ts";
 import { makeAgentSession } from "../makeAgentSession.ts";
 
 export const Recording = Schema.Struct({

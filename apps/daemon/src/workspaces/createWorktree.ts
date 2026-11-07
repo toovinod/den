@@ -1,6 +1,6 @@
 import { BranchAlreadyExistsError, WorktreeCreateError } from "@repo/contracts/Workspace";
-import { Effect } from "effect";
 import { runGit } from "../git/runGit.ts";
+import { Effect } from "effect";
 
 export const createWorktree = Effect.fn("createWorktree")(function* (options: {
 	readonly repositoryPath: string;

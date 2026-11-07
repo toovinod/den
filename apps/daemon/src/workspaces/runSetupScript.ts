@@ -1,12 +1,12 @@
-import { and, eq } from "drizzle-orm";
+import { IllegalJobTransitionError, type JobEvent, transitionJob } from "../jobs/transitionJob.ts";
 import { Duration, Effect, Schedule, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { LocalDatabase } from "../database/LocalDatabase.ts";
-import { nowIso } from "../database/nowIso.ts";
-import { scriptRun } from "../database/schema.ts";
-import { IllegalJobTransitionError, type JobEvent, transitionJob } from "../jobs/transitionJob.ts";
-import type { CappedOutput } from "./CappedOutput.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
+import { LocalDatabase } from "../database/LocalDatabase.ts";
+import type { CappedOutput } from "./CappedOutput.ts";
+import { scriptRun } from "../database/schema.ts";
+import { nowIso } from "../database/nowIso.ts";
+import { and, eq } from "drizzle-orm";
 
 // Permanent: the script ran and failed. Retrying would only repeat it, so the user decides.
 export class ScriptExitError extends Schema.TaggedError<ScriptExitError>()("ScriptExitError", {

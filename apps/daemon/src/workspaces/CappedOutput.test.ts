@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
 import { CappedOutput, OUTPUT_MAX_BYTES, OUTPUT_MAX_LINES } from "./CappedOutput.ts";
+import { describe, expect, test } from "bun:test";
 
 describe("CappedOutput", () => {
 	test("keeps everything under both caps", () => {

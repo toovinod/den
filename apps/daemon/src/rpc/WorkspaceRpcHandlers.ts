@@ -1,7 +1,7 @@
-import { WorkspaceRpcs } from "@repo/contracts/WorkspaceRpcs";
-import { Effect } from "effect";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
+import { WorkspaceRpcs } from "@repo/contracts/WorkspaceRpcs";
 import { orInternalError } from "./orInternalError.ts";
+import { Effect } from "effect";
 
 export const WorkspaceRpcHandlers = WorkspaceRpcs.toLayer(
 	Effect.gen(function* () {
