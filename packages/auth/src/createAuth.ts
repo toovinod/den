@@ -31,6 +31,8 @@ export const createAuth = ({
 		secret: Redacted.value(config.secret),
 		trustedOrigins: [config.webOrigin],
 		database: drizzleAdapter(database, { provider: "pg", schema: authSchema }),
+		// Sign-in tokens from GitHub and Google are secrets, so they are encrypted at rest.
+		account: { encryptOAuthTokens: true },
 		socialProviders: {
 			github: {
 				clientId: config.github.clientId,
