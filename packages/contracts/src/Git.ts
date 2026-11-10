@@ -113,6 +113,17 @@ export class PushFailedError extends Schema.TaggedError<PushFailedError>()("Push
 	}
 }
 
+// actual is null on a detached HEAD.
+export class BranchChangedError extends Schema.TaggedError<BranchChangedError>()("BranchChangedError", {
+	expected: Schema.String,
+	actual: Schema.NullOr(Schema.String),
+}) {
+	override get message() {
+		const now = this.actual === null ? "has no branch checked out" : `is on ${this.actual}`;
+		return `This workspace ${now}, but Den set it up on ${this.expected}. Switch back to ${this.expected}, or start a new workspace.`;
+	}
+}
+
 export class GhNotInstalledError extends Schema.TaggedError<GhNotInstalledError>()("GhNotInstalledError", {}) {
 	override get message() {
 		return "The GitHub CLI (gh) is not installed. Install it from https://cli.github.com, then try again.";

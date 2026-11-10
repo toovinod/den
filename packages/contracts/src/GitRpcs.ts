@@ -1,4 +1,5 @@
 import {
+	BranchChangedError,
 	CommitFailedError,
 	CommitResult,
 	DiffFile,
@@ -27,7 +28,7 @@ import { FileReadError } from "./WorkspaceFile.ts";
 import { Rpc, RpcGroup } from "effect/rpc";
 import { Schema } from "effect";
 
-const PushError = [NoRemoteError, PushRejectedError, PushFailedError] as const;
+const PushError = [BranchChangedError, NoRemoteError, PushRejectedError, PushFailedError] as const;
 const GhError = [GhNotInstalledError, GhNotAuthenticatedError] as const;
 
 export class GitRpcs extends RpcGroup.make(
@@ -99,6 +100,7 @@ export class GitRpcs extends RpcGroup.make(
 		payload: { workspaceId: Schema.String, review: PullRequestReviewInput },
 		error: Schema.Union([
 			WorkspaceNotFoundError,
+			BranchChangedError,
 			...GhError,
 			PullRequestNotFoundError,
 			PullRequestReadError,
@@ -112,6 +114,7 @@ export class GitRpcs extends RpcGroup.make(
 		success: PullRequestStatus,
 		error: Schema.Union([
 			WorkspaceNotFoundError,
+			BranchChangedError,
 			...GhError,
 			PullRequestNotFoundError,
 			PullRequestMergeError,

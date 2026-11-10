@@ -424,7 +424,14 @@ describe("GitService pull requests", () => {
 				const created = yield* createWorkspace(tempDir);
 				const origin = yield* addOrigin(tempDir, join(tempDir, "repo"));
 				yield* git.push(created.id);
-				const executable = yield* fakeGh(tempDir, `[ "$1 $2" = "pr view" ] && echo '${merged}'\nexit 0`);
+				const executable = yield* fakeGh(
+					tempDir,
+					[
+						`[ "$1 $2 $3 $4 $5" = "pr view 7 --json headRefName" ] && echo '{"headRefName":"feature"}' && exit 0`,
+						`[ "$1 $2" = "pr view" ] && echo '${merged}'`,
+						"exit 0",
+					].join("\n"),
+				);
 				const status = yield* git
 					.mergePullRequest(created.id, "squash", true)
 					.pipe(Effect.provideService(GhSettings, { executable }));
@@ -438,6 +445,74 @@ describe("GitService pull requests", () => {
 		expect(result.ghLog).toContain("pr merge 7 --squash");
 		expect(result.remoteBranches).toBe("");
 		expect(result.status).toMatchObject({ status: "found", pullRequest: { state: "MERGED" } });
+	});
+
+	test("keeps the branch on origin when the pull request's head is another branch", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const git = yield* GitService;
+				const created = yield* createWorkspace(tempDir);
+				const origin = yield* addOrigin(tempDir, join(tempDir, "repo"));
+				yield* git.push(created.id);
+				const executable = yield* fakeGh(
+					tempDir,
+					[
+						`[ "$1 $2 $3 $4 $5" = "pr view 7 --json headRefName" ] && echo '{"headRefName":"other"}' && exit 0`,
+						`[ "$1 $2" = "pr view" ] && echo '${foundJson}'`,
+						"exit 0",
+					].join("\n"),
+				);
+				const error = yield* Effect.flip(git.mergePullRequest(created.id, "squash", true)).pipe(
+					Effect.provideService(GhSettings, { executable }),
+				);
+				return { error, remoteBranches: yield* runGit(origin, ["branch", "--list"]) };
+			}),
+		);
+		expect(result.error).toMatchObject({ _tag: "RemoteBranchDeleteError", branch: "other" });
+		expect(result.remoteBranches).toContain("feature");
+	});
+
+	test("refuses to push, open, review or merge after the worktree switched branches", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const git = yield* GitService;
+				const created = yield* createWorkspace(tempDir);
+				const origin = yield* addOrigin(tempDir, join(tempDir, "repo"));
+				const executable = yield* fakeGh(
+					tempDir,
+					[
+						'[ "$1" = auth ] && exit 0',
+						`[ "$1 $2" = "pr view" ] && echo '${foundJson}' && exit 0`,
+						'[ "$1 $2" = "pr create" ] && echo "https://github.com/acme/repo/pull/7"',
+						"exit 0",
+					].join("\n"),
+				);
+				// Someone switched branches from a terminal inside the worktree.
+				yield* runGit(created.path, ["switch", "-c", "elsewhere"]);
+				const errors = yield* Effect.all([
+					Effect.flip(git.push(created.id)),
+					Effect.flip(git.createPullRequest(created.id, { title: "t", body: "", draft: false })),
+					Effect.flip(git.reviewPullRequest(created.id, { verdict: "approve", body: "" })),
+					Effect.flip(git.mergePullRequest(created.id, "squash", true)),
+				]).pipe(Effect.provideService(GhSettings, { executable }));
+				yield* runGit(created.path, ["switch", "--detach"]);
+				const detached = yield* Effect.flip(git.push(created.id));
+				const ghLog = yield* fs.readFileString(join(tempDir, "gh.log")).pipe(Effect.orElseSucceed(() => ""));
+				return { errors, detached, ghLog, remoteBranches: yield* runGit(origin, ["branch", "--list"]) };
+			}),
+		);
+		for (const error of result.errors) {
+			expect(error).toMatchObject({ _tag: "BranchChangedError", expected: "feature", actual: "elsewhere" });
+		}
+		expect(result.errors[0]?.message).toBe(
+			"This workspace is on elsewhere, but Den set it up on feature. Switch back to feature, or start a new workspace.",
+		);
+		expect(result.detached).toMatchObject({ _tag: "BranchChangedError", expected: "feature", actual: null });
+		expect(result.remoteBranches).toBe("");
+		expect(result.ghLog).not.toContain("pr create");
+		expect(result.ghLog).not.toContain("pr review");
+		expect(result.ghLog).not.toContain("pr merge");
 	});
 
 	test("reports a merge that gh refused", async () => {

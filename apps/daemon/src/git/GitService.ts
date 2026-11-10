@@ -1,4 +1,5 @@
 import {
+	BranchChangedError,
 	CommitFailedError,
 	CommitResult,
 	DiffFile,
@@ -100,6 +101,8 @@ const GhReviewComments = Schema.fromJsonString(
 		}),
 	),
 );
+
+const GhHeadRef = Schema.fromJsonString(Schema.Struct({ headRefName: Schema.String }));
 
 const GhPullRequest = Schema.fromJsonString(
 	Schema.Struct({
@@ -338,7 +341,21 @@ export class GitService extends Context.Service<GitService>()("den/daemon/git/Gi
 			return new CommitResult({ sha });
 		}, Effect.provide(services));
 
+		// The stored branch goes stale when someone switches branches in the worktree, from a terminal or an
+		// agent. Pushing, merging or deleting by the stored name would then act on a branch the user is not on.
+		const requireWorkspaceBranch = Effect.fn("GitService.requireWorkspaceBranch")(function* (current: Workspace) {
+			const checkedOut = yield* runGit(current.path, ["branch", "--show-current"]);
+			if (checkedOut !== current.branch) {
+				// An empty answer means a detached HEAD.
+				return yield* new BranchChangedError({
+					expected: current.branch,
+					actual: checkedOut === "" ? null : checkedOut,
+				});
+			}
+		});
+
 		const pushWorkspace = Effect.fn("GitService.pushWorkspace")(function* (current: Workspace) {
+			yield* requireWorkspaceBranch(current);
 			const remotes = yield* runGit(current.path, ["remote"]);
 			if (!remotes.split("\n").includes("origin")) {
 				return yield* new NoRemoteError();
@@ -548,6 +565,7 @@ export class GitService extends Context.Service<GitService>()("den/daemon/git/Gi
 			review: PullRequestReviewInput,
 		) {
 			const current = yield* workspaces.get(workspaceId);
+			yield* requireWorkspaceBranch(current);
 			const number = yield* requirePullRequestNumber(current);
 			yield* runGh(current.path, [
 				"pr",
@@ -573,7 +591,19 @@ export class GitService extends Context.Service<GitService>()("den/daemon/git/Gi
 		) {
 			const current = yield* workspaces.get(workspaceId);
 			const { branch } = current;
+			yield* requireWorkspaceBranch(current);
 			const number = yield* requirePullRequestNumber(current);
+			// Read before merging, so a gh failure here leaves the pull request open instead of half done.
+			const headRefName = deleteBranch
+				? yield* runGh(current.path, ["pr", "view", number, "--json", "headRefName"]).pipe(
+						Effect.catchTag(
+							"GhCommandError",
+							failGh(current.path, "gh pr view failed", new PullRequestReadError({ branch })),
+						),
+						Effect.flatMap((output) => decodeGh(GhHeadRef, output, branch)),
+						Effect.map((found) => found.headRefName),
+					)
+				: null;
 			yield* runGh(current.path, ["pr", "merge", number, MERGE_FLAGS[method]]).pipe(
 				Effect.catchTag(
 					"GhCommandError",
@@ -583,7 +613,15 @@ export class GitService extends Context.Service<GitService>()("den/daemon/git/Gi
 			yield* Effect.logInfo("Merged pull request").pipe(Effect.annotateLogs({ workspaceId, method }));
 			// Not gh's --delete-branch: it also switches the local checkout, which a worktree cannot do while the base
 			// branch is checked out in the project folder. The local branch goes when the workspace is archived.
-			if (deleteBranch) {
+			if (headRefName !== null && headRefName !== branch) {
+				// gh finds the pull request through the upstream, which can name another branch. Deleting the
+				// workspace's branch on origin would then remove a branch this pull request never used.
+				yield* Effect.logError("The pull request's head is not the workspace branch, so no branch was deleted").pipe(
+					Effect.annotateLogs({ workspaceId, branch, headRefName }),
+				);
+				return yield* new RemoteBranchDeleteError({ branch: headRefName });
+			}
+			if (headRefName !== null) {
 				yield* runGit(current.path, ["push", "origin", "--delete", branch]).pipe(
 					Effect.catchTag("GitCommandError", (cause) =>
 						Effect.logError("Could not delete the remote branch", cause).pipe(
