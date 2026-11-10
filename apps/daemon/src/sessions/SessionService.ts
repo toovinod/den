@@ -187,8 +187,9 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 			return Effect.asVoid(updateSession(runtime.sessionId, { status }));
 		};
 
+		// The budget is in bytes, and a string's length counts UTF-16 units, a third of the bytes for CJK text.
 		const publish = (event: SessionEvent) =>
-			PubSub.publish(events, { event, bytes: JSON.stringify(event.event).length });
+			PubSub.publish(events, { event, bytes: Buffer.byteLength(JSON.stringify(event.event)) });
 
 		// Stored events are written before they are published, so a subscriber never misses one.
 		const record = Effect.fnUntraced(function* (runtime: Runtime, event: AgentEvent) {

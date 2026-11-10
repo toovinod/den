@@ -267,6 +267,51 @@ describe("SessionService", () => {
 		);
 	});
 
+	test("counts a subscriber's buffer in UTF-8 bytes, not characters", async () => {
+		// 200 messages of 2,000 three-byte characters: 0.4 million characters, but 1.2 MB, over the 1 MB budget.
+		const wide = "\u6f22".repeat(2_000);
+		const burst: Array<AgentEvent> = [
+			...Array.from(
+				{ length: 200 },
+				(_, index): AgentEvent => ({
+					type: "message.completed",
+					itemId: `wide-${index}`,
+					text: wide,
+				}),
+			),
+			{ type: "turn.completed", turnId: "burst", result: { status: "completed" } },
+		];
+		const recording: Recording = { kind: "codex", nativeSessionId: "thread-wide", turns: [messages("warm", 1), burst] };
+		const outcome = await runWithRecording(recording, (tempDir) =>
+			Effect.gen(function* () {
+				const sessions = yield* SessionService;
+				const session = yield* addSession(tempDir);
+				yield* sessions.sendMessage(session.id, "warm", [], false);
+				yield* waitForStored(session.id, 3);
+				const firstReceived = yield* Deferred.make<void>();
+				const gate = yield* Deferred.make<void>();
+				const subscriber = yield* sessions.subscribe(session.id, -1).pipe(
+					Stream.takeUntil((stored) => stored.event.type === "turn.completed" && stored.event.turnId === "burst"),
+					Stream.runForEach(() =>
+						Effect.gen(function* () {
+							yield* Deferred.succeed(firstReceived, undefined);
+							yield* Deferred.await(gate);
+						}),
+					),
+					Effect.result,
+					Effect.forkChild,
+				);
+				yield* Deferred.await(firstReceived);
+				yield* sessions.sendMessage(session.id, "burst", [], false);
+				yield* waitForStored(session.id, 205);
+				yield* Effect.sleep("200 millis");
+				yield* Deferred.succeed(gate, undefined);
+				return yield* Fiber.join(subscriber).pipe(Effect.timeout("5 seconds"));
+			}),
+		);
+		expect(outcome._tag === "Failure" && outcome.failure._tag).toBe("ResubscribeRequiredError");
+	});
+
 	test("caps running agents at 8 and stops the least recently used idle one for a new one", async () => {
 		const result = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {
