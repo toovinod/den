@@ -2,10 +2,11 @@ import type { AgentSessionHandle, StartSessionInput } from "../AgentAdapter.ts";
 import codexVersionFile from "./generated/CODEX_VERSION" with { type: "text" };
 import { CodexAdapter, CodexAdapterConfig } from "./CodexAdapter.ts";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
+import { CodexRequestSettings } from "./codexRpcClient.ts";
 import { userMessage } from "../../testing/userMessage.ts";
 import { BunServices } from "@effect/platform-bun";
 import { describe, expect, test } from "bun:test";
-import { Effect, Stream } from "effect";
+import { Duration, Effect, Stream } from "effect";
 
 const fakeCodex = `${import.meta.dir}/fixtures/fakeCodex.ts`;
 const newSession: StartSessionInput = {
@@ -157,6 +158,25 @@ describe("CodexAdapter", () => {
 				result: { status: "interrupted" },
 			},
 		]);
+	});
+
+	test("a control request Codex never answers fails at its deadline", async () => {
+		const error = await runSession((handle) =>
+			Effect.gen(function* () {
+				yield* handle.sendMessage(userMessage("approve this"));
+				yield* takeUntil(handle, "approval.requested");
+				// The fake app-server never answers turn/steer.
+				return yield* Effect.flip(
+					handle
+						.sendMessage(userMessage("steer"), { steer: true })
+						.pipe(Effect.provideService(CodexRequestSettings, { timeout: Duration.millis(100) })),
+				);
+			}),
+		);
+		expect(error).toMatchObject({
+			_tag: "AgentProcessError",
+			message: "Codex did not answer turn/steer in time. Try again, and stop the chat if it keeps happening.",
+		});
 	});
 
 	test("resumes an existing thread", async () => {

@@ -1,5 +1,5 @@
+import { type Cause, Context, Deferred, Duration, Effect, Queue, Schema, Stream } from "effect";
 import { type AgentError, AgentProcessError, AgentProtocolError } from "../AgentAdapter.ts";
-import { type Cause, Deferred, Effect, Queue, Schema, Stream } from "effect";
 import { type ChildProcess, ChildProcessSpawner } from "effect/process";
 import { toAgentError } from "../toAgentError.ts";
 
@@ -49,6 +49,15 @@ export interface CodexRpcClient {
 }
 
 export const METHOD_NOT_FOUND = -32601;
+
+export const CodexRequestSettings = Context.Reference<{
+	// How long Codex may take to answer a request. Every app-server request is answered at once, turns
+	// included: their work streams in as notifications, which have no deadline. A hung app-server then fails
+	// the call instead of leaving the UI waiting forever.
+	readonly timeout: Duration.Duration;
+}>("den/daemon/agents/codex/CodexRequestSettings", {
+	defaultValue: () => ({ timeout: Duration.seconds(30) }),
+});
 // Incoming messages wait here for the adapter. A full buffer pauses reading stdout.
 const INCOMING_BUFFER = 256;
 
@@ -158,11 +167,22 @@ export const makeCodexRpcClient = Effect.fn("makeCodexRpcClient")(function* (com
 		incoming: Stream.fromQueue(incoming),
 		request: (method, params) =>
 			Effect.gen(function* () {
+				const { timeout } = yield* CodexRequestSettings;
 				const id = nextId++;
 				const deferred = yield* Deferred.make<unknown, AgentError>();
 				pending.set(id, deferred);
 				return yield* send({ id, method, params }).pipe(
 					Effect.andThen(Deferred.await(deferred)),
+					Effect.timeoutOrElse({
+						duration: timeout,
+						orElse: () =>
+							Effect.fail(
+								new AgentProcessError({
+									message: `Codex did not answer ${method} in time. Try again, and stop the chat if it keeps happening.`,
+									cause: null,
+								}),
+							),
+					}),
 					// Also when the caller gives up, for example at a deadline, so a reply that never comes leaks nothing.
 					Effect.ensuring(Effect.sync(() => pending.delete(id))),
 				);
