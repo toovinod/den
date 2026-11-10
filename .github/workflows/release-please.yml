@@ -3,6 +3,14 @@ name: Release
 on:
   push:
     branches: [main]
+  # Builds the desktop downloads by hand: for a tag, to attach them again after a failed build, and without one,
+  # only to check that they still build.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the downloads to, such as v0.1.1. Leave empty to only build.
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -10,9 +18,66 @@ permissions:
 
 jobs:
   release-please:
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # Here and not on the release event: a release made with GITHUB_TOKEN starts no other workflow.
+  desktop:
+    name: Desktop download (${{ matrix.name }})
+    needs: release-please
+    if: ${{ !cancelled() && (needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Apple silicon
+            os: macos-15
+            bundles: dmg
+            files: bundle/dmg/*.dmg
+          - name: Linux x64
+            os: ubuntu-24.04
+            bundles: deb,appimage
+            files: bundle/deb/*.deb bundle/appimage/*.AppImage
+    env:
+      TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Install Tauri system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev build-essential file
+      - run: bun install --frozen-lockfile
+      # The desktop package's own build skips bundling, so build what it bundles, then bundle here.
+      - run: bunx turbo run build --filter=daemon --filter=web
+      - run: bunx tauri build --bundles ${{ matrix.bundles }}
+        working-directory: apps/desktop
+      - name: Attach to the release
+        working-directory: apps/desktop/src-tauri/target/release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l ${{ matrix.files }}
+          if [ -n "$TAG" ]; then
+            gh release upload "$TAG" ${{ matrix.files }} --clobber
+          fi
