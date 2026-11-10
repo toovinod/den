@@ -388,6 +388,8 @@ export class GitService extends Context.Service<GitService>()("den/daemon/git/Gi
 		// through the remote it pushes to. A branch argument would be read as a pull request number when it is
 		// all digits, and would match a fork's branch of the same name. Everything after uses the number.
 		const findPullRequest = Effect.fn("GitService.findPullRequest")(function* (current: Workspace) {
+			// gh finds the pull request of the checked-out branch, so after a switch it would answer for another one.
+			yield* requireWorkspaceBranch(current);
 			const output = yield* runGh(current.path, [
 				"pr",
 				"view",
@@ -572,7 +574,6 @@ export class GitService extends Context.Service<GitService>()("den/daemon/git/Gi
 			review: PullRequestReviewInput,
 		) {
 			const current = yield* workspaces.get(workspaceId);
-			yield* requireWorkspaceBranch(current);
 			const number = yield* requirePullRequestNumber(current);
 			yield* runGh(current.path, [
 				"pr",
@@ -598,7 +599,6 @@ export class GitService extends Context.Service<GitService>()("den/daemon/git/Gi
 		) {
 			const current = yield* workspaces.get(workspaceId);
 			const { branch } = current;
-			yield* requireWorkspaceBranch(current);
 			const number = yield* requirePullRequestNumber(current);
 			// Read before merging, so a gh failure here leaves the pull request open instead of half done.
 			const headRefName = deleteBranch

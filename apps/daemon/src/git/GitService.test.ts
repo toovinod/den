@@ -508,7 +508,7 @@ describe("GitService pull requests", () => {
 		expect(result.remoteBranches).toContain("feature");
 	});
 
-	test("refuses to push, open, review or merge after the worktree switched branches", async () => {
+	test("refuses to read, push, open, review or merge pull requests after the worktree switched branches", async () => {
 		const result = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {
 				const fs = yield* FileSystem.FileSystem;
@@ -531,6 +531,9 @@ describe("GitService pull requests", () => {
 					Effect.flip(git.createPullRequest(created.id, { title: "t", body: "", draft: false })),
 					Effect.flip(git.reviewPullRequest(created.id, { verdict: "approve", body: "" })),
 					Effect.flip(git.mergePullRequest(created.id, "squash", true)),
+					// gh finds the pull request of the checked-out branch, which would store another branch's URL.
+					Effect.flip(git.getPullRequest(created.id)),
+					Effect.flip(git.getPullRequestConversation(created.id)),
 				]).pipe(Effect.provideService(GhSettings, { executable }));
 				yield* runGit(created.path, ["switch", "--detach"]);
 				const detached = yield* Effect.flip(git.push(created.id));
@@ -549,6 +552,7 @@ describe("GitService pull requests", () => {
 		expect(result.ghLog).not.toContain("pr create");
 		expect(result.ghLog).not.toContain("pr review");
 		expect(result.ghLog).not.toContain("pr merge");
+		expect(result.ghLog).not.toContain("pr view");
 	});
 
 	test("reports a merge that gh refused", async () => {

@@ -93,6 +93,7 @@ export class GitRpcs extends RpcGroup.make(
 		error: Schema.Union([
 			WorkspaceNotFoundError,
 			GitTimeoutError,
+			BranchChangedError,
 			...GhError,
 			PullRequestReadError,
 			DaemonInternalError,
@@ -105,6 +106,7 @@ export class GitRpcs extends RpcGroup.make(
 		error: Schema.Union([
 			WorkspaceNotFoundError,
 			GitTimeoutError,
+			BranchChangedError,
 			...GhError,
 			PullRequestNotFoundError,
 			PullRequestReadError,
