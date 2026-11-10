@@ -336,8 +336,9 @@ describe("GitService pull requests", () => {
 				{ id: "PRR_1", author: null, state: "CHANGES_REQUESTED", body: "Fix it", submittedAt: "2026-01-02T00:00:00Z" },
 			],
 		});
+		// One page, as gh prints it with --paginate --slurp.
 		const commentsJson = JSON.stringify([
-			{ id: 11, user: { login: "bo" }, body: "Rename this", path: "src/a.ts", line: 4, created_at: "2026-01-03" },
+			[{ id: 11, user: { login: "bo" }, body: "Rename this", path: "src/a.ts", line: 4, created_at: "2026-01-03" }],
 		]);
 		const result = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {
@@ -370,7 +371,42 @@ describe("GitService pull requests", () => {
 			{ id: "11", author: "bo", body: "Rename this", createdAt: "2026-01-03", path: "src/a.ts", line: 4 },
 		]);
 		expect(result.ghLog).toContain("pr view 7 --json");
-		expect(result.ghLog).toContain("api repos/{owner}/{repo}/pulls/7/comments?per_page=100");
+		expect(result.ghLog).toContain("api --paginate --slurp repos/{owner}/{repo}/pulls/7/comments?per_page=100");
+	});
+
+	test("reads every page of line comments, past GitHub's 100 per page", async () => {
+		const page = (from: number, count: number) =>
+			Array.from({ length: count }, (_, index) => ({
+				id: from + index,
+				user: { login: "bo" },
+				body: `Comment ${from + index}`,
+				path: "src/a.ts",
+				line: 1,
+				created_at: "2026-01-03",
+			}));
+		const viewJson = JSON.stringify({ number: 7, statusCheckRollup: null, comments: [], reviews: [] });
+		const firstPage = JSON.stringify(page(1, 100));
+		// What gh prints with --paginate --slurp: one array that holds each page's array.
+		const slurped = JSON.stringify([page(1, 100), page(101, 50)]);
+		const conversation = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const created = yield* createWorkspace(tempDir);
+				const executable = yield* fakeGh(
+					tempDir,
+					[
+						`[ "$1" = api ] && case "$*" in *--paginate*--slurp*) echo '${slurped}' ;; *) echo '${firstPage}' ;; esac`,
+						`[ "$1 $2 $3" = "pr view --json" ] && echo '${foundJson}'`,
+						`[ "$1 $2 $3" = "pr view 7" ] && echo '${viewJson}'`,
+						"exit 0",
+					].join("\n"),
+				);
+				return yield* Effect.flatMap(GitService, (git) => git.getPullRequestConversation(created.id)).pipe(
+					Effect.provideService(GhSettings, { executable }),
+				);
+			}),
+		);
+		expect(conversation.reviewComments).toHaveLength(150);
+		expect(conversation.reviewComments.at(-1)?.body).toBe("Comment 150");
 	});
 
 	test("reports a branch with no pull request", async () => {

@@ -89,16 +89,19 @@ const GhConversation = Schema.fromJsonString(
 	}),
 );
 
-const GhReviewComments = Schema.fromJsonString(
+// One array per page, as `gh api --paginate --slurp` prints them.
+const GhReviewCommentPages = Schema.fromJsonString(
 	Schema.Array(
-		Schema.Struct({
-			id: Schema.Int,
-			user: GhAuthor,
-			body: Schema.String,
-			path: Schema.String,
-			line: Schema.NullOr(Schema.Int),
-			created_at: Schema.String,
-		}),
+		Schema.Array(
+			Schema.Struct({
+				id: Schema.Int,
+				user: GhAuthor,
+				body: Schema.String,
+				path: Schema.String,
+				line: Schema.NullOr(Schema.Int),
+				created_at: Schema.String,
+			}),
+		),
 	),
 );
 
@@ -508,13 +511,17 @@ export class GitService extends Context.Service<GitService>()("den/daemon/git/Gi
 				),
 			);
 			const conversation = yield* decodeGh(GhConversation, viewed, branch);
-			// gh fills in {owner}/{repo} from the repository's remote. 100 is GitHub's largest page.
+			// gh fills in {owner}/{repo} from the repository's remote. 100 is GitHub's largest page, and --paginate
+			// follows the rest. --slurp wraps the pages in one array, so the output is always one JSON document.
 			const lineComments = yield* runGh(current.path, [
 				"api",
+				"--paginate",
+				"--slurp",
 				`repos/{owner}/{repo}/pulls/${conversation.number}/comments?per_page=100`,
 			]).pipe(
 				Effect.catchTag("GhCommandError", failGh(current.path, "gh api failed", new PullRequestReadError({ branch }))),
-				Effect.flatMap((output) => decodeGh(GhReviewComments, output, branch)),
+				Effect.flatMap((output) => decodeGh(GhReviewCommentPages, output, branch)),
+				Effect.map((pages) => pages.flat()),
 			);
 			return new PullRequestConversation({
 				checks: (conversation.statusCheckRollup ?? []).map(
