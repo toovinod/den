@@ -8,6 +8,7 @@ import { TerminalPanel } from "./TerminalPanel.tsx";
 import { FileBrowser } from "./FileBrowser.tsx";
 import { RunPanel } from "./RunPanel.tsx";
 import { DiffView } from "./DiffView.tsx";
+import { useState } from "react";
 
 const TABS: ReadonlyArray<{ readonly value: PanelTab; readonly label: string; readonly icon: React.ReactNode }> = [
 	{ value: "diff", label: "Diff", icon: <FileDiffIcon /> },
@@ -19,9 +20,13 @@ const TABS: ReadonlyArray<{ readonly value: PanelTab; readonly label: string; re
 
 const isPanelTab = (value: string): value is PanelTab => TABS.some((tab) => tab.value === value);
 
-// Every tab stays mounted once opened, so switching keeps terminals, scroll positions and loaded diffs.
+// A tab mounts the first time it is opened, so panels nobody looks at load nothing. It then stays mounted, so
+// switching keeps terminals, scroll positions and loaded diffs.
 export const SidePanel = () => {
 	const tab = useAppState((current) => current.panel.tab);
+	const [opened, setOpened] = useState<ReadonlySet<PanelTab>>(() => new Set([tab]));
+	// Updated during render, so the newly opened tab mounts in this render instead of one render later.
+	if (!opened.has(tab)) setOpened(new Set([...opened, tab]));
 	const workspaceId = useAppState((current) => current.selectedWorkspaceId);
 	const workspace = useAppState((current) => (workspaceId === null ? undefined : current.workspaces[workspaceId]));
 	if (workspace === undefined) return <aside className="h-full bg-background" />;
@@ -41,7 +46,7 @@ export const SidePanel = () => {
 					</TabsTrigger>
 				))}
 			</TabsList>
-			{TABS.map((item) => (
+			{TABS.filter((item) => opened.has(item.value)).map((item) => (
 				<TabsContent key={item.value} value={item.value} forceMount className="min-h-0 data-[state=inactive]:hidden">
 					<PanelBody tab={item.value} workspaceKey={workspace.id} />
 				</TabsContent>
