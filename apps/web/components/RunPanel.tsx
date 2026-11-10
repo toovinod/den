@@ -36,6 +36,16 @@ export const RunPanel = ({ workspace }: { readonly workspace: Workspace }) => {
 		() => callDaemon((daemon) => daemon.listScriptRuns({ workspaceId: workspace.id })),
 		workspace.id,
 	);
+	// Each status change reloads the list, so the panel never sits on "Waiting to start" once a run started.
+	// After a dropped connection, a reload catches up on the changes missed meanwhile.
+	useEffect(
+		() =>
+			followReattaching<ScriptRun>(
+				(handlers) => followDaemon((daemon) => daemon.watchScriptRuns({ workspaceId: workspace.id }), handlers),
+				{ onItem: reload, onReattach: reload },
+			),
+		[workspace.id, reload],
+	);
 	const runs = loaded.state === "ready" ? loaded.value : [];
 	const run = latest(runs, kind);
 	const running = run?.status === "processing" || run?.status === "pending";

@@ -19,6 +19,7 @@ import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import type { ScriptRunKind } from "@repo/contracts/ScriptRun";
 import type { ChildProcessSpawner } from "effect/process";
 import { DaemonConfig } from "../config/DaemonConfig.ts";
+import { ScriptRunChanges } from "./ScriptRunChanges.ts";
 import { createWorktree } from "./createWorktree.ts";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { WorkspaceLock } from "./WorkspaceLock.ts";
@@ -32,7 +33,11 @@ import { join } from "node:path";
 
 type WorkspaceRow = typeof workspace.$inferSelect;
 type ScriptRunRow = typeof scriptRun.$inferInsert;
-type ScriptServices = LocalDatabase | ChildProcessSpawner.ChildProcessSpawner | SecureRandom.SecureRandom;
+type ScriptServices =
+	| LocalDatabase
+	| ScriptRunChanges
+	| ChildProcessSpawner.ChildProcessSpawner
+	| SecureRandom.SecureRandom;
 
 const UNFINISHED = ["pending", "processing"] as const;
 
@@ -62,6 +67,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("den/d
 		const sessions = yield* SessionService;
 		const terminals = yield* TerminalService;
 		const workspaceLock = yield* WorkspaceLock;
+		const scriptRunChanges = yield* ScriptRunChanges;
 		const fs = yield* FileSystem.FileSystem;
 		const services = yield* Effect.context<ScriptServices>();
 		// One fiber per running script, interrupted when its workspace is archived
@@ -444,6 +450,9 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("den/d
 			Effect.provide(services),
 		);
 
+		const watchScriptRuns = (workspaceId: string): Stream.Stream<ScriptRun> =>
+			Stream.fromPubSub(scriptRunChanges).pipe(Stream.filter((run) => run.workspaceId === workspaceId));
+
 		const stopRunScript = (workspaceId: string) => cancelScripts(workspaceId, "Stopped.", ["run"]);
 
 		const setPullRequestUrl = Effect.fn("WorkspaceService.setPullRequestUrl")(function* (
@@ -519,6 +528,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("den/d
 			followScriptRunOutput,
 			startRunScript,
 			stopRunScript,
+			watchScriptRuns,
 			setPullRequestUrl,
 		};
 	}),

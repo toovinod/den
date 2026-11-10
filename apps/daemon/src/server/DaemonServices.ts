@@ -1,4 +1,5 @@
 import { TrackedChildProcessSpawner } from "../processes/TrackedChildProcessSpawner.ts";
+import { ScriptRunChanges } from "../workspaces/ScriptRunChanges.ts";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import { ClaudeAdapter } from "../agents/claude/ClaudeAdapter.ts";
 import { TerminalService } from "../terminals/TerminalService.ts";
@@ -29,7 +30,7 @@ export const AgentServices = Layer.mergeAll(
 export const DaemonServices = Layer.mergeAll(GitService.layer, FileService.layer).pipe(
 	Layer.provideMerge(WorkspaceService.layer),
 	Layer.provideMerge(Layer.merge(SessionService.layer, TerminalService.layer)),
-	Layer.provideMerge(Layer.merge(ProjectService.layer, WorkspaceLock.layer)),
+	Layer.provideMerge(Layer.mergeAll(ProjectService.layer, WorkspaceLock.layer, ScriptRunChanges.layer)),
 	Layer.provide(TrackedChildProcessSpawner),
 	Layer.provideMerge(LocalDatabase.layer),
 	Layer.provide([BunServices.layer, SecureRandom.layerWebCrypto]),

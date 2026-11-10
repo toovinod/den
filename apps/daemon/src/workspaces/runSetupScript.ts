@@ -1,8 +1,10 @@
 import { IllegalJobTransitionError, type JobEvent, transitionJob } from "../jobs/transitionJob.ts";
-import { Duration, Effect, Schedule, Schema, Stream } from "effect";
+import { Duration, Effect, PubSub, Schedule, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
+import { ScriptRunChanges } from "./ScriptRunChanges.ts";
+import { ScriptRun } from "@repo/contracts/ScriptRun";
 import { capLineLength } from "./capLineLength.ts";
 import { scriptRun } from "../database/schema.ts";
 import { nowIso } from "../database/nowIso.ts";
@@ -52,10 +54,7 @@ export const applyScriptRunEvent = Effect.fn("applyScriptRunEvent")(function* (
 	const outcome = yield* database.query((db) =>
 		db.transaction((tx) =>
 			Effect.gen(function* () {
-				const [row] = yield* tx
-					.select({ status: scriptRun.status, attempts: scriptRun.attempts })
-					.from(scriptRun)
-					.where(eq(scriptRun.id, scriptRunId));
+				const [row] = yield* tx.select().from(scriptRun).where(eq(scriptRun.id, scriptRunId));
 				if (row === undefined) {
 					return { _tag: "Missing" } as const;
 				}
@@ -63,11 +62,12 @@ export const applyScriptRunEvent = Effect.fn("applyScriptRunEvent")(function* (
 				if (result._tag === "Failure") {
 					return { _tag: "Illegal", error: result.failure } as const;
 				}
+				const update = exitCode === undefined ? result.success : { ...result.success, exitCode };
 				yield* tx
 					.update(scriptRun)
-					.set(exitCode === undefined ? result.success : { ...result.success, exitCode })
+					.set(update)
 					.where(and(eq(scriptRun.id, scriptRunId), eq(scriptRun.status, row.status)));
-				return { _tag: "Applied", update: result.success } as const;
+				return { _tag: "Applied", update: result.success, run: new ScriptRun({ ...row, ...update }) } as const;
 			}),
 		),
 	);
@@ -81,6 +81,7 @@ export const applyScriptRunEvent = Effect.fn("applyScriptRunEvent")(function* (
 		case "Illegal":
 			return yield* outcome.error;
 		case "Applied":
+			yield* PubSub.publish(yield* ScriptRunChanges, outcome.run);
 			return outcome.update;
 	}
 });

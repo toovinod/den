@@ -83,6 +83,12 @@ export class WorkspaceRpcs extends RpcGroup.make(
 		payload: { workspaceId: Schema.String },
 		error: DaemonInternalError,
 	}),
+	// Each script run of the workspace as its status changes, from the moment of the call.
+	Rpc.make("watchScriptRuns", {
+		payload: { workspaceId: Schema.String },
+		success: ScriptRun,
+		stream: true,
+	}),
 	// The kept output first, then new lines as the script prints them. Ends when the run ends.
 	Rpc.make("followScriptRunOutput", {
 		payload: { scriptRunId: Schema.String },

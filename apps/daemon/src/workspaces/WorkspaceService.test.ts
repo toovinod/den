@@ -673,4 +673,33 @@ describe("WorkspaceService", () => {
 		);
 		expect(result).toEqual(["", ...Array(MAX_FINISHED_OUTPUTS).fill("done")]);
 	});
+
+	test("streams each status change of the workspace's script runs", async () => {
+		const statuses = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const projects = yield* ProjectService;
+				const workspaces = yield* WorkspaceService;
+				const project = yield* addProject(tempDir);
+				yield* projects.updateScripts(project.id, { setupScript: null, runScript: "echo done" });
+				const created = yield* workspaces.create({ kind: "inPlace", projectId: project.id });
+				const other = yield* workspaces.create({ kind: "worktree", projectId: project.id, name: "other" });
+				const watching = yield* Effect.forkChild(
+					workspaces.watchScriptRuns(created.id).pipe(
+						Stream.takeUntil((run) => run.status === "completed"),
+						Stream.runCollect,
+						Effect.timeout("5 seconds"),
+					),
+				);
+				// Let the subscription register before the runs start.
+				yield* Effect.sleep("100 millis");
+				yield* workspaces.startRunScript(other.id);
+				yield* workspaces.startRunScript(created.id);
+				return (yield* Fiber.join(watching)).map((run) => [run.workspaceId === created.id, run.status]);
+			}),
+		);
+		expect(statuses).toEqual([
+			[true, "processing"],
+			[true, "completed"],
+		]);
+	});
 });

@@ -2,9 +2,9 @@ import type { Follow } from "./daemonRuntime.ts";
 
 const REATTACH_DELAY_MS = 1000;
 
-// Follows a stream the daemon replays from the start on every attach, such as a script run's kept
-// output. When the connection drops, it attaches to the same stream again; `onReattach` runs first, so
-// the caller can drop what the replay repeats. `onEnd` runs only when the stream itself ends.
+// Follows a daemon stream across dropped connections: when the connection drops, it attaches to the
+// same stream again. `onReattach` runs first, so the caller can drop what a replay will repeat, or
+// reload what it missed meanwhile. `onEnd` runs only when the stream itself ends.
 export const followReattaching = <A>(
 	follow: (handlers: Follow<A>) => () => void,
 	handlers: Follow<A> & { readonly onReattach: () => void },
