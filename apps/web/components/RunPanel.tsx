@@ -3,6 +3,7 @@
 import { callDaemon, errorMessage, followDaemon } from "../lib/daemonRuntime.ts";
 import type { ScriptRun, ScriptRunKind } from "@repo/contracts/ScriptRun";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { followReattaching } from "../lib/followReattaching.ts";
 import { useDaemonValue } from "../lib/useDaemonValue.ts";
 import type { Workspace } from "@repo/contracts/Workspace";
 import { openDialog, toast } from "../lib/store.ts";
@@ -110,25 +111,37 @@ const ScriptOutput = ({ scriptRunId, onEnd }: { readonly scriptRunId: string; re
 	useEffect(() => {
 		let batch: Array<string> = [];
 		let scheduled = false;
+		// After a reattach the daemon replays the kept output, which replaces what is shown.
+		let replace = false;
 		const flush = () => {
 			scheduled = false;
 			const added = batch;
 			batch = [];
-			setLines((current) => [...current, ...added].slice(-MAX_LINES));
+			if (added.length === 0) return;
+			const fresh = replace;
+			replace = false;
+			setLines((current) => (fresh ? added : [...current, ...added]).slice(-MAX_LINES));
 		};
-		return followDaemon((daemon) => daemon.followScriptRunOutput({ scriptRunId }), {
-			onItem: (line) => {
-				batch.push(line);
-				if (!scheduled) {
-					scheduled = true;
-					requestAnimationFrame(flush);
-				}
+		return followReattaching<string>(
+			(handlers) => followDaemon((daemon) => daemon.followScriptRunOutput({ scriptRunId }), handlers),
+			{
+				onItem: (line) => {
+					batch.push(line);
+					if (!scheduled) {
+						scheduled = true;
+						requestAnimationFrame(flush);
+					}
+				},
+				onReattach: () => {
+					flush();
+					replace = true;
+				},
+				onEnd: () => {
+					flush();
+					onEnd();
+				},
 			},
-			onEnd: () => {
-				flush();
-				onEnd();
-			},
-		});
+		);
 	}, [scriptRunId, onEnd]);
 
 	useLayoutEffect(() => {
