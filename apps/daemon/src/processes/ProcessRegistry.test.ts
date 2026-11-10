@@ -1,15 +1,17 @@
 import { isGoneWithin, killGroupOnExit, spawnDetachedShell, WITH_GRANDCHILD } from "../testing/processTesting.ts";
+import { Clock, Context, Duration, Effect, Exit, FileSystem, Layer, Option, Schema, Stream } from "effect";
 import { ProcessRegistry, REGISTRY_FILE_NAME, RegistryEntries } from "./ProcessRegistry.ts";
-import { Clock, Context, Duration, Effect, FileSystem, Layer, Schema } from "effect";
 import { testDaemonConfig } from "../testing/testDaemonConfig.ts";
 import { runInTempDir } from "../testing/runServiceTest.ts";
-import { LOCK_FILE_NAME } from "./lockDataDirectory.ts";
 import { processExists } from "./stopProcessGroup.ts";
 import { BunServices } from "@effect/platform-bun";
 import { describe, expect, test } from "bun:test";
+import { ChildProcess } from "effect/process";
 import { join } from "node:path";
 
 type Entries = typeof RegistryEntries.Type;
+
+const DAEMON_DIR = join(import.meta.dir, "..", "..");
 
 // Writes the registry a crashed daemon would have left, starts a new registry on it, and returns
 // what the new registry left in the file.
@@ -24,6 +26,10 @@ const startRegistryOn = (dataDir: string, entries: Entries) =>
 		);
 		return Schema.decodeUnknownSync(Schema.fromJsonString(RegistryEntries))(yield* fs.readFileString(file));
 	});
+
+// Starts a registry on the data directory and closes it again.
+const startRegistry = (dataDir: string) =>
+	Effect.scoped(Layer.build(ProcessRegistry.layer.pipe(Layer.provide([testDaemonConfig(dataDir), BunServices.layer]))));
 
 describe("ProcessRegistry", () => {
 	test("stops a recorded group whose leader is still the process we started", async () => {
@@ -84,19 +90,59 @@ describe("ProcessRegistry", () => {
 		expect(result.stillRunning).toBe(true);
 	});
 
-	test("a lock left by a daemon that is gone does not stop the next one", async () => {
+	test("a lock held by a daemon that was killed does not stop the next one", async () => {
+		const result = await runInTempDir((dataDir) =>
+			Effect.gen(function* () {
+				const holder = yield* ChildProcess.make("bun", ["src/testing/dataDirectoryHolder.ts"], {
+					cwd: DAEMON_DIR,
+					env: { DEN_DATA_DIR: dataDir },
+					extendEnv: true,
+				});
+				const ready = yield* holder.stdout.pipe(Stream.decodeText, Stream.splitLines, Stream.runHead);
+				const heldBefore = yield* Effect.flip(startRegistry(dataDir));
+				// SIGKILL runs no finalizer, so only the kernel can release what the holder held.
+				process.kill(holder.pid, "SIGKILL");
+				yield* holder.exitCode.pipe(Effect.ignore);
+				yield* startRegistry(dataDir);
+				return { ready: Option.getOrUndefined(ready), heldBefore: heldBefore._tag };
+			}),
+		);
+		expect(result).toEqual({ ready: "DEN_LOCK_HELD", heldBefore: "DataDirectoryInUseError" });
+	}, 20_000);
+
+	test("two daemons starting at once on a stale lock: exactly one gets the data directory", async () => {
 		const result = await runInTempDir((dataDir) =>
 			Effect.gen(function* () {
 				const fs = yield* FileSystem.FileSystem;
-				const { shell } = yield* spawnDetachedShell("exit 0");
+				const { shell } = yield* spawnDetachedShell("echo gone");
 				yield* Effect.promise(() => shell.exited);
-				yield* fs.writeFileString(join(dataDir, LOCK_FILE_NAME), JSON.stringify({ pid: shell.pid, startedAt: 0 }));
-				yield* Effect.scoped(
-					Layer.build(ProcessRegistry.layer.pipe(Layer.provide([testDaemonConfig(dataDir), BunServices.layer]))),
+				const layer = ProcessRegistry.layer.pipe(Layer.provide([testDaemonConfig(dataDir), BunServices.layer]));
+				const race = Effect.scoped(
+					Effect.all([Effect.exit(Layer.build(layer)), Effect.exit(Layer.build(layer))], {
+						concurrency: "unbounded",
+					}).pipe(Effect.map((exits) => exits.filter(Exit.isSuccess).length)),
 				);
-				return { lockLeft: yield* fs.exists(join(dataDir, LOCK_FILE_NAME)) };
+				// The race is decided by timing, so run it often enough that a wrong lock shows up.
+				const rounds = [];
+				for (let i = 0; i < 30; i++) {
+					// A lock file naming a daemon that is gone, as a daemon that died leaves it.
+					yield* fs.writeFileString(join(dataDir, "dend.lock"), JSON.stringify({ pid: shell.pid, startedAt: 0 }));
+					rounds.push(yield* race);
+				}
+				return rounds.filter((winners) => winners !== 1).length;
 			}),
 		);
-		expect(result).toEqual({ lockLeft: false });
+		expect(result).toBe(0);
+	});
+
+	test("a lock file left by the previous version does not stop the next daemon", async () => {
+		const result = await runInTempDir((dataDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				yield* fs.writeFileString(join(dataDir, "dend.lock"), JSON.stringify({ pid: 1, startedAt: 0 }));
+				return yield* Effect.exit(startRegistry(dataDir));
+			}),
+		);
+		expect(Exit.isSuccess(result)).toBe(true);
 	});
 });

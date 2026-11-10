@@ -1,12 +1,11 @@
-import { PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE } from "../database/LocalDatabase.ts";
-import { processStartTime, wasStartedAt } from "./processStartTime.ts";
-import { DateTime, Effect, FileSystem, Option, Schema } from "effect";
-import { processExists } from "./stopProcessGroup.ts";
+import { PRIVATE_DIRECTORY_MODE } from "../database/LocalDatabase.ts";
+import { Effect, FileSystem, Predicate, Schema } from "effect";
+import { Database } from "bun:sqlite";
 import { join } from "node:path";
 
-export const LOCK_FILE_NAME = "dend.lock";
-
-const LockFile = Schema.fromJsonString(Schema.Struct({ pid: Schema.Int, startedAt: Schema.Number }));
+// Not `dend.lock`: the previous version left a JSON file there, which SQLite cannot open. That
+// version is never running next to this one, so its file is simply ignored.
+export const LOCK_FILE_NAME = "dend.lock.db";
 
 export class DataDirectoryInUseError extends Schema.TaggedError<DataDirectoryInUseError>()("DataDirectoryInUseError", {
 	dataDir: Schema.String,
@@ -16,58 +15,33 @@ export class DataDirectoryInUseError extends Schema.TaggedError<DataDirectoryInU
 	}
 }
 
+const isBusy = (error: unknown) => Predicate.hasProperty(error, "code") && error.code === "SQLITE_BUSY";
+
 // Holds the data directory for as long as the scope is open. A second daemon on the same directory
 // would otherwise read the first one's live children from the registry as a crashed daemon's
-// leftovers and stop them. The holder is recorded as pid plus start time, so a lock left by a daemon
-// that died is replaced, and a reused pid is not mistaken for a running daemon.
+// leftovers and stop them. The lock is an exclusive SQLite transaction, so the OS holds it and drops
+// it when the process dies, however it dies: there is never a stale lock to judge or replace.
 export const lockDataDirectory = Effect.fn("lockDataDirectory")(function* (dataDir: string) {
 	const fs = yield* FileSystem.FileSystem;
-	const file = join(dataDir, LOCK_FILE_NAME);
 	yield* fs.makeDirectory(dataDir, { recursive: true, mode: PRIVATE_DIRECTORY_MODE }).pipe(Effect.orDie);
 
-	const ownStart = yield* processStartTime(process.pid);
-	const contents = yield* Schema.encodeEffect(LockFile)({
-		pid: process.pid,
-		startedAt: Option.match(ownStart, { onNone: () => 0, onSome: DateTime.toEpochMillis }),
-	}).pipe(Effect.orDie);
-	// "wx" fails when the file exists, so only one daemon can create it.
-	const create = fs.writeFileString(file, contents, { flag: "wx", mode: PRIVATE_FILE_MODE }).pipe(
-		Effect.as(true),
-		Effect.catchIf(
-			(error) => error.reason._tag === "AlreadyExists",
-			() => Effect.succeed(false),
-		),
-		Effect.orDie,
+	const db = yield* Effect.acquireRelease(
+		Effect.sync(() => new Database(join(dataDir, LOCK_FILE_NAME), { create: true })),
+		(db) => Effect.sync(() => db.close()),
 	);
-	const holderIsRunning = fs.readFileString(file).pipe(
-		Effect.flatMap(Schema.decodeUnknownEffect(LockFile)),
-		Effect.option,
-		Effect.flatMap(
-			Option.match({
-				// Unreadable: a daemon is writing it right now, or it is damaged. Either way, not ours to take.
-				onNone: () => Effect.succeed(true),
-				onSome: (holder) =>
-					processExists(holder.pid).pipe(
-						Effect.flatMap((alive) => (alive ? wasStartedAt(holder.pid, holder.startedAt) : Effect.succeed(false))),
-					),
-			}),
+	yield* Effect.try({
+		try: () => {
+			// Fail at once rather than wait for the holder, which may run for days.
+			db.run("PRAGMA busy_timeout = 0");
+			// Keeps the lock after the transaction too, so it lasts until the connection closes.
+			db.run("PRAGMA locking_mode = EXCLUSIVE");
+			db.run("BEGIN EXCLUSIVE");
+		},
+		catch: (cause) => cause,
+	}).pipe(
+		// The driver throws untyped errors; only a busy lock is an expected outcome.
+		Effect.catch((cause) =>
+			isBusy(cause) ? Effect.fail(new DataDirectoryInUseError({ dataDir })) : Effect.die(cause),
 		),
-	);
-
-	if (!(yield* create)) {
-		if (yield* holderIsRunning) {
-			return yield* new DataDirectoryInUseError({ dataDir });
-		}
-		yield* Effect.logWarning("Replacing the lock of a daemon that is gone").pipe(Effect.annotateLogs({ dataDir }));
-		yield* fs.remove(file, { force: true }).pipe(Effect.orDie);
-		// Another daemon replacing the same stale lock got there first.
-		if (!(yield* create)) {
-			return yield* new DataDirectoryInUseError({ dataDir });
-		}
-	}
-	yield* Effect.addFinalizer(() =>
-		fs
-			.remove(file, { force: true })
-			.pipe(Effect.catch((cause) => Effect.logWarning("Could not remove the data directory lock", cause))),
 	);
 });
