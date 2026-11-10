@@ -12,6 +12,7 @@ import {
 import { RunScriptMissingError, ScriptRun, ScriptRunOutput } from "./ScriptRun.ts";
 import { DaemonInternalError } from "./DaemonInternalError.ts";
 import { ProjectNotFoundError } from "./Project.ts";
+import { GitTimeoutError } from "./Git.ts";
 import { Rpc, RpcGroup } from "effect/rpc";
 import { Schema } from "effect";
 
@@ -37,6 +38,7 @@ export class WorkspaceRpcs extends RpcGroup.make(
 			WorkspacePathInUseError,
 			BranchAlreadyExistsError,
 			WorktreeCreateError,
+			GitTimeoutError,
 			DaemonInternalError,
 		]),
 	}),
@@ -52,6 +54,7 @@ export class WorkspaceRpcs extends RpcGroup.make(
 			WorkspaceNotFoundError,
 			WorkspaceHasUnsavedWorkError,
 			WorktreeRemoveError,
+			GitTimeoutError,
 			DaemonInternalError,
 		]),
 	}),

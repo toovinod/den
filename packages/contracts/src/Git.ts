@@ -113,6 +113,21 @@ export class PushFailedError extends Schema.TaggedError<PushFailedError>()("Push
 	}
 }
 
+// kind says whether the command talks to a remote, which decides what the user should check.
+export class GitTimeoutError extends Schema.TaggedError<GitTimeoutError>()("GitTimeoutError", {
+	command: Schema.String,
+	kind: Schema.Literals(["local", "network"]),
+	timeout: Schema.String,
+}) {
+	override get message() {
+		const check =
+			this.kind === "network"
+				? "Check your network and that git and gh are signed in"
+				: "Check that no other git process is holding the repository";
+		return `\`${this.command}\` did not finish within ${this.timeout}, so Den stopped it. ${check}, then try again.`;
+	}
+}
+
 // actual is null on a detached HEAD.
 export class BranchChangedError extends Schema.TaggedError<BranchChangedError>()("BranchChangedError", {
 	expected: Schema.String,

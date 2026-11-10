@@ -11,6 +11,7 @@ import {
 	ProjectNotFoundError,
 } from "./Project.ts";
 import { DaemonInternalError } from "./DaemonInternalError.ts";
+import { GitTimeoutError } from "./Git.ts";
 import { Rpc, RpcGroup } from "effect/rpc";
 import { Schema } from "effect";
 
@@ -23,6 +24,7 @@ export class ProjectRpcs extends RpcGroup.make(
 			NotAGitRepositoryError,
 			DefaultBranchNotFoundError,
 			ProjectAlreadyAddedError,
+			GitTimeoutError,
 			DaemonInternalError,
 		]),
 	}),
@@ -37,6 +39,7 @@ export class ProjectRpcs extends RpcGroup.make(
 			NotAGitRepositoryError,
 			DefaultBranchNotFoundError,
 			ProjectAlreadyAddedError,
+			GitTimeoutError,
 			DaemonInternalError,
 		]),
 	}),

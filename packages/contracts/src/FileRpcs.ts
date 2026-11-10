@@ -1,6 +1,7 @@
 import { FileContent, FileEntry, FileNotFoundError, FileReadError } from "./WorkspaceFile.ts";
 import { DaemonInternalError } from "./DaemonInternalError.ts";
 import { WorkspaceNotFoundError } from "./Workspace.ts";
+import { GitTimeoutError } from "./Git.ts";
 import { Rpc, RpcGroup } from "effect/rpc";
 import { Schema } from "effect";
 
@@ -9,7 +10,7 @@ export class FileRpcs extends RpcGroup.make(
 	Rpc.make("listDirectory", {
 		payload: { workspaceId: Schema.String, path: Schema.String },
 		success: Schema.Array(FileEntry),
-		error: Schema.Union([WorkspaceNotFoundError, DaemonInternalError]),
+		error: Schema.Union([WorkspaceNotFoundError, GitTimeoutError, DaemonInternalError]),
 	}),
 	Rpc.make("readFile", {
 		payload: { workspaceId: Schema.String, path: Schema.String },
