@@ -21,6 +21,8 @@ export const SessionRpcHandlers = SessionRpcs.toLayer(
 				sessions.respondToApproval(sessionId, requestId, decision).pipe(orInternalError("answer the approval")),
 			interruptSession: ({ sessionId }) => sessions.interrupt(sessionId).pipe(orInternalError("stop the turn")),
 			stopSession: ({ sessionId }) => sessions.stop(sessionId).pipe(orInternalError("stop the agent")),
+			loadSessionHistory: ({ sessionId, beforeSequence, limit }) =>
+				sessions.history(sessionId, beforeSequence, limit).pipe(orInternalError("load the chat")),
 			subscribeSession: ({ sessionId, afterSequence }) =>
 				sessions
 					.subscribe(sessionId, afterSequence)

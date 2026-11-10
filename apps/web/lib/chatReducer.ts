@@ -38,6 +38,10 @@ export interface ChatState {
 	readonly positions: Readonly<Record<string, number>>;
 	// The last stored event applied. Resubscribing starts after it.
 	readonly lastSequence: number;
+	// The oldest stored event loaded, or null before any. Sequences start at 0, so older pages exist while it is above 0.
+	readonly firstSequence: number | null;
+	// Answers to approvals asked before the loaded history starts. An older page shows them on its requests.
+	readonly earlierOutcomes: Readonly<Record<string, ApprovalOutcome>>;
 	readonly usage: { readonly contextTokens: number; readonly contextWindow: number | null } | null;
 	readonly rateLimit: RateLimit | null;
 }
@@ -47,6 +51,8 @@ export const emptyChat = (sessionId: string): ChatState => ({
 	items: [],
 	positions: {},
 	lastSequence: -1,
+	firstSequence: null,
+	earlierOutcomes: {},
 	usage: null,
 	rateLimit: null,
 });
@@ -57,7 +63,7 @@ export const applyEvents = (state: ChatState, events: ReadonlyArray<SessionEvent
 	// Copied only when a new item arrives. Most batches are deltas to a message that already has a position.
 	let positions = state.positions;
 	let ownPositions: Record<string, number> | null = null;
-	let { lastSequence, usage, rateLimit } = state;
+	let { lastSequence, firstSequence, earlierOutcomes, usage, rateLimit } = state;
 
 	const put = (item: ChatItem) => {
 		const at = positions[item.key];
@@ -80,6 +86,7 @@ export const applyEvents = (state: ChatState, events: ReadonlyArray<SessionEvent
 			// A resubscribe can replay events this state already holds.
 			if (sequence <= lastSequence) continue;
 			lastSequence = sequence;
+			firstSequence ??= sequence;
 		}
 		switch (event.type) {
 			case "user.message":
@@ -122,6 +129,7 @@ export const applyEvents = (state: ChatState, events: ReadonlyArray<SessionEvent
 			case "approval.resolved": {
 				const current = find(`approval:${event.requestId}`);
 				if (current?.kind === "approval") put({ ...current, outcome: event.outcome });
+				else earlierOutcomes = { ...earlierOutcomes, [event.requestId]: event.outcome };
 				break;
 			}
 			case "turn.completed":
@@ -154,5 +162,47 @@ export const applyEvents = (state: ChatState, events: ReadonlyArray<SessionEvent
 				break;
 		}
 	}
-	return { sessionId: state.sessionId, items, positions, lastSequence, usage, rateLimit };
+	return {
+		sessionId: state.sessionId,
+		items,
+		positions,
+		lastSequence,
+		firstSequence,
+		earlierOutcomes,
+		usage,
+		rateLimit,
+	};
+};
+
+// Puts an older page of stored events before what the chat holds. An item both parts touch, like a tool
+// started before the page boundary and finished after it, keeps its older place and its newer state.
+export const prependEvents = (state: ChatState, older: ReadonlyArray<SessionEvent>): ChatState => {
+	const earlier = applyEvents(emptyChat(state.sessionId), older);
+	const items = earlier.items.slice();
+	const positions: Record<string, number> = { ...earlier.positions };
+	for (const item of state.items) {
+		const at = positions[item.key];
+		if (at === undefined) {
+			positions[item.key] = items.length;
+			items.push(item);
+		} else {
+			items[at] = item;
+		}
+	}
+	const unmatched: Record<string, ApprovalOutcome> = {};
+	for (const [requestId, outcome] of Object.entries(state.earlierOutcomes)) {
+		const at = positions[`approval:${requestId}`];
+		const item = at === undefined ? undefined : items[at];
+		if (at !== undefined && item?.kind === "approval") items[at] = { ...item, outcome };
+		else unmatched[requestId] = outcome;
+	}
+	return {
+		...state,
+		items,
+		positions,
+		firstSequence: earlier.firstSequence ?? state.firstSequence,
+		earlierOutcomes: { ...earlier.earlierOutcomes, ...unmatched },
+		usage: state.usage ?? earlier.usage,
+		rateLimit: state.rateLimit ?? earlier.rateLimit,
+	};
 };

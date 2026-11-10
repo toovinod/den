@@ -8,8 +8,8 @@ import {
 	writeStored,
 } from "./settings.ts";
 import type { AgentAuthMode, AgentInfo, AgentKind, AgentSession, ImageData } from "@repo/contracts/AgentSession";
+import { applyEvents, type ChatState, emptyChat, prependEvents } from "./chatReducer.ts";
 import { callDaemon, errorMessage, errorTag, followDaemon } from "./daemonRuntime.ts";
-import { applyEvents, type ChatState, emptyChat } from "./chatReducer.ts";
 import type { CreateWorkspaceInput } from "@repo/contracts/WorkspaceRpcs";
 import type { ApprovalDecision } from "@repo/contracts/AgentEvent";
 import type { SessionEvent } from "@repo/contracts/SessionEvent";
@@ -317,7 +317,7 @@ export const selectSession = (sessionId: string) => {
 		};
 	});
 	rememberWorkspace(session.workspaceId);
-	if (state.chat?.sessionId !== sessionId) openChat(sessionId);
+	if (state.chat?.sessionId !== sessionId) void openChat(sessionId);
 };
 
 const defaultChoice = () => {
@@ -465,15 +465,55 @@ const follow = (sessionId: string, afterSequence: number) => {
 	};
 };
 
-const openChat = (sessionId: string) => {
+// A long chat opens on its latest events. Older pages load as the user scrolls up.
+const HISTORY_PAGE = 200;
+
+const loadHistory = (sessionId: string, beforeSequence: number | null) =>
+	callDaemon((daemon) => daemon.loadSessionHistory({ sessionId, beforeSequence, limit: HISTORY_PAGE }));
+
+const openChat = async (sessionId: string) => {
 	closeChat();
 	setState(() => ({ chat: emptyChat(sessionId) }));
-	follow(sessionId, -1);
+	const generation = chatGeneration;
+	const page = await loadHistory(sessionId, null).catch((error: unknown) => {
+		toast(errorMessage(error));
+		return null;
+	});
+	if (generation !== chatGeneration) return;
+	if (page === null) {
+		// Without the latest page the chat still loads, from its first event.
+		follow(sessionId, -1);
+		return;
+	}
+	setState((current) => (current.chat === null ? {} : { chat: applyEvents(current.chat, page) }));
+	// The subscription reads stored events after the page's last one, so events stored meanwhile are neither
+	// lost nor shown twice.
+	follow(sessionId, state.chat?.lastSequence ?? -1);
+};
+
+let loadingOlder = false;
+
+export const loadOlderEvents = async () => {
+	const chat = state.chat;
+	if (chat === null || chat.firstSequence === null || chat.firstSequence <= 0 || loadingOlder) return;
+	const { sessionId, firstSequence } = chat;
+	loadingOlder = true;
+	const page = await attempt(() => loadHistory(sessionId, firstSequence));
+	loadingOlder = false;
+	if (page === null) return;
+	// Only onto the chat it was loaded for. A chat reopened in the meantime starts from another page.
+	setState((current) =>
+		current.chat?.sessionId === sessionId && current.chat.firstSequence === firstSequence
+			? { chat: prependEvents(current.chat, page) }
+			: {},
+	);
 };
 
 const closeChat = () => {
 	stopChat?.();
 	stopChat = null;
+	// A history load still under way belongs to the chat being closed.
+	chatGeneration++;
 	pending = [];
 	if (state.chat !== null) setState(() => ({ chat: null }));
 };

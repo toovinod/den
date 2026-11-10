@@ -198,6 +198,42 @@ describe("SessionService", () => {
 		expect(sequences(received)).toEqual(Array.from({ length: 1 + 452 * 2 - 11 }, (_, index) => index + 11));
 	});
 
+	test("pages stored history backwards, and a subscription after the latest page joins it", async () => {
+		// session.started, the user message and 8 agent events: sequences 0 to 9.
+		const recording: Recording = { kind: "codex", nativeSessionId: "thread-pages", turns: [messages("first", 7)] };
+		const result = await runWithRecording(recording, (tempDir) =>
+			Effect.gen(function* () {
+				const sessions = yield* SessionService;
+				const session = yield* addSession(tempDir);
+				const empty = yield* sessions.history(session.id, null, 4);
+				yield* sessions.sendMessage(session.id, "first", [], false);
+				yield* waitForStored(session.id, 10);
+				const latest = yield* sessions.history(session.id, null, 4);
+				const before = yield* sessions.history(session.id, 6, 4);
+				const oldest = yield* sessions.history(session.id, 2, 4);
+				const exact = yield* sessions.history(session.id, 10, 10);
+				const first = yield* sessions.history(session.id, 0, 4);
+				const missing = yield* Effect.flip(sessions.history("nope", null, 4));
+				yield* sessions.sendMessage(session.id, "second", [], false);
+				const joined = yield* sessions.subscribe(session.id, latest.at(-1)?.sequence ?? -1).pipe(
+					Stream.takeUntil((stored) => stored.event.type === "turn.completed"),
+					Stream.runCollect,
+					Effect.timeout("5 seconds"),
+				);
+				return { empty, latest, before, oldest, exact, first, missing, joined };
+			}),
+		);
+		expect(result.empty).toEqual([]);
+		expect(sequences(result.latest)).toEqual([6, 7, 8, 9]);
+		expect(sequences(result.before)).toEqual([2, 3, 4, 5]);
+		expect(sequences(result.oldest)).toEqual([0, 1]);
+		expect(sequences(result.exact)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+		expect(result.first).toEqual([]);
+		expect(result.missing._tag).toBe("SessionNotFoundError");
+		// The second message has no recorded turn, so it fails at once: its user message, then turn.completed.
+		expect(sequences(result.joined)).toEqual([10, 11]);
+	});
+
 	test("a failed turn leaves the session failed, and the next message still runs", async () => {
 		const recording: Recording = {
 			kind: "codex",

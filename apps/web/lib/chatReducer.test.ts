@@ -1,5 +1,5 @@
+import { applyEvents, emptyChat, prependEvents } from "./chatReducer.ts";
 import type { AgentEvent } from "@repo/contracts/AgentEvent";
-import { applyEvents, emptyChat } from "./chatReducer.ts";
 import { describe, expect, test } from "bun:test";
 
 let nextSequence = 0;
@@ -88,5 +88,51 @@ describe("applyEvents positions", () => {
 		]);
 		expect(state.positions).toEqual({ "message:m1": 0 });
 		expect(next.positions).toEqual({ "message:m1": 0, "tool:c1": 1, "tool:c2": 2 });
+	});
+});
+
+describe("prependEvents", () => {
+	test("joins an older page so items split across the boundary show once, in their older place", () => {
+		nextSequence = 0;
+		const older = [
+			stored({ type: "user.message", itemId: "u1", text: "Run the tests", attachments: [] }),
+			stored({ type: "tool.started", itemId: "c1", tool: command }),
+			stored({
+				type: "approval.requested",
+				requestId: "r1",
+				itemId: "c1",
+				kind: "command",
+				summary: "bun test",
+				reason: null,
+				choices: ["allowOnce", "deny"],
+			}),
+		];
+		const newer = applyEvents(emptyChat("s"), [
+			stored({ type: "approval.resolved", requestId: "r1", outcome: "allowOnce" }),
+			stored({ type: "tool.completed", itemId: "c1", tool: command, status: "completed", output: "3 pass" }),
+			stored({ type: "message.completed", itemId: "m1", text: "Done" }),
+		]);
+		expect(newer.firstSequence).toBe(3);
+		expect(newer.earlierOutcomes).toEqual({ r1: "allowOnce" });
+
+		const joined = prependEvents(newer, older);
+		expect(joined.items.map((item) => item.key)).toEqual(["user:u1", "tool:c1", "approval:r1", "message:m1"]);
+		expect(joined.items[1]).toMatchObject({ status: "completed", output: "3 pass" });
+		expect(joined.items[2]).toMatchObject({ outcome: "allowOnce" });
+		expect(joined.positions).toEqual({ "user:u1": 0, "tool:c1": 1, "approval:r1": 2, "message:m1": 3 });
+		expect(joined.firstSequence).toBe(0);
+		expect(joined.lastSequence).toBe(5);
+		expect(joined.earlierOutcomes).toEqual({});
+	});
+
+	test("keeps an answer whose request is older still", () => {
+		nextSequence = 5;
+		const newer = applyEvents(emptyChat("s"), [
+			stored({ type: "approval.resolved", requestId: "r0", outcome: "deny" }),
+		]);
+		nextSequence = 3;
+		const joined = prependEvents(newer, [stored({ type: "message.completed", itemId: "m1", text: "Hi" })]);
+		expect(joined.firstSequence).toBe(3);
+		expect(joined.earlierOutcomes).toEqual({ r0: "deny" });
 	});
 });

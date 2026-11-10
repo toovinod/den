@@ -49,11 +49,11 @@ import { LocalDatabase, PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE } from "../dat
 import { agentSession, project, sessionEvent, setting, workspace } from "../database/schema.ts";
 import { WorkspaceArchivedError, WorkspaceNotFoundError } from "@repo/contracts/Workspace";
 import { AgentEvent, type ApprovalDecision } from "@repo/contracts/AgentEvent";
+import { and, asc, desc, eq, gt, inArray, lt, max } from "drizzle-orm";
 import { ClaudeAdapter } from "../agents/claude/ClaudeAdapter.ts";
 import { CodexAdapter } from "../agents/codex/CodexAdapter.ts";
 import { CredentialStore } from "../agents/CredentialStore.ts";
 import { AgentProbeSettings } from "./AgentProbeSettings.ts";
-import { and, asc, eq, gt, inArray, max } from "drizzle-orm";
 import { SessionEvent } from "@repo/contracts/SessionEvent";
 import { DaemonConfig } from "../config/DaemonConfig.ts";
 import type { SecureRandom } from "effect/crypto";
@@ -616,6 +616,40 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 			return session;
 		});
 
+		const toSessionEvents = (rows: ReadonlyArray<typeof sessionEvent.$inferSelect>) =>
+			Effect.forEach(rows, (row) =>
+				// A row that no longer decodes means a corrupt database, not a user error.
+				Effect.map(
+					Effect.orDie(decodeEvent(row.payload)),
+					(event) =>
+						new SessionEvent({ sessionId: row.sessionId, sequence: row.sequence, event, createdAt: row.createdAt }),
+				),
+			);
+
+		// Up to limit stored events before beforeSequence, oldest first. null reads the latest ones, so a chat
+		// opens on its last page and subscribes after it.
+		const history = Effect.fn("SessionService.history")(function* (
+			sessionId: string,
+			beforeSequence: number | null,
+			limit: number,
+		) {
+			yield* getRow(sessionId);
+			const rows = yield* database.query((db) =>
+				db
+					.select()
+					.from(sessionEvent)
+					.where(
+						and(
+							eq(sessionEvent.sessionId, sessionId),
+							beforeSequence === null ? undefined : lt(sessionEvent.sequence, beforeSequence),
+						),
+					)
+					.orderBy(desc(sessionEvent.sequence))
+					.limit(limit),
+			);
+			return yield* toSessionEvents(rows.reverse());
+		});
+
 		const historyPage = (sessionId: string, afterSequence: number) =>
 			database
 				.query((db) =>
@@ -628,13 +662,7 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 				)
 				.pipe(
 					Effect.flatMap((rows) =>
-						Effect.forEach(rows, (row) =>
-							// A row that no longer decodes means a corrupt database, not a user error.
-							Effect.map(
-								Effect.orDie(decodeEvent(row.payload)),
-								(event) => new SessionEvent({ sessionId, sequence: row.sequence, event, createdAt: row.createdAt }),
-							),
-						).pipe(
+						toSessionEvents(rows).pipe(
 							Effect.map(
 								(page) =>
 									[
@@ -818,6 +846,7 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 			stopWorkspace,
 			deleteWorkspaceAttachments,
 			getAttachment,
+			history,
 			subscribe,
 			watch,
 		};

@@ -3,14 +3,21 @@
 import { useLayoutEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ChatState } from "../lib/chatReducer.ts";
+import { loadOlderEvents } from "../lib/store.ts";
 import { ChatItemView } from "./ChatItemView.tsx";
 
 // Within this many pixels of the end counts as reading the latest message, so new output keeps it in view.
 const STICK_DISTANCE = 48;
+// Older messages start loading this close to the top, so scrolling up rarely has to wait for them.
+const LOAD_DISTANCE = 400;
 
 export const ChatTimeline = ({ chat, footer }: { readonly chat: ChatState; readonly footer: React.ReactNode }) => {
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const atEnd = useRef(true);
+	// Where the reader was, measured from the end, and the first item then. When older items arrive above,
+	// the same distance from the end keeps the same messages in view.
+	const fromEnd = useRef(0);
+	const firstKey = useRef<string | undefined>(undefined);
 	const virtualizer = useVirtualizer({
 		count: chat.items.length,
 		getScrollElement: () => scrollRef.current,
@@ -25,7 +32,14 @@ export const ChatTimeline = ({ chat, footer }: { readonly chat: ChatState; reado
 	// Runs before paint, so a growing message never shows a frame scrolled away from the end.
 	useLayoutEffect(() => {
 		const element = scrollRef.current;
-		if (element !== null && atEnd.current) element.scrollTop = element.scrollHeight;
+		if (element === null) return;
+		const first = chat.items[0]?.key;
+		if (atEnd.current) element.scrollTop = element.scrollHeight;
+		else if (first !== firstKey.current) element.scrollTop = element.scrollHeight - fromEnd.current;
+		firstKey.current = first;
+		fromEnd.current = element.scrollHeight - element.scrollTop;
+		// A first page shorter than the view gives nothing to scroll, so the next one loads at once.
+		if (element.scrollHeight <= element.clientHeight) void loadOlderEvents();
 	});
 
 	return (
@@ -35,6 +49,8 @@ export const ChatTimeline = ({ chat, footer }: { readonly chat: ChatState; reado
 			onScroll={(event) => {
 				const element = event.currentTarget;
 				atEnd.current = element.scrollHeight - element.scrollTop - element.clientHeight < STICK_DISTANCE;
+				fromEnd.current = element.scrollHeight - element.scrollTop;
+				if (element.scrollTop < LOAD_DISTANCE) void loadOlderEvents();
 			}}
 		>
 			<div className="relative mx-auto w-full max-w-3xl px-6" style={{ height: virtualizer.getTotalSize() }}>

@@ -111,6 +111,17 @@ export class SessionRpcs extends RpcGroup.make(
 		payload: { sessionId: Schema.String },
 		error: Schema.Union([SessionNotFoundError, DaemonInternalError]),
 	}),
+	// Up to limit stored events before beforeSequence, oldest first. null reads the latest page. A chat opens on
+	// that page, subscribes after its last event, and loads older pages as the user scrolls up.
+	Rpc.make("loadSessionHistory", {
+		payload: {
+			sessionId: Schema.String,
+			beforeSequence: Schema.NullOr(Schema.Int),
+			limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
+		},
+		success: Schema.Array(SessionEvent),
+		error: Schema.Union([SessionNotFoundError, DaemonInternalError]),
+	}),
 	// Stored events after afterSequence, then live events. -1 starts from the beginning.
 	Rpc.make("subscribeSession", {
 		payload: { sessionId: Schema.String, afterSequence: Schema.Int },
