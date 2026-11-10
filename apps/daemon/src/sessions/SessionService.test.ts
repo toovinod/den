@@ -376,6 +376,34 @@ describe("SessionService", () => {
 		expect(result.firstGone._tag).toBe("ApprovalNotFoundError");
 	});
 
+	test("watching starts with every session of the active workspaces, then follows changes", async () => {
+		const titles = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const sessions = yield* SessionService;
+				const workspaces = yield* WorkspaceService;
+				const session = yield* addSession(tempDir);
+				const workspace = yield* workspaces.get(session.workspaceId);
+				const old = yield* workspaces.create({ kind: "worktree", projectId: workspace.projectId, name: "old" });
+				yield* sessions.create({ workspaceId: old.id, agent: "codex", model: "replay", effort: null });
+				yield* workspaces.archive(old.id, { force: false });
+				// Every session above changed before the watch began, so only its first items can report them.
+				const watched = yield* sessions.watch.pipe(
+					Stream.take(2),
+					Stream.runCollect,
+					Effect.timeout("5 seconds"),
+					Effect.forkChild,
+				);
+				yield* Effect.sleep("100 millis");
+				yield* sessions.rename(session.id, "Renamed");
+				return (yield* Fiber.join(watched)).map((changed) => [changed.id === session.id, changed.title]);
+			}),
+		);
+		expect(titles).toEqual([
+			[true, null],
+			[true, "Renamed"],
+		]);
+	});
+
 	test("marks sessions cut off by a restart as interrupted", async () => {
 		const statuses = await runInTempDir((tempDir) =>
 			Effect.gen(function* () {

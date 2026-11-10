@@ -162,6 +162,9 @@ const watchSessions = () => {
 	followDaemon((daemon) => daemon.watchSessions(), {
 		onItem: (session) => {
 			const before = state.sessions[session.id];
+			// The watch opens with a snapshot that can overlap changes it also sends, and the lists loaded at
+			// boot can be newer than either. Never step a session back to an older state.
+			if (before !== undefined && session.updatedAt < before.updatedAt) return;
 			setState((current) => ({ sessions: { ...current.sessions, [session.id]: session } }));
 			if (before !== undefined) noticeChange(before, session);
 		},

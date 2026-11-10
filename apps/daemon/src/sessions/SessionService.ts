@@ -725,7 +725,25 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 				}),
 			);
 
-		const watch = Stream.fromPubSub(sessionChanges);
+		// Subscribed before the snapshot is read, so a change made while a client loads is never lost. A change
+		// read in the snapshot can also come through the subscription, so clients keep the newest updatedAt.
+		const watch = Stream.unwrap(
+			Effect.gen(function* () {
+				const subscription = yield* PubSub.subscribe(sessionChanges);
+				const rows = yield* database.query((db) =>
+					db
+						.select({ session: agentSession })
+						.from(agentSession)
+						.innerJoin(workspace, eq(agentSession.workspaceId, workspace.id))
+						.where(eq(workspace.status, "active"))
+						.orderBy(asc(agentSession.createdAt)),
+				);
+				return Stream.concat(
+					Stream.fromIterable(rows.map((row) => new AgentSession(row.session))),
+					Stream.fromSubscription(subscription),
+				);
+			}),
+		);
 
 		const modelsOf = (kind: AgentKind) => {
 			const cached = modelCache.get(kind);

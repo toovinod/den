@@ -31,7 +31,12 @@ export const SessionRpcHandlers = SessionRpcs.toLayer(
 							Stream.fromEffect(Effect.fail(error).pipe(orInternalError("load the chat"))),
 						),
 					),
-			watchSessions: () => sessions.watch,
+			watchSessions: () =>
+				sessions.watch.pipe(
+					Stream.catchTag("LocalDatabaseError", (error) =>
+						Stream.fromEffect(Effect.fail(error).pipe(orInternalError("list chats"))),
+					),
+				),
 			setAgentAuthMode: ({ agent, mode }) =>
 				sessions.setAuthMode(agent, mode).pipe(orInternalError("save the sign-in choice")),
 			startAgentLogin: ({ agent }) => sessions.startLogin(agent).pipe(orInternalError("start the sign-in")),

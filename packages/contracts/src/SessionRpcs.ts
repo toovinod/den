@@ -129,7 +129,9 @@ export class SessionRpcs extends RpcGroup.make(
 		error: Schema.Union([SessionNotFoundError, ResubscribeRequiredError, DaemonInternalError]),
 		stream: true,
 	}),
-	// Every session change (status, title, native id) across all workspaces.
+	// Every session of the active workspaces as it is now, then every change (status, title, native id) across
+	// all workspaces. The snapshot is read after the watch starts, so a change can come twice: keep the newest
+	// updatedAt.
 	Rpc.make("watchSessions", {
 		success: AgentSession,
 		error: DaemonInternalError,
