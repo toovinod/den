@@ -1,6 +1,7 @@
 import { Cause, Effect, Exit, Fiber, Layer, ManagedRuntime, Predicate, Schema, Stream } from "effect";
 import { DaemonClient } from "@repo/contracts/DaemonClient";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 const DaemonConnection = Schema.Struct({
 	url: Schema.String,
@@ -34,6 +35,22 @@ const DaemonClientFromShell = Layer.unwrap(
 );
 
 const daemonRuntime = ManagedRuntime.make(DaemonClientFromShell);
+
+// Must match DAEMON_STOPPED_EVENT in apps/desktop/src-tauri/src/lib.rs.
+const DAEMON_STOPPED_EVENT = "daemon-stopped";
+
+// Calls back when the desktop shell's daemon exits without the app quitting. Returns the function that stops listening.
+export const onDaemonStopped = (listener: () => void) => {
+	if (!isTauri()) return () => {};
+	const unlisten = listen(DAEMON_STOPPED_EVENT, listener);
+	return () => {
+		void unlisten.then((stop) => stop());
+	};
+};
+
+// The new daemon has a new URL and token. Reloading the window rebuilds the runtime, every stream and every list
+// against it, so nothing keeps talking to the daemon that is gone.
+export const restartDaemon = () => invoke("restart_daemon").then(() => window.location.reload());
 
 export type Daemon = DaemonClient["Service"];
 

@@ -3,9 +3,11 @@
 import { DenLogo } from "./DenLogo.tsx";
 import { boot, closeTab, newChat, onWindowFocus, openDialog, setPanel, useAppState } from "../lib/store.ts";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@repo/ui/components/resizable";
+import { onDaemonStopped, restartDaemon } from "../lib/daemonRuntime.ts";
 import { SidebarProvider } from "@repo/ui/components/sidebar";
 import { TooltipProvider } from "@repo/ui/components/tooltip";
 import { Toaster } from "@repo/ui/components/sonner";
+import { Button } from "@repo/ui/components/button";
 import { WorkspaceSettingsDialog } from "./WorkspaceSettingsDialog.tsx";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog.tsx";
 import { NewProjectDialog } from "./NewProjectDialog.tsx";
@@ -15,7 +17,7 @@ import { getState } from "../lib/store.ts";
 import { SidePanel } from "./SidePanel.tsx";
 import { ChatView } from "./ChatView.tsx";
 import { Sidebar } from "./Sidebar.tsx";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const useShortcuts = () =>
 	useEffect(() => {
@@ -47,14 +49,46 @@ const useShortcuts = () =>
 		};
 	}, []);
 
+const useDaemonStopped = () => {
+	const [stopped, setStopped] = useState(false);
+	useEffect(() => onDaemonStopped(() => setStopped(true)), []);
+	return stopped;
+};
+
+// The user restarts the daemon, never a timer, so a daemon that crashes on start does not restart in a loop.
+const DaemonStopped = () => {
+	const [restart, setRestart] = useState<"idle" | "restarting" | "failed">("idle");
+	const onRestart = () => {
+		setRestart("restarting");
+		restartDaemon().catch(() => setRestart("failed"));
+	};
+	return (
+		<main className="flex h-full flex-col items-center justify-center gap-2 text-center">
+			<DenLogo className="size-10" />
+			<p className="font-medium">Den lost its daemon.</p>
+			<p className="max-w-sm text-sm text-muted-foreground">
+				{restart === "failed"
+					? "Den could not start its daemon again. Quit Den and open it again."
+					: "Agents and terminals that were running have stopped. Restart the daemon to reconnect."}
+			</p>
+			<Button size="sm" className="mt-2" disabled={restart === "restarting"} onClick={onRestart}>
+				{restart === "restarting" ? "Restarting" : "Restart"}
+			</Button>
+		</main>
+	);
+};
+
 export const App = () => {
 	const connection = useAppState((current) => current.connection);
 	const panelOpen = useAppState((current) => current.panel.open);
 	const hasWorkspace = useAppState((current) => current.selectedWorkspaceId !== null);
+	const daemonStopped = useDaemonStopped();
 	useShortcuts();
 	useEffect(() => {
 		void boot();
 	}, []);
+
+	if (daemonStopped) return <DaemonStopped />;
 
 	if (connection.status !== "ready") {
 		return (
