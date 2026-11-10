@@ -3,7 +3,22 @@
 This records the packaging spike from [architecture section 13](architecture.md#13-packaging-validate-before-building-more-features), run on 2026-11-07.
 The question was whether the shipped shape works: a Tauri release app with `dend` compiled by `bun build --compile` as its sidecar.
 
-## Setup
+## Supported and verified now
+
+Checked on 2026-11-10 against `.github/workflows`, `apps/desktop/src-tauri/tauri.conf.json` and a local build.
+Everything below this section is the historical spike record, not the current state.
+
+| What                                | State now                                                                                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release workflow                    | `release-please.yml` only runs release-please, which bumps the version in `tauri.conf.json` and `Cargo.toml`. No workflow builds, signs or publishes the app. |
+| Linux x64 desktop build             | CI's `desktop` job runs `tauri build --no-bundle` on `ubuntu-24.04` for every push and pull request. It compiles the app and `dend`, but makes no installer.  |
+| macOS arm64 desktop build           | Not in CI. `bun run build` built the release app and `dend` on a local Apple silicon Mac on 2026-11-10, without a bundle. The app was not started.            |
+| macOS x64 and Linux arm64           | `compileDaemon.ts` can cross-compile `dend` for them. No app is built for them in CI or in a release.                                                         |
+| Windows                             | Not a target. `compileDaemon.ts` has no Windows target.                                                                                                       |
+| Installers and bundles              | `tauri.conf.json` asks for every bundle type, but no workflow runs a bundling build.                                                                          |
+| Code signing, notarization, updates | Not configured. `tauri.conf.json` has no signing settings and there is no updater plugin.                                                                     |
+
+## Setup (historical, 2026-11-07)
 
 - Machine: macOS on Apple silicon, Bun 1.4.4, Rust 1.99.1, Tauri CLI 2.12.4, Docker for Linux.
 - Agents: Claude Code 2.1.318 at `~/.local/bin/claude`, Codex CLI 0.166.0 from npm at `~/.npm-global/bin/codex`.
@@ -12,7 +27,7 @@ The question was whether the shipped shape works: a Tauri release app with `dend
 - Neither global install was changed.
 - Both agents used the user's existing CLI logins. Den did not read, store or proxy any credentials.
 
-## How it builds
+## How it builds (historical, 2026-11-07)
 
 - `bun run --cwd apps/daemon build` runs `src/compileDaemon.ts`.
 - With no arguments it compiles for the current machine. Any of `bun-darwin-arm64`, `bun-darwin-x64`, `bun-linux-x64` and `bun-linux-arm64` can be passed to cross-compile.
@@ -37,7 +52,7 @@ dist/dend-x86_64-unknown-linux-gnu:  ELF 64-bit LSB executable, x86-64, ... inte
 Each binary is 90 to 110 MB.
 `bunx tauri build --bundles app` produced a 99 MB `Den.app` with `Contents/MacOS/den` and `Contents/MacOS/dend`.
 
-## How it was checked
+## How it was checked (historical, 2026-11-07)
 
 - The release app was started from `Den.app/Contents/MacOS/den` with the environment Finder gives an app: `env -i` with `HOME`, `USER`, `SHELL`, `TMPDIR` and `PATH=/usr/bin:/bin:/usr/sbin:/sbin`.
 - The sandbox this spike ran in blocks `open`, so the app was not started through Launch Services.
@@ -45,7 +60,9 @@ Each binary is 90 to 110 MB.
 - For the child process checks, a throwaway layer was merged into `main.ts` for one build. It started a setup-script-style shell with grandchildren (`sh -c "sleep 1001 & sleep 1002; wait"`), a `Bun.Terminal` shell, a Claude session and a Codex session. It was removed afterwards.
 - A temporary hook called `app.exit(0)` after 16 seconds to exercise the normal quit path, because the sandbox also blocks Apple Events. It was removed afterwards.
 
-## Results
+## Results (historical, 2026-11-07)
+
+These are the spike's results on the code of that day. Later changes were not rechecked in a packaged app.
 
 | Check                                                     | macOS arm64 (packaged app) | Linux x64 (Docker)      | Linux arm64 (Docker) |
 | --------------------------------------------------------- | -------------------------- | ----------------------- | -------------------- |
@@ -159,7 +176,7 @@ There is no Tauri shell in the Linux container, so there dend's stdin was closed
 That stopped dend, the setup script group and the PTY shell, but the PTY shell's `sleep 1003` kept running.
 It stopped once the release signalled the PTY's process group instead of only the shell (see Terminals below).
 
-## What failed and how it was fixed
+## What failed and how it was fixed (historical, 2026-11-07)
 
 1. **dend outlived the app.**
    Before the fix, dend was still running 3 seconds after its stdin closed, so a crashed app left the daemon and everything it started.
@@ -177,7 +194,7 @@ It stopped once the release signalled the PTY's process group instead of only th
    That took about 2 seconds here (`-lc` alone took 1 second and missed 6 entries), so the daemon now starts off the setup thread and the window does not wait for it.
    In the packaged app, dend's PATH then had `~/.local/bin` and `~/.npm-global/bin`, and both agents were found.
 
-## Decisions for later work
+## Decisions for later work (historical, 2026-11-07)
 
 - **Terminals.** Spawn PTY shells with `detached: true` and stop them by signalling the process group (`process.kill(-pid, "SIGHUP")`).
   In the Linux container, sending SIGHUP only to the shell left its `sleep` running, and signalling the group stopped it.
@@ -192,7 +209,7 @@ It stopped once the release signalled the PTY's process group instead of only th
   The UI has to say that clearly instead of failing on save.
 - **Claude.** The adapter runs the user's own `claude`. Den does not embed or extract the SDK's CLI.
 
-## Still unverified
+## Still unverified (as of 2026-11-07)
 
 - The darwin-x64 binary was compiled but not run, because this machine has no Rosetta, and no x64 or Linux Tauri app was built.
 - The app was not started through Finder or `open`, only with Finder's environment.
