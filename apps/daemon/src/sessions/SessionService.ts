@@ -597,13 +597,15 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 			sessionId: string,
 			settings: SessionSettings,
 		) {
-			const session = yield* updateSession(sessionId, settings);
-			if (session === undefined) {
-				return yield* new SessionNotFoundError({ sessionId });
-			}
+			yield* getRow(sessionId);
+			// Applied before it is stored, so a change the agent refuses never shows as the session's settings.
 			const runtime = runtimes.get(sessionId);
 			if (runtime !== undefined) {
 				yield* runtime.handle.updateSettings(settings);
+			}
+			const session = yield* updateSession(sessionId, settings);
+			if (session === undefined) {
+				return yield* new SessionNotFoundError({ sessionId });
 			}
 			return session;
 		});

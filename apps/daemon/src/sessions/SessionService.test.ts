@@ -603,6 +603,35 @@ describe("SessionService", () => {
 		expect(updated).toMatchObject({ model: "other", effort: "high" });
 	});
 
+	test("keeps the stored settings when the running agent refuses the change", async () => {
+		const replay = makeReplayAdapter(commandWithApproval);
+		const codex: AgentAdapter = {
+			...replay,
+			startSession: (input) =>
+				Effect.map(replay.startSession(input), (handle) => ({
+					...handle,
+					updateSettings: () => Effect.fail(new AgentProtocolError({ message: "Unknown model", cause: null })),
+				})),
+		};
+		const result = await runInTempDir((tempDir) =>
+			withServices(
+				join(tempDir, "data"),
+				testAgentServices({ claude: makeReplayAdapter({ ...commandWithApproval, kind: "claude" }), codex }),
+			)(
+				Effect.gen(function* () {
+					const sessions = yield* SessionService;
+					const session = yield* addSession(tempDir);
+					yield* sessions.sendMessage(session.id, "run the tests", [], false);
+					const error = yield* Effect.flip(sessions.updateSettings(session.id, { model: "other", effort: "high" }));
+					const [row] = yield* sessions.list(session.workspaceId);
+					return { error, row };
+				}),
+			),
+		);
+		expect(result.error._tag).toBe("AgentProtocolError");
+		expect(result.row).toMatchObject({ model: "replay", effort: null });
+	});
+
 	test("Claude needs an API key before it starts", async () => {
 		const error = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {
