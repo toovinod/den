@@ -3,6 +3,7 @@ import { Duration, Effect, Schedule, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
+import { capLineLength } from "./capLineLength.ts";
 import { scriptRun } from "../database/schema.ts";
 import { nowIso } from "../database/nowIso.ts";
 import { and, eq } from "drizzle-orm";
@@ -90,6 +91,7 @@ export const executeScript = Effect.fn("executeScript")(
 		const handle = yield* spawner.spawn(ChildProcess.make(script, { cwd, shell: true }));
 		yield* handle.all.pipe(
 			Stream.decodeText(),
+			capLineLength,
 			Stream.splitLines,
 			Stream.runForEach((line) => Effect.sync(() => onLine(line))),
 		);

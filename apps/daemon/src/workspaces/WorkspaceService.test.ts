@@ -1,4 +1,5 @@
 import { runInTempDir, runServiceTest, waitForScriptRun, withServices } from "../testing/runServiceTest.ts";
+import { MAX_FINISHED_OUTPUTS, WorkspaceService } from "./WorkspaceService.ts";
 import { SLOW_TO_STOP, waitForFile } from "../testing/processTesting.ts";
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
 import { Duration, Effect, Fiber, FileSystem, Stream } from "effect";
@@ -8,7 +9,7 @@ import { SessionService } from "../sessions/SessionService.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
 import { scriptRun, workspace } from "../database/schema.ts";
-import { WorkspaceService } from "./WorkspaceService.ts";
+import { LINE_MAX_LENGTH } from "./capLineLength.ts";
 import { describe, expect, test } from "bun:test";
 import { runGit } from "../git/runGit.ts";
 import { eq, sql } from "drizzle-orm";
@@ -630,5 +631,46 @@ describe("WorkspaceService", () => {
 			}),
 		);
 		expect(result).toEqual({ failed: "WorktreeRemoveError", run: "run" });
+	});
+
+	test("a long line is cut to the line cap before it is kept or streamed", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const projects = yield* ProjectService;
+				const workspaces = yield* WorkspaceService;
+				const project = yield* addProject(tempDir);
+				// The pause lets the follower attach first, so the long line reaches it live.
+				const script = "echo ready; sleep 0.3; head -c 300000 /dev/zero | tr '\\0' x; echo; echo after";
+				yield* projects.updateScripts(project.id, { setupScript: null, runScript: script });
+				const created = yield* workspaces.create({ kind: "inPlace", projectId: project.id });
+				const run = yield* workspaces.startRunScript(created.id);
+				const streamed = yield* Stream.runCollect(workspaces.followScriptRunOutput(run.id));
+				return { streamed, kept: workspaces.getScriptRunOutput(run.id).output.split("\n") };
+			}),
+		);
+		const cut = "x".repeat(LINE_MAX_LENGTH);
+		expect(result.streamed).toEqual(["ready", cut, "after"]);
+		expect(result.kept).toEqual(["ready", cut, "after"]);
+	});
+
+	test("keeps the output of the latest finished runs only", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const projects = yield* ProjectService;
+				const workspaces = yield* WorkspaceService;
+				const project = yield* addProject(tempDir);
+				yield* projects.updateScripts(project.id, { setupScript: null, runScript: "echo done" });
+				const created = yield* workspaces.create({ kind: "inPlace", projectId: project.id });
+				const runs = [];
+				for (let i = 0; i <= MAX_FINISHED_OUTPUTS; i++) {
+					const run = yield* workspaces.startRunScript(created.id);
+					yield* Stream.runDrain(workspaces.followScriptRunOutput(run.id));
+					yield* waitForScriptRun(created.id);
+					runs.push(run.id);
+				}
+				return runs.map((id) => workspaces.getScriptRunOutput(id).output);
+			}),
+		);
+		expect(result).toEqual(["", ...Array(MAX_FINISHED_OUTPUTS).fill("done")]);
 	});
 });

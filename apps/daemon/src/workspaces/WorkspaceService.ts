@@ -50,6 +50,10 @@ interface ScriptOutput {
 // A slow follower loses old lines rather than growing the daemon's memory.
 const LIVE_LINES = 1000;
 
+// Finished output stays so the UI can show why a run failed, but only for the latest runs: a
+// daemon that runs scripts for weeks would otherwise hold the output of every one.
+export const MAX_FINISHED_OUTPUTS = 20;
+
 export class WorkspaceService extends Context.Service<WorkspaceService>()("den/daemon/workspaces/WorkspaceService", {
 	make: Effect.gen(function* () {
 		const { dataDir } = yield* DaemonConfig;
@@ -96,6 +100,9 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("den/d
 					Effect.ensuring(
 						Effect.sync(() => {
 							output.finished = true;
+							const finished = [...outputs].filter(([, kept]) => kept.finished);
+							for (const [id] of finished.slice(0, -MAX_FINISHED_OUTPUTS)) outputs.delete(id);
+							// Last: a follower waiting on the end resumes inside this call.
 							publish(null);
 						}),
 					),
