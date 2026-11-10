@@ -110,16 +110,20 @@ export const makeAgentSession = Effect.fnUntraced(function* (capabilities: Agent
 						if (!steer && Queue.sizeUnsafe(inbox) >= MAX_QUEUED_MESSAGES) {
 							return yield* new SessionBusyError({ queued: MAX_QUEUED_MESSAGES });
 						}
-						yield* emit({
+						const recordMessage = emit({
 							type: "user.message",
 							itemId: message.id,
 							text: message.text,
 							attachments: message.images.map(({ id, mediaType }) => ({ id, mediaType })),
 						});
 						if (steer) {
+							// Recorded only once the agent took it, so a rejected steer leaves no message in history
+							// that the agent never saw, and the caller can safely drop its images.
 							yield* driver.steerTurn(message);
+							yield* recordMessage;
 							return "steered" as const;
 						}
+						yield* recordMessage;
 						Queue.offerUnsafe(inbox, message);
 						return "queued" as const;
 					}).pipe(Semaphore.withPermit(sendLock)),

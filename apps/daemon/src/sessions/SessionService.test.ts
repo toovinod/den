@@ -1,4 +1,10 @@
 import {
+	type AgentAdapter,
+	AgentNotInstalledError,
+	AgentProtocolError,
+	type StartSessionInput,
+} from "../agents/AgentAdapter.ts";
+import {
 	Deferred,
 	Duration,
 	Effect,
@@ -11,7 +17,6 @@ import {
 	Schema,
 	Stream,
 } from "effect";
-import { type AgentAdapter, AgentNotInstalledError, type StartSessionInput } from "../agents/AgentAdapter.ts";
 import { commandWithApproval, TEST_LOGIN_URL, testAgentServices } from "../testing/testAgentServices.ts";
 import { runInTempDir, runServiceTest, type Services, withServices } from "../testing/runServiceTest.ts";
 import { makeReplayAdapter, type Recording } from "../agents/replay/ReplayAdapter.ts";
@@ -22,6 +27,7 @@ import { MAX_RUNNING_SESSIONS, SessionService } from "./SessionService.ts";
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
 import { WorkspaceService } from "../workspaces/WorkspaceService.ts";
 import { agentSession, sessionEvent } from "../database/schema.ts";
+import { makeAgentSession } from "../agents/makeAgentSession.ts";
 import type { SessionEvent } from "@repo/contracts/SessionEvent";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { AgentProbeSettings } from "./AgentProbeSettings.ts";
@@ -485,6 +491,53 @@ describe("SessionService", () => {
 		expect(result.failed._tag).toBe("WorktreeRemoveError");
 		expect(result.status).toBe("active");
 		expect(result.served).toEqual(image);
+	});
+
+	test("a steer the agent rejects leaves no message in history and no image on disk", async () => {
+		const replay = makeReplayAdapter(commandWithApproval);
+		// A turn that keeps running, so the next message steers, and an agent that rejects every steer.
+		const codex: AgentAdapter = {
+			...replay,
+			capabilities: { ...replay.capabilities, steerWhileRunning: true },
+			startSession: () =>
+				Effect.gen(function* () {
+					const session = yield* makeAgentSession({ ...replay.capabilities, steerWhileRunning: true });
+					yield* session.setNativeSessionId("thread-steer");
+					return yield* session.start({
+						startTurn: () => session.emit({ type: "message.completed", itemId: "working", text: "working" }),
+						steerTurn: () => Effect.fail(new AgentProtocolError({ message: "No active turn", cause: null })),
+						interruptTurn: Effect.void,
+						updateSettings: () => Effect.void,
+					});
+				}),
+		};
+		const image = { mediaType: "image/png", base64: Buffer.from("png bytes").toString("base64") } as const;
+		const result = await runInTempDir((tempDir) =>
+			withServices(
+				join(tempDir, "data"),
+				testAgentServices({ claude: makeReplayAdapter({ ...commandWithApproval, kind: "claude" }), codex }),
+			)(
+				Effect.gen(function* () {
+					const sessions = yield* SessionService;
+					const fs = yield* FileSystem.FileSystem;
+					const session = yield* addSession(tempDir);
+					yield* sessions.sendMessage(session.id, "first", [], false);
+					yield* waitForStored(session.id, 3);
+					const error = yield* Effect.flip(sessions.sendMessage(session.id, "steer", [image], true));
+					// Give a wrongly recorded message time to reach the database.
+					yield* Effect.sleep("100 millis");
+					const directory = join(tempDir, "data", "attachments", session.id);
+					return {
+						error,
+						types: (yield* storedEvents(session.id)).map((row) => row.type),
+						files: (yield* fs.exists(directory)) ? yield* fs.readDirectory(directory) : [],
+					};
+				}),
+			),
+		);
+		expect(result.error._tag).toBe("AgentUnavailableError");
+		expect(result.types).toEqual(["session.started", "user.message", "message.completed"]);
+		expect(result.files).toEqual([]);
 	});
 
 	test("refuses images for a model that cannot read them", async () => {
