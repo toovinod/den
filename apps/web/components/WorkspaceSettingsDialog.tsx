@@ -141,14 +141,15 @@ const Archive = ({ workspace }: { readonly workspace: Workspace }) => {
 			{state === "unsaved" ? (
 				<div className="flex flex-col gap-2 rounded-md bg-destructive/10 p-2.5">
 					<p className="text-xs text-destructive">
-						This worktree has changes that are not committed or not pushed. Archiving anyway deletes them.
+						This worktree has changes that are not committed or not pushed. Archiving anyway stashes the uncommitted
+						changes and keeps the branch with its commits. Run <code>git stash list</code> in the project to find them.
 					</p>
 					<div className="flex justify-end gap-1.5">
 						<Button size="sm" variant="ghost" onClick={() => setState("idle")}>
 							Keep the workspace
 						</Button>
 						<Button size="sm" variant="destructive" onClick={() => void archive(true)}>
-							Archive and delete changes
+							Archive and stash changes
 						</Button>
 					</div>
 				</div>
