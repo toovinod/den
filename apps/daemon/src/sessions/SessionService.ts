@@ -152,6 +152,10 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 		// Event consumers live here. Its finalizer runs after the shutdown finalizer below,
 		// so consumers can still store the last events of the processes being stopped.
 		const consumers = yield* Scope.fork(yield* Effect.scope);
+		// Model lists come from the agents and rarely change, so each is fetched once per sign-in.
+		// The account decides which models an agent offers, so a new key or auth mode fetches it again.
+		const modelCache = new Map<AgentKind, AgentModels>();
+		const forgetModels = (agent: AgentKind) => void modelCache.delete(agent);
 
 		const getRow = Effect.fn("SessionService.getRow")(function* (sessionId: string) {
 			const [row] = yield* database.query((db) => db.select().from(agentSession).where(eq(agentSession.id, sessionId)));
@@ -315,6 +319,7 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 					.values({ key, value: mode })
 					.onConflictDoUpdate({ target: setting.key, set: { value: mode } }),
 			);
+			forgetModels(agent);
 		});
 
 		const startLogin = Effect.fn("SessionService.startLogin")(function* (agent: AgentKind) {
@@ -694,8 +699,6 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 
 		const watch = Stream.fromPubSub(sessionChanges);
 
-		// Model lists come from the agents and rarely change, so each is fetched once per daemon run.
-		const modelCache = new Map<AgentKind, AgentModels>();
 		const modelsOf = (kind: AgentKind) => {
 			const cached = modelCache.get(kind);
 			if (cached !== undefined) return Effect.succeed(cached);
@@ -768,8 +771,10 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 			concurrency: "unbounded",
 		}).pipe(Effect.withSpan("SessionService.listAgents"));
 
-		const setApiKey = (agent: AgentKind, apiKey: Redacted.Redacted<string>) => credentials.set(agent, apiKey);
-		const removeApiKey = (agent: AgentKind) => credentials.remove(agent);
+		const setApiKey = (agent: AgentKind, apiKey: Redacted.Redacted<string>) =>
+			credentials.set(agent, apiKey).pipe(Effect.tap(() => Effect.sync(() => forgetModels(agent))));
+		const removeApiKey = (agent: AgentKind) =>
+			credentials.remove(agent).pipe(Effect.tap(() => Effect.sync(() => forgetModels(agent))));
 
 		// Startup recovery: a restart cut off every turn that was running or waiting for an approval.
 		const recoverSessions = Effect.gen(function* () {

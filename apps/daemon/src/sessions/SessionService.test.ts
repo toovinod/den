@@ -790,6 +790,43 @@ describe("SessionService", () => {
 		expect(calls).toBe(1);
 	});
 
+	test("asks for an agent's models again after its sign-in changes", async () => {
+		const replay = makeReplayAdapter(commandWithApproval);
+		let calls = 0;
+		const codex: AgentAdapter = {
+			...replay,
+			listModels: Effect.andThen(
+				Effect.sync(() => calls++),
+				replay.listModels,
+			),
+		};
+		const counts = await runInTempDir((tempDir) =>
+			withServices(
+				join(tempDir, "data"),
+				testAgentServices({ claude: makeReplayAdapter({ ...commandWithApproval, kind: "claude" }), codex }),
+			)(
+				Effect.gen(function* () {
+					const sessions = yield* SessionService;
+					const countAfter = <E>(change: Effect.Effect<void, E>) =>
+						Effect.gen(function* () {
+							yield* change;
+							yield* sessions.listAgents;
+							return calls;
+						});
+					return [
+						yield* countAfter(Effect.void),
+						yield* countAfter(sessions.setApiKey("codex", Redacted.make("sk-test"))),
+						yield* countAfter(sessions.setAuthMode("codex", "apiKey")),
+						yield* countAfter(sessions.removeApiKey("codex")),
+						// Another agent's key leaves this agent's models alone.
+						yield* countAfter(sessions.setApiKey("claude", Redacted.make("sk-ant-test"))),
+					];
+				}),
+			),
+		);
+		expect(counts).toEqual([1, 2, 3, 4, 4]);
+	});
+
 	test("keeps Claude on API keys and lets Codex switch between its sign-in modes", async () => {
 		const result = await runServiceTest((tempDir) =>
 			Effect.gen(function* () {
