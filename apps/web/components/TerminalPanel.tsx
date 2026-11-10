@@ -1,6 +1,7 @@
 "use client";
 
 import { callDaemon, errorMessage, followDaemon } from "../lib/daemonRuntime.ts";
+import { followTerminal } from "../lib/followTerminal.ts";
 import type { TerminalInfo } from "@repo/contracts/Terminal";
 import type { Workspace } from "@repo/contracts/Workspace";
 import { useEffect, useRef, useState } from "react";
@@ -143,14 +144,9 @@ const TerminalView = ({ terminalId, visible }: { readonly terminalId: string; re
 			const input = terminal.onData((data) => {
 				void callDaemon((daemon) => daemon.writeTerminal({ terminalId, data })).catch(() => undefined);
 			});
-			const stop = followDaemon((daemon) => daemon.attachTerminal({ terminalId }), {
-				onItem: (output) => {
-					if (output.type === "data") terminal.write(output.data);
-					else
-						terminal.write(
-							`\r\n\x1b[2m[The shell exited${output.exitCode === null ? "" : ` with code ${output.exitCode}`}]\x1b[0m\r\n`,
-						);
-				},
+			const stop = followTerminal((follow) => followDaemon((daemon) => daemon.attachTerminal({ terminalId }), follow), {
+				reset: () => terminal.reset(),
+				write: (data) => terminal.write(data),
 			});
 			cleanup = () => {
 				stop();
