@@ -10,12 +10,21 @@ import {
 	DropdownMenuTrigger,
 } from "@repo/ui/components/dropdown-menu";
 import { Textarea } from "@repo/ui/components/textarea";
-import { interruptSession, sendMessage, toast, updateSessionSettings } from "../lib/store.ts";
+import {
+	discardFailedSend,
+	type FailedSend,
+	failedSendsOf,
+	interruptSession,
+	retryFailedSend,
+	sendMessage,
+	toast,
+	updateSessionSettings,
+	useAppState,
+} from "../lib/store.ts";
 import { type DraftImage, MAX_IMAGES_PER_MESSAGE, readImages } from "../lib/images.ts";
 import { memo, useEffect, useRef, useState, useTransition } from "react";
 import type { AgentInfo, AgentSession } from "@repo/contracts/AgentSession";
 import type { ChatState } from "../lib/chatReducer.ts";
-import { errorMessage } from "../lib/daemonRuntime.ts";
 import { formatClockTime, formatTokens } from "../lib/format.ts";
 import { Hint } from "./Hint.tsx";
 import { Button } from "@repo/ui/components/button";
@@ -50,6 +59,7 @@ export const Composer = memo(
 		const model = agent?.models.find((item) => item.id === session.model);
 		const busy = session.status === "running" || session.status === "awaitingApproval";
 		const steer = busy && agent?.capabilities.steerWhileRunning === true;
+		const failedSends = useAppState((current) => failedSendsOf(current, session.id));
 
 		useEffect(() => {
 			drafts.set(session.id, draft);
@@ -80,23 +90,17 @@ export const Composer = memo(
 		const send = () => {
 			const text = draft.text.trim();
 			if (text === "" && draft.images.length === 0) return;
-			const sent = draft;
+			const { images } = draft;
 			setDraft({ text: "", images: [] });
-			const images = sent.images.map(({ mediaType, base64 }) => ({ mediaType, base64 }));
-			sendMessage(session.id, text, images, steer).then(
-				() => {
-					for (const image of sent.images) URL.revokeObjectURL(image.previewUrl);
-				},
-				(error: unknown) => {
-					// Put the message back so nothing typed is lost.
-					setDraft((current) => (current.text === "" ? sent : current));
-					toast(errorMessage(error));
-				},
-			);
+			// A refused message comes back as a failed send above the composer, apart from the new draft.
+			void sendMessage(session.id, text, images, steer);
 		};
 
 		return (
 			<div className="mx-auto w-full max-w-3xl px-6 pb-4">
+				{failedSends.map((failed) => (
+					<FailedSendNotice key={failed.id} sessionId={session.id} failed={failed} steer={steer} />
+				))}
 				{/* biome-ignore lint/a11y/noStaticElementInteractions: dropping images is an extra way in, the + button is the accessible one. */}
 				<div
 					className={cn(
@@ -213,6 +217,33 @@ export const Composer = memo(
 			</div>
 		);
 	},
+);
+
+const FailedSendNotice = ({
+	sessionId,
+	failed,
+	steer,
+}: {
+	readonly sessionId: string;
+	readonly failed: FailedSend;
+	readonly steer: boolean;
+}) => (
+	<div className="mb-2 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
+		<div className="min-w-0 flex-1">
+			<p className="text-xs text-destructive">Not sent. {failed.error}</p>
+			<p className="truncate text-muted-foreground">
+				{failed.text === ""
+					? `${failed.images.length} ${failed.images.length === 1 ? "image" : "images"}`
+					: failed.text}
+			</p>
+		</div>
+		<Button size="xs" variant="secondary" onClick={() => void retryFailedSend(sessionId, failed.id, steer)}>
+			Retry
+		</Button>
+		<Button size="xs" variant="ghost" onClick={() => discardFailedSend(sessionId, failed.id)}>
+			Discard
+		</Button>
+	</div>
 );
 
 const ModelPicker = ({ session, agent }: { readonly session: AgentSession; readonly agent: AgentInfo | undefined }) => {

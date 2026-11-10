@@ -7,7 +7,7 @@ import {
 	saveSettings,
 	writeStored,
 } from "./settings.ts";
-import type { AgentAuthMode, AgentInfo, AgentKind, AgentSession, ImageData } from "@repo/contracts/AgentSession";
+import type { AgentAuthMode, AgentInfo, AgentKind, AgentSession } from "@repo/contracts/AgentSession";
 import { applyEvents, type ChatState, emptyChat, prependEvents } from "./chatReducer.ts";
 import { callDaemon, errorMessage, errorTag, followDaemon } from "./daemonRuntime.ts";
 import type { CreateWorkspaceInput } from "@repo/contracts/WorkspaceRpcs";
@@ -16,6 +16,7 @@ import type { SessionEvent } from "@repo/contracts/SessionEvent";
 import { playChime, showNotification } from "./desktop.ts";
 import type { Workspace } from "@repo/contracts/Workspace";
 import type { Project } from "@repo/contracts/Project";
+import type { DraftImage } from "./images.ts";
 import { useSyncExternalStore } from "react";
 import { toast as showToast } from "sonner";
 import { Redacted } from "effect";
@@ -31,6 +32,14 @@ export type DialogState =
 
 export type Attention = "approval" | "done" | "failed";
 
+// A message the daemon refused. It stays apart from the draft, so typing on or switching chats never loses it.
+export interface FailedSend {
+	readonly id: number;
+	readonly text: string;
+	readonly images: ReadonlyArray<DraftImage>;
+	readonly error: string;
+}
+
 export interface AppState {
 	readonly connection:
 		| { readonly status: "connecting" | "ready" }
@@ -43,6 +52,8 @@ export interface AppState {
 	// Chats closed as tabs. They stay in the sidebar and reopen as a tab when picked.
 	readonly closedTabs: ReadonlySet<string>;
 	readonly attention: Readonly<Record<string, Attention>>;
+	// Keyed by session id, oldest first.
+	readonly failedSends: Readonly<Record<string, ReadonlyArray<FailedSend>>>;
 	readonly selectedWorkspaceId: string | null;
 	readonly selectedSessionId: string | null;
 	// Only the visible chat's events are in memory.
@@ -60,6 +71,7 @@ let state: AppState = {
 	agents: [],
 	closedTabs: new Set(),
 	attention: {},
+	failedSends: {},
 	selectedWorkspaceId: null,
 	selectedSessionId: null,
 	chat: null,
@@ -409,8 +421,55 @@ export const closeTab = (sessionId: string) => {
 	}
 };
 
-export const sendMessage = (sessionId: string, text: string, images: ReadonlyArray<ImageData>, steer: boolean) =>
-	callDaemon((daemon) => daemon.sendMessage({ sessionId, text, images: [...images], steer }));
+const noFailedSends: ReadonlyArray<FailedSend> = [];
+
+export const failedSendsOf = (current: AppState, sessionId: string) => current.failedSends[sessionId] ?? noFailedSends;
+
+let nextFailedSend = 0;
+
+const setFailedSends = (sessionId: string, update: (sends: ReadonlyArray<FailedSend>) => ReadonlyArray<FailedSend>) =>
+	setState((current) => {
+		const sends = update(failedSendsOf(current, sessionId));
+		return {
+			failedSends:
+				sends.length === 0 ? without(current.failedSends, sessionId) : { ...current.failedSends, [sessionId]: sends },
+		};
+	});
+
+const releaseImages = (images: ReadonlyArray<DraftImage>) => {
+	for (const image of images) URL.revokeObjectURL(image.previewUrl);
+};
+
+// A refused message is kept with the daemon's reason, for the composer to offer Retry and Discard.
+export const sendMessage = async (
+	sessionId: string,
+	text: string,
+	images: ReadonlyArray<DraftImage>,
+	steer: boolean,
+) => {
+	const payload = images.map(({ mediaType, base64 }) => ({ mediaType, base64 }));
+	await callDaemon((daemon) => daemon.sendMessage({ sessionId, text, images: payload, steer })).then(
+		() => releaseImages(images),
+		(error: unknown) => {
+			const failed = { id: nextFailedSend++, text, images, error: errorMessage(error) };
+			setFailedSends(sessionId, (sends) => [...sends, failed]);
+		},
+	);
+};
+
+export const retryFailedSend = (sessionId: string, id: number, steer: boolean) => {
+	const failed = failedSendsOf(state, sessionId).find((send) => send.id === id);
+	if (failed === undefined) return Promise.resolve();
+	setFailedSends(sessionId, (sends) => sends.filter((send) => send.id !== id));
+	return sendMessage(sessionId, failed.text, failed.images, steer);
+};
+
+export const discardFailedSend = (sessionId: string, id: number) => {
+	const failed = failedSendsOf(state, sessionId).find((send) => send.id === id);
+	if (failed === undefined) return;
+	releaseImages(failed.images);
+	setFailedSends(sessionId, (sends) => sends.filter((send) => send.id !== id));
+};
 
 export const interruptSession = (sessionId: string) =>
 	attempt(() => callDaemon((daemon) => daemon.interruptSession({ sessionId })));
