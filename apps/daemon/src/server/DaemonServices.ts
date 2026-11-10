@@ -6,6 +6,7 @@ import { CodexAdapter } from "../agents/codex/CodexAdapter.ts";
 import { CredentialStore } from "../agents/CredentialStore.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
 import { SessionService } from "../sessions/SessionService.ts";
+import { WorkspaceLock } from "../workspaces/WorkspaceLock.ts";
 import { ClaudeQuery } from "../agents/claude/ClaudeQuery.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
 import { FileService } from "../files/FileService.ts";
@@ -28,7 +29,7 @@ export const AgentServices = Layer.mergeAll(
 export const DaemonServices = Layer.mergeAll(GitService.layer, FileService.layer).pipe(
 	Layer.provideMerge(WorkspaceService.layer),
 	Layer.provideMerge(Layer.merge(SessionService.layer, TerminalService.layer)),
-	Layer.provideMerge(ProjectService.layer),
+	Layer.provideMerge(Layer.merge(ProjectService.layer, WorkspaceLock.layer)),
 	Layer.provide(TrackedChildProcessSpawner),
 	Layer.provideMerge(LocalDatabase.layer),
 	Layer.provide([BunServices.layer, SecureRandom.layerWebCrypto]),

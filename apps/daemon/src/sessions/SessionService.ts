@@ -53,6 +53,7 @@ import { and, asc, desc, eq, gt, inArray, lt, max } from "drizzle-orm";
 import { ClaudeAdapter } from "../agents/claude/ClaudeAdapter.ts";
 import { CodexAdapter } from "../agents/codex/CodexAdapter.ts";
 import { CredentialStore } from "../agents/CredentialStore.ts";
+import { WorkspaceLock } from "../workspaces/WorkspaceLock.ts";
 import { AgentProbeSettings } from "./AgentProbeSettings.ts";
 import { SessionEvent } from "@repo/contracts/SessionEvent";
 import { DaemonConfig } from "../config/DaemonConfig.ts";
@@ -137,6 +138,7 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 	make: Effect.gen(function* () {
 		const database = yield* LocalDatabase;
 		const credentials = yield* CredentialStore;
+		const workspaceLock = yield* WorkspaceLock;
 		const codex = yield* CodexAdapter;
 		const adapters: Record<AgentKind, AgentAdapter> = { claude: yield* ClaudeAdapter, codex };
 		const services = yield* Effect.context<SecureRandom.SecureRandom>();
@@ -853,11 +855,13 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 			setAuthMode,
 			startLogin,
 			removeApiKey,
-			create,
+			// Both can start work in the workspace, so neither may race an archive of it.
+			create: (input: Parameters<typeof create>[0]) => workspaceLock.starting(input.workspaceId, create(input)),
 			list,
 			rename,
 			updateSettings,
-			sendMessage,
+			sendMessage: (...args: Parameters<typeof sendMessage>) =>
+				Effect.flatMap(getRow(args[0]), (row) => workspaceLock.starting(row.workspaceId, sendMessage(...args))),
 			respondToApproval,
 			interrupt,
 			stop,

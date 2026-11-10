@@ -1,10 +1,11 @@
 import { TEST_TOKEN, testDaemonConfig } from "../testing/testDaemonConfig.ts";
+import { SLOW_TO_STOP, waitForFile } from "../testing/processTesting.ts";
 import { testProcessRegistry } from "../testing/testProcessRegistry.ts";
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
 import { testAgentServices } from "../testing/testAgentServices.ts";
 import packageJson from "../../package.json" with { type: "json" };
+import { Effect, Fiber, FileSystem, Layer, Stream } from "effect";
 import { DaemonClient } from "@repo/contracts/DaemonClient";
-import { Effect, FileSystem, Layer, Stream } from "effect";
 import { BunServices } from "@effect/platform-bun";
 import { describe, expect, test } from "bun:test";
 import { DaemonServer } from "./DaemonServer.ts";
@@ -128,4 +129,31 @@ describe("DaemonServer", () => {
 		]);
 		expect(result.listed).toMatchObject({ agent: "codex", nativeSessionId: "thread-replay" });
 	});
+
+	test("a terminal opened while its workspace is being archived is refused", async () => {
+		const result = await runWithDaemon((baseUrl, tempDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const repositoryPath = yield* makeTestRepository(join(tempDir, "repo"));
+				const client = yield* DaemonClient;
+				const project = yield* client.addProject({ path: repositoryPath });
+				yield* client.updateProjectScripts({ projectId: project.id, setupScript: null, runScript: SLOW_TO_STOP });
+				const workspace = yield* client.createWorkspace({ kind: "inPlace", projectId: project.id });
+				const run = yield* client.startRunScript({ workspaceId: workspace.id });
+				yield* client.followScriptRunOutput({ scriptRunId: run.id }).pipe(Stream.take(1), Stream.runDrain);
+				const archiving = yield* Effect.forkChild(client.archiveWorkspace({ workspaceId: workspace.id, force: false }));
+				yield* waitForFile(join(repositoryPath, "stopping"));
+				const opening = yield* Effect.forkChild(
+					Effect.flip(client.openTerminal({ workspaceId: workspace.id, cols: 80, rows: 24 })),
+				);
+				yield* fs.writeFileString(join(repositoryPath, "release"), "");
+				yield* Fiber.join(archiving);
+				return {
+					refused: (yield* Fiber.join(opening))._tag,
+					terminals: yield* client.listTerminals({ workspaceId: workspace.id }),
+				};
+			}).pipe(withClient(baseUrl)),
+		);
+		expect(result).toEqual({ refused: "WorkspaceArchivedError", terminals: [] });
+	}, 15_000);
 });

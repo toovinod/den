@@ -21,6 +21,7 @@ import type { ChildProcessSpawner } from "effect/process";
 import { DaemonConfig } from "../config/DaemonConfig.ts";
 import { createWorktree } from "./createWorktree.ts";
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { WorkspaceLock } from "./WorkspaceLock.ts";
 import type { SecureRandom } from "effect/crypto";
 import { CappedOutput } from "./CappedOutput.ts";
 import { runRunScript } from "./runRunScript.ts";
@@ -56,6 +57,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("den/d
 		const projects = yield* ProjectService;
 		const sessions = yield* SessionService;
 		const terminals = yield* TerminalService;
+		const workspaceLock = yield* WorkspaceLock;
 		const fs = yield* FileSystem.FileSystem;
 		const services = yield* Effect.context<ScriptServices>();
 		// One fiber per running script, interrupted when its workspace is archived
@@ -324,6 +326,7 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("den/d
 				yield* Effect.logInfo("Archived workspace").pipe(Effect.annotateLogs({ workspaceId }));
 				return yield* get(workspaceId);
 			},
+			(effect, workspaceId) => workspaceLock.archiving(workspaceId, effect),
 			Semaphore.withPermit(archiveLock),
 			Effect.provide(services),
 		);
@@ -429,6 +432,8 @@ export class WorkspaceService extends Context.Service<WorkspaceService>()("den/d
 				});
 			},
 			Semaphore.withPermit(runScriptLock),
+			// Outside the run script lock, so an archive holding one workspace never blocks the others.
+			(effect, workspaceId) => workspaceLock.starting(workspaceId, effect),
 			Effect.provide(services),
 		);
 

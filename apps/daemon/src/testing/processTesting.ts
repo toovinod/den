@@ -1,5 +1,5 @@
 import { processExists, signalProcessGroup } from "../processes/stopProcessGroup.ts";
-import { Duration, Effect, Option, Schedule } from "effect";
+import { Duration, Effect, FileSystem, Option, Schedule } from "effect";
 
 // Prints the pid of a grandchild, then waits for it, so a test can check the grandchild dies.
 export const WITH_GRANDCHILD = "sleep 30 & echo $!; wait";
@@ -26,3 +26,14 @@ export const spawnDetachedShell = (script: string) =>
 
 // Makes sure a failed test does not leave its processes running.
 export const killGroupOnExit = (pgid: number) => Effect.addFinalizer(() => signalProcessGroup(pgid, "SIGKILL"));
+
+// A run script that, once asked to stop, holds the archive up until the test creates `release`.
+// It leaves `stopping` behind, so the test knows the archive is under way.
+export const SLOW_TO_STOP =
+	"trap 'touch stopping; while [ ! -f release ]; do sleep 0.05; done; exit 0' TERM; echo ready; while true; do sleep 0.1; done";
+
+export const waitForFile = (path: string) =>
+	Effect.flatMap(FileSystem.FileSystem, (fs) => fs.exists(path)).pipe(
+		Effect.repeat({ schedule: Schedule.spaced("20 millis"), until: (exists) => exists }),
+		Effect.timeout("4 seconds"),
+	);

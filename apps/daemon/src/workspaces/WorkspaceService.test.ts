@@ -1,8 +1,10 @@
 import { runInTempDir, runServiceTest, waitForScriptRun, withServices } from "../testing/runServiceTest.ts";
+import { SLOW_TO_STOP, waitForFile } from "../testing/processTesting.ts";
 import { makeTestRepository } from "../testing/makeTestRepository.ts";
 import { Duration, Effect, Fiber, FileSystem, Stream } from "effect";
 import { TerminalService } from "../terminals/TerminalService.ts";
 import { ProjectService } from "../projects/ProjectService.ts";
+import { SessionService } from "../sessions/SessionService.ts";
 import { SetupScriptSettings } from "./SetupScriptSettings.ts";
 import { LocalDatabase } from "../database/LocalDatabase.ts";
 import { scriptRun, workspace } from "../database/schema.ts";
@@ -562,5 +564,71 @@ describe("WorkspaceService", () => {
 			}),
 		);
 		expect(result).toEqual({ before: 1, after: 0 });
+	});
+	test("work started while the workspace is being archived is refused", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const fs = yield* FileSystem.FileSystem;
+				const projects = yield* ProjectService;
+				const sessions = yield* SessionService;
+				const workspaces = yield* WorkspaceService;
+				const project = yield* addProject(tempDir);
+				yield* projects.updateScripts(project.id, { setupScript: null, runScript: SLOW_TO_STOP });
+				const created = yield* workspaces.create({ kind: "inPlace", projectId: project.id });
+				const session = yield* sessions.create({
+					workspaceId: created.id,
+					agent: "codex",
+					model: "replay",
+					effort: null,
+				});
+				const run = yield* workspaces.startRunScript(created.id);
+				yield* workspaces.followScriptRunOutput(run.id).pipe(Stream.take(1), Stream.runDrain);
+				const archiving = yield* Effect.forkChild(workspaces.archive(created.id, { force: false }));
+				yield* waitForFile(join(project.path, "stopping"));
+				const attempts = yield* Effect.forkChild(
+					Effect.all(
+						[
+							Effect.flip(sessions.create({ workspaceId: created.id, agent: "codex", model: "replay", effort: null })),
+							Effect.flip(sessions.sendMessage(session.id, "hello", [], false)),
+							Effect.flip(workspaces.startRunScript(created.id)),
+						],
+						{ concurrency: "unbounded" },
+					),
+				);
+				yield* fs.writeFileString(join(project.path, "release"), "");
+				const archived = yield* Fiber.join(archiving);
+				return { archived: archived.status, refused: (yield* Fiber.join(attempts)).map((error) => error._tag) };
+			}),
+		);
+		expect(result).toEqual({
+			archived: "archived",
+			refused: ["WorkspaceNotFoundError", "WorkspaceArchivedError", "WorkspaceArchivedError"],
+		});
+	}, 15_000);
+
+	test("a workspace whose archive failed takes new work again", async () => {
+		const result = await runServiceTest((tempDir) =>
+			Effect.gen(function* () {
+				const projects = yield* ProjectService;
+				const sessions = yield* SessionService;
+				const workspaces = yield* WorkspaceService;
+				const project = yield* addProject(tempDir);
+				yield* projects.updateScripts(project.id, { setupScript: null, runScript: "echo serving" });
+				const created = yield* workspaces.create({ kind: "worktree", projectId: project.id, name: "feature" });
+				// A locked worktree refuses `git worktree remove`.
+				yield* runGit(project.path, ["worktree", "lock", created.path]);
+				const failed = yield* Effect.flip(workspaces.archive(created.id, { force: false }));
+				const session = yield* sessions.create({
+					workspaceId: created.id,
+					agent: "codex",
+					model: "replay",
+					effort: null,
+				});
+				yield* sessions.sendMessage(session.id, "hello", [], false);
+				const run = yield* workspaces.startRunScript(created.id);
+				return { failed: failed._tag, run: run.kind };
+			}),
+		);
+		expect(result).toEqual({ failed: "WorktreeRemoveError", run: "run" });
 	});
 });
