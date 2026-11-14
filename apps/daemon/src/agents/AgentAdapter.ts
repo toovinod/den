@@ -51,7 +51,7 @@ export class AgentNotInstalledError extends Schema.TaggedError<AgentNotInstalled
 	executable: Schema.String,
 }) {
 	override get message() {
-		return `Den could not find ${this.executable}. Install it, or add its folder to the PATH your login shell sets.`;
+		return `Octopus could not find ${this.executable}. Install it, or add its folder to the PATH your login shell sets.`;
 	}
 }
 
@@ -65,7 +65,7 @@ export class CodexVersionMismatchError extends Schema.TaggedError<CodexVersionMi
 	{ expected: Schema.String, actual: Schema.String },
 ) {
 	override get message() {
-		return `Den needs Codex ${this.expected}, but the installed codex is ${this.actual || "an unknown version"}. Install Codex ${this.expected} to use it with Den.`;
+		return `Octopus needs Codex ${this.expected}, but the installed codex is ${this.actual || "an unknown version"}. Install Codex ${this.expected} to use it with Octopus.`;
 	}
 }
 

@@ -18,9 +18,9 @@ use tauri_plugin_shell::{
 use tokio::sync::watch;
 
 // Must match READY_LINE_PREFIX in apps/daemon/src/server/DaemonServer.ts.
-const READY_LINE_PREFIX: &str = "DEN_DAEMON_READY ";
+const READY_LINE_PREFIX: &str = "OCTOPUS_DAEMON_READY ";
 
-// Longer than dend's own 8 second shutdown deadline, so a daemon that is still stopping its
+// Longer than octopusd's own 8 second shutdown deadline, so a daemon that is still stopping its
 // children is not cut off. Only a daemon that hangs past its own deadline gets killed.
 const DAEMON_EXIT_WAIT: Duration = Duration::from_secs(10);
 
@@ -42,7 +42,7 @@ enum DaemonStatus {
 }
 
 impl DaemonStatus {
-  // None while dend is still starting, so callers keep waiting.
+  // None while octopusd is still starting, so callers keep waiting.
   fn connection(&self) -> Option<Result<DaemonConnection, String>> {
     match self {
       DaemonStatus::Starting => None,
@@ -61,14 +61,14 @@ impl DaemonStatus {
   }
 }
 
-// The status an event from dend moves to, or None when the event does not change it.
+// The status an event from octopusd moves to, or None when the event does not change it.
 fn status_after(event: &CommandEvent, token: &str) -> Option<DaemonStatus> {
   match event {
     CommandEvent::Stdout(line) => String::from_utf8_lossy(line)
       .trim()
       .strip_prefix(READY_LINE_PREFIX)
       .map(|url| DaemonStatus::Ready(DaemonConnection { url: url.to_string(), token: token.to_string() })),
-    // The plugin sends this only after it reaped the process, so the old dend and its data dir lock are gone.
+    // The plugin sends this only after it reaped the process, so the old octopusd and its data dir lock are gone.
     CommandEvent::Terminated(_) => Some(DaemonStatus::Stopped),
     _ => None,
   }
@@ -77,7 +77,7 @@ fn status_after(event: &CommandEvent, token: &str) -> Option<DaemonStatus> {
 struct Daemon {
   status: watch::Sender<DaemonStatus>,
   // With the pid read at spawn: `CommandChild::pid` waits on a lock the plugin's waiter thread
-  // can hold while dend is stopped, and quitting runs on the UI thread.
+  // can hold while octopusd is stopped, and quitting runs on the UI thread.
   child: Mutex<Option<(CommandChild, u32)>>,
   quitting: AtomicBool,
 }
@@ -139,10 +139,10 @@ fn login_shell_path() -> Option<String> {
 
 fn spawn_daemon(app: &tauri::AppHandle) -> Result<CommandChild, Box<dyn std::error::Error>> {
   let token = generate_token()?;
-  let mut sidecar = app.shell().sidecar("dend")?;
+  let mut sidecar = app.shell().sidecar("octopusd")?;
   match login_shell_path() {
     Some(path) => sidecar = sidecar.env("PATH", path),
-    None => log::warn!("Could not read PATH from the login shell, so dend keeps the app's own PATH"),
+    None => log::warn!("Could not read PATH from the login shell, so octopusd keeps the app's own PATH"),
   }
   let (mut events, mut child) = sidecar.spawn()?;
   // Through stdin, not the environment: agents, scripts and git inherit the daemon's environment.
@@ -153,16 +153,16 @@ fn spawn_daemon(app: &tauri::AppHandle) -> Result<CommandChild, Box<dyn std::err
     while let Some(event) = events.recv().await {
       let status = status_after(&event, &token);
       match &event {
-        CommandEvent::Stdout(line) if status.is_none() => log::info!("dend: {}", String::from_utf8_lossy(line).trim_end()),
-        CommandEvent::Stderr(line) => log::warn!("dend: {}", String::from_utf8_lossy(line).trim_end()),
-        CommandEvent::Terminated(payload) => log::info!("dend exited: {payload:?}"),
+        CommandEvent::Stdout(line) if status.is_none() => log::info!("octopusd: {}", String::from_utf8_lossy(line).trim_end()),
+        CommandEvent::Stderr(line) => log::warn!("octopusd: {}", String::from_utf8_lossy(line).trim_end()),
+        CommandEvent::Terminated(payload) => log::info!("octopusd exited: {payload:?}"),
         _ => {}
       }
       let Some(status) = status else { continue };
       let stopped = status == DaemonStatus::Stopped;
       let daemon = app.state::<Daemon>();
       daemon.status.send_replace(status);
-      // Quitting stops dend on purpose, so only an unexpected exit tells the webview.
+      // Quitting stops octopusd on purpose, so only an unexpected exit tells the webview.
       if stopped && !daemon.quitting.load(Ordering::SeqCst) {
         let _ = app.emit(DAEMON_STOPPED_EVENT, ());
       }
@@ -184,7 +184,7 @@ fn start_daemon(app: tauri::AppHandle) {
         }
       }
       Err(error) => {
-        log::error!("Could not start dend: {error}");
+        log::error!("Could not start octopusd: {error}");
         daemon.status.send_replace(DaemonStatus::Stopped);
       }
     }
@@ -246,9 +246,9 @@ fn quit(app: &tauri::AppHandle, api: tauri::ExitRequestApi) {
   tauri::async_runtime::spawn(async move {
     let stopped = status.wait_for(|status| *status == DaemonStatus::Stopped);
     if tokio::time::timeout(DAEMON_EXIT_WAIT, stopped).await.is_err() {
-      log::error!("dend did not exit within {DAEMON_EXIT_WAIT:?}, killing it");
-      // Still dend's pid: it has not exited, so the pid cannot have been reused. The children
-      // it leaves are stopped by the next dend from its process registry.
+      log::error!("octopusd did not exit within {DAEMON_EXIT_WAIT:?}, killing it");
+      // Still octopusd's pid: it has not exited, so the pid cannot have been reused. The children
+      // it leaves are stopped by the next octopusd from its process registry.
       unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
     }
     app.exit(0);
@@ -266,7 +266,7 @@ mod tests {
 
   #[test]
   fn the_ready_line_makes_the_daemon_ready() {
-    let line = CommandEvent::Stdout(b"DEN_DAEMON_READY http://127.0.0.1:4799\n".to_vec());
+    let line = CommandEvent::Stdout(b"OCTOPUS_DAEMON_READY http://127.0.0.1:4799\n".to_vec());
     assert_eq!(status_after(&line, "secret"), Some(DaemonStatus::Ready(connection())));
     assert_eq!(status_after(&CommandEvent::Stdout(b"listening\n".to_vec()), "secret"), None);
   }

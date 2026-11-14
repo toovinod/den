@@ -21,7 +21,7 @@ export class EmailService extends Context.Service<
 	{
 		sendInvitation(input: InvitationEmailInput): Effect.Effect<void, EmailSendError>;
 	}
->()("den/email/EmailService") {
+>()("octopus/email/EmailService") {
 	static readonly layer = Layer.effect(
 		EmailService,
 		Effect.gen(function* () {
@@ -55,7 +55,7 @@ export class EmailService extends Context.Service<
 }
 
 export class SentEmails extends Context.Service<SentEmails, Ref.Ref<ReadonlyArray<EmailMessage>>>()(
-	"den/email/SentEmails",
+	"octopus/email/SentEmails",
 ) {
 	static readonly layer = Layer.effect(SentEmails, Ref.make<ReadonlyArray<EmailMessage>>([]));
 }

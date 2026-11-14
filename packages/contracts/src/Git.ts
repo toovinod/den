@@ -109,7 +109,7 @@ export class PushFailedError extends Schema.TaggedError<PushFailedError>()("Push
 	branch: Schema.String,
 }) {
 	override get message() {
-		return `Den could not push ${this.branch}. Check your network and git credentials, then try again.`;
+		return `Octopus could not push ${this.branch}. Check your network and git credentials, then try again.`;
 	}
 }
 
@@ -124,7 +124,7 @@ export class GitTimeoutError extends Schema.TaggedError<GitTimeoutError>()("GitT
 			this.kind === "network"
 				? "Check your network and that git and gh are signed in"
 				: "Check that no other git process is holding the repository";
-		return `\`${this.command}\` did not finish within ${this.timeout}, so Den stopped it. ${check}, then try again.`;
+		return `\`${this.command}\` did not finish within ${this.timeout}, so Octopus stopped it. ${check}, then try again.`;
 	}
 }
 
@@ -135,7 +135,7 @@ export class BranchChangedError extends Schema.TaggedError<BranchChangedError>()
 }) {
 	override get message() {
 		const now = this.actual === null ? "has no branch checked out" : `is on ${this.actual}`;
-		return `This workspace ${now}, but Den set it up on ${this.expected}. Switch back to ${this.expected}, or start a new workspace.`;
+		return `This workspace ${now}, but Octopus set it up on ${this.expected}. Switch back to ${this.expected}, or start a new workspace.`;
 	}
 }
 
@@ -243,6 +243,6 @@ export class RemoteBranchDeleteError extends Schema.TaggedError<RemoteBranchDele
 	branch: Schema.String,
 }) {
 	override get message() {
-		return `The pull request merged, but Den could not delete ${this.branch} on origin. Delete it on GitHub.`;
+		return `The pull request merged, but Octopus could not delete ${this.branch} on origin. Delete it on GitHub.`;
 	}
 }

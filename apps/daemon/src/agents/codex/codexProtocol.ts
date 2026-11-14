@@ -1,7 +1,7 @@
 import { AgentProtocolError } from "../AgentAdapter.ts";
 import { Effect, Schema } from "effect";
 
-// The fields Den reads from Codex app-server messages. The full shapes are the generated
+// The fields Octopus reads from Codex app-server messages. The full shapes are the generated
 // types in ./generated. Extra fields are ignored, so Codex can add fields without breaking us.
 
 export const ThreadResponse = Schema.Struct({
@@ -148,7 +148,7 @@ export const decodeCodex =
 			Effect.mapError(
 				(cause) =>
 					new AgentProtocolError({
-						message: "Codex sent a message Den could not read.",
+						message: "Codex sent a message Octopus could not read.",
 						cause,
 					}),
 			),

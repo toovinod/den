@@ -32,6 +32,6 @@ export class TerminalSpawnError extends Schema.TaggedError<TerminalSpawnError>()
 	cause: Schema.Defect(),
 }) {
 	override get message() {
-		return `Den could not start ${this.shell}. Check that your login shell exists.`;
+		return `Octopus could not start ${this.shell}. Check that your login shell exists.`;
 	}
 }

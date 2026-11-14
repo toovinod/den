@@ -11,7 +11,7 @@ export class WorkspaceLock extends Context.Service<
 		readonly starting: <A, E, R>(workspaceId: string, start: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
 		readonly archiving: <A, E, R>(workspaceId: string, archive: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
 	}
->()("den/daemon/workspaces/WorkspaceLock") {
+>()("octopus/daemon/workspaces/WorkspaceLock") {
 	static readonly layer = Layer.effect(
 		WorkspaceLock,
 		Effect.sync(() => {

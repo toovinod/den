@@ -55,7 +55,7 @@ export const CodexRequestSettings = Context.Reference<{
 	// included: their work streams in as notifications, which have no deadline. A hung app-server then fails
 	// the call instead of leaving the UI waiting forever.
 	readonly timeout: Duration.Duration;
-}>("den/daemon/agents/codex/CodexRequestSettings", {
+}>("octopus/daemon/agents/codex/CodexRequestSettings", {
 	defaultValue: () => ({ timeout: Duration.seconds(30) }),
 });
 // Incoming messages wait here for the adapter. A full buffer pauses reading stdout.
@@ -87,7 +87,7 @@ export const makeCodexRpcClient = Effect.fn("makeCodexRpcClient")(function* (com
 				Effect.mapError(
 					(cause) =>
 						new AgentProtocolError({
-							message: "Codex sent a line Den could not read.",
+							message: "Codex sent a line Octopus could not read.",
 							cause,
 						}),
 				),

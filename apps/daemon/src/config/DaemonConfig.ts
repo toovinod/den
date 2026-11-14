@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 class DaemonTokenMissingError extends Schema.TaggedError<DaemonTokenMissingError>()("DaemonTokenMissingError", {}) {
 	override get message() {
-		return "dend reads its token from the first line of stdin. Start it from the Den app.";
+		return "octopusd reads its token from the first line of stdin. Start it from the Octopus app.";
 	}
 }
 
@@ -35,13 +35,13 @@ export class DaemonConfig extends Context.Service<
 		// Completes when stdin closes, which means the app that started the daemon is gone.
 		readonly parentExited: Effect.Effect<void>;
 	}
->()("den/daemon/config/DaemonConfig") {
+>()("octopus/daemon/config/DaemonConfig") {
 	static readonly layer = Layer.effect(
 		DaemonConfig,
 		Effect.gen(function* () {
-			const port = yield* Config.Port("DEN_DAEMON_PORT").pipe(Config.withDefault(0));
+			const port = yield* Config.Port("OCTOPUS_DAEMON_PORT").pipe(Config.withDefault(0));
 			const { token, parentExited } = yield* readStdin;
-			const dataDir = yield* Config.String("DEN_DATA_DIR").pipe(Config.withDefault(join(homedir(), ".den")));
+			const dataDir = yield* Config.String("OCTOPUS_DATA_DIR").pipe(Config.withDefault(join(homedir(), ".octopus")));
 			return DaemonConfig.of({ port, token, dataDir, parentExited });
 		}),
 	);

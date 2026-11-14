@@ -23,7 +23,7 @@ export class LocalDatabaseError extends Schema.TaggedError<LocalDatabaseError>()
 	cause: Schema.Defect(),
 }) {}
 
-export const DATABASE_FILE_NAME = "den.db";
+export const DATABASE_FILE_NAME = "octopus.db";
 
 export const PRIVATE_DIRECTORY_MODE = 0o700;
 export const PRIVATE_FILE_MODE = 0o600;
@@ -48,7 +48,7 @@ export class LocalDatabase extends Context.Service<
 			run: (db: LocalDrizzle) => Effect.Effect<A, DriverError>,
 		) => Effect.Effect<A, LocalDatabaseError>;
 	}
->()("den/daemon/database/LocalDatabase") {
+>()("octopus/daemon/database/LocalDatabase") {
 	static readonly layer = Layer.effect(
 		LocalDatabase,
 		Effect.gen(function* () {

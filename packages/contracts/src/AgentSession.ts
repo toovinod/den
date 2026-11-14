@@ -114,7 +114,7 @@ export class AgentUnavailableError extends Schema.TaggedError<AgentUnavailableEr
 			case "notInstalled":
 				return `${name} is not installed. Install it, then try again.`;
 			case "versionMismatch":
-				return `${name} ${this.availability.actual} is installed, but Den needs ${this.availability.expected}.`;
+				return `${name} ${this.availability.actual} is installed, but Octopus needs ${this.availability.expected}.`;
 			case "unknown":
 				return `${name} could not start: ${this.availability.message}`;
 		}

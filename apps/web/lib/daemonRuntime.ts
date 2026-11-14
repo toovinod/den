@@ -12,7 +12,7 @@ class DaemonConnectionError extends Schema.TaggedError<DaemonConnectionError>()(
 	cause: Schema.Defect(),
 }) {
 	override get message() {
-		return "Den could not reach its daemon. Restart the app.";
+		return "Octopus could not reach its daemon. Restart the app.";
 	}
 }
 

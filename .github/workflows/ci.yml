@@ -26,7 +26,7 @@ jobs:
       - run: bun run lint
       - run: bun run check-types
       # Creating a project makes its first commit, which needs an identity. Runners have none.
-      - run: git config --global user.name "Den CI" && git config --global user.email "ci@den.local"
+      - run: git config --global user.name "Octopus CI" && git config --global user.email "ci@octopus.local"
       - run: bun test
       # The desktop app has its own job because it needs Rust and system libraries.
       - run: bunx turbo run build --filter=!desktop
@@ -39,18 +39,18 @@ jobs:
       postgres:
         image: postgres:18.6-alpine
         env:
-          POSTGRES_USER: den
-          POSTGRES_PASSWORD: den
-          POSTGRES_DB: den
+          POSTGRES_USER: octopus
+          POSTGRES_PASSWORD: octopus
+          POSTGRES_DB: octopus
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U den -d den"
+          --health-cmd "pg_isready -U octopus -d octopus"
           --health-interval 2s
           --health-timeout 5s
           --health-retries 15
     env:
-      DATABASE_URL: postgres://den:den@localhost:5432/den
+      DATABASE_URL: postgres://octopus:octopus@localhost:5432/octopus
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0

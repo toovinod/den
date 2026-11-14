@@ -3,7 +3,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { withGitDeadline } from "./GitTimeoutSettings.ts";
 import { Context, Effect, Schema, Stream } from "effect";
 
-export const GhSettings = Context.Reference<{ readonly executable: string }>("den/daemon/git/GhSettings", {
+export const GhSettings = Context.Reference<{ readonly executable: string }>("octopus/daemon/git/GhSettings", {
 	defaultValue: () => ({ executable: "gh" }),
 });
 
@@ -13,7 +13,7 @@ export class GhCommandError extends Schema.TaggedError<GhCommandError>()("GhComm
 	stderr: Schema.String,
 }) {}
 
-// gh keeps and uses its own GitHub login. Den never reads or stores that token.
+// gh keeps and uses its own GitHub login. Octopus never reads or stores that token.
 export const runGh = Effect.fn("runGh")(
 	function* (cwd: string, args: ReadonlyArray<string>) {
 		const { executable } = yield* GhSettings;

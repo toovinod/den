@@ -16,7 +16,7 @@ export class ClaudeQuery extends Context.Service<
 	{
 		start(params: { readonly prompt: AsyncIterable<SDKUserMessage>; readonly options: Options }): ClaudeQueryRun;
 	}
->()("den/daemon/agents/claude/ClaudeQuery") {
+>()("octopus/daemon/agents/claude/ClaudeQuery") {
 	static readonly layer = Layer.succeed(
 		ClaudeQuery,
 		ClaudeQuery.of({

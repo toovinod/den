@@ -30,9 +30,9 @@ export const invitationEmail = (input: InvitationEmailInput): EmailMessage => {
 	const inviterName = plainName(input.inviterName);
 	return {
 		to: input.to,
-		subject: `Join ${organizationName} on Den`,
+		subject: `Join ${organizationName} on Octopus`,
 		text: [
-			`${inviterName} invited you to join ${organizationName} on Den.`,
+			`${inviterName} invited you to join ${organizationName} on Octopus.`,
 			"",
 			`Accept the invitation: ${input.acceptUrl}`,
 			"",

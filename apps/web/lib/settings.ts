@@ -21,7 +21,7 @@ export const defaultSettings: Settings = {
 	lastModel: null,
 };
 
-const KEY = "den.settings";
+const KEY = "octopus.settings";
 
 // Storage can be missing or blocked (private windows, prerendering). Reads then find nothing and writes do nothing.
 export const readStored = (key: string): string | null =>

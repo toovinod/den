@@ -194,7 +194,7 @@ describe("WorkspaceService", () => {
 		expect(result.terminalsAfterArchive).toBe(0);
 		expect(result.archived.status).toBe("archived");
 		expect(result.folderExists).toBe(false);
-		expect(result.stashes).toContain(`den-archive/${result.created.id}`);
+		expect(result.stashes).toContain(`octopus-archive/${result.created.id}`);
 		// The untracked file is in the stash's untracked-files commit.
 		expect(result.stashedFiles).toBe("new.txt");
 	});

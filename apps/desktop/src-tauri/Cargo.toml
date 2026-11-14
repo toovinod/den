@@ -1,5 +1,5 @@
 [package]
-name = "den"
+name = "octopus"
 version = "0.1.0"
 description = "Run Claude Code and Codex in parallel"
 license = "MIT"
@@ -10,7 +10,7 @@ rust-version = "1.90"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "den_lib"
+name = "octopus_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

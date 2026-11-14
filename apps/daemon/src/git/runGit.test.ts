@@ -30,7 +30,7 @@ describe("git and gh deadlines", () => {
 		);
 		expect(result.error).toMatchObject({ _tag: "GitTimeoutError", command: "git slow", kind: "local" });
 		expect(result.error.message).toBe(
-			"`git slow` did not finish within 100ms, so Den stopped it. Check that no other git process is holding the repository, then try again.",
+			"`git slow` did not finish within 100ms, so Octopus stopped it. Check that no other git process is holding the repository, then try again.",
 		);
 		expect(result.finished).toBe(false);
 	});
@@ -41,7 +41,7 @@ describe("git and gh deadlines", () => {
 				const repo = yield* makeTestRepository(join(tempDir, "repo"));
 				// A remote that answers slowly and then hangs up, without touching the network.
 				yield* runGit(repo, ["config", "core.sshCommand", "sh -c 'sleep 0.5' --"]);
-				const push = runGit(repo, ["push", "ssh://den.invalid/repo.git", "main"]);
+				const push = runGit(repo, ["push", "ssh://octopus.invalid/repo.git", "main"]);
 				return {
 					withinNetwork: yield* Effect.flip(
 						push.pipe(Effect.provideService(GitTimeoutSettings, deadlines(100, 30_000))),

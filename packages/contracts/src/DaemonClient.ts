@@ -6,7 +6,7 @@ import { Socket } from "effect/socket";
 export class DaemonClient extends Context.Service<
 	DaemonClient,
 	RpcClient.RpcClient<RpcGroup.Rpcs<typeof DaemonRpcs>, RpcClientError.RpcClientError>
->()("den/contracts/DaemonClient") {
+>()("octopus/contracts/DaemonClient") {
 	static readonly layer = (webSocketUrl: string) =>
 		Layer.effect(DaemonClient, RpcClient.make(DaemonRpcs)).pipe(
 			Layer.provide(RpcClient.layerProtocolSocket()),

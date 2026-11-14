@@ -6,7 +6,7 @@ export const SetupScriptSettings = Context.Reference<{
 	readonly maxAttempts: number;
 	// First retry delay. Later ones grow exponentially, with jitter.
 	readonly retryBaseDelay: Duration.Duration;
-}>("den/daemon/workspaces/SetupScriptSettings", {
+}>("octopus/daemon/workspaces/SetupScriptSettings", {
 	defaultValue: () => ({
 		timeout: Duration.minutes(15),
 		maxAttempts: 3,

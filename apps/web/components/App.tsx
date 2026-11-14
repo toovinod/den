@@ -1,6 +1,6 @@
 "use client";
 
-import { DenLogo } from "./DenLogo.tsx";
+import { OctopusLogo } from "./OctopusLogo.tsx";
 import { boot, closeTab, newChat, onWindowFocus, openDialog, setPanel, useAppState } from "../lib/store.ts";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@repo/ui/components/resizable";
 import { onDaemonStopped, restartDaemon } from "../lib/daemonRuntime.ts";
@@ -64,11 +64,11 @@ const DaemonStopped = () => {
 	};
 	return (
 		<main className="flex h-full flex-col items-center justify-center gap-2 text-center">
-			<DenLogo className="size-10" />
-			<p className="font-medium">Den lost its daemon.</p>
+			<OctopusLogo className="size-10" />
+			<p className="font-medium">Octopus lost its daemon.</p>
 			<p className="max-w-sm text-sm text-muted-foreground">
 				{restart === "failed"
-					? "Den could not start its daemon again. Quit Den and open it again."
+					? "Octopus could not start its daemon again. Quit Octopus and open it again."
 					: "Agents and terminals that were running have stopped. Restart the daemon to reconnect."}
 			</p>
 			<Button size="sm" className="mt-2" disabled={restart === "restarting"} onClick={onRestart}>
@@ -93,8 +93,8 @@ export const App = () => {
 	if (connection.status !== "ready") {
 		return (
 			<main className="flex h-full flex-col items-center justify-center gap-2 text-center">
-				<DenLogo className="size-10" />
-				<p className="font-medium">Den</p>
+				<OctopusLogo className="size-10" />
+				<p className="font-medium">Octopus</p>
 				<p className="text-sm text-muted-foreground">
 					{connection.status === "failed" ? connection.message : "Connecting to the daemon"}
 				</p>

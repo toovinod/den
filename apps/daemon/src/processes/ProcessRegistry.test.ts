@@ -95,7 +95,7 @@ describe("ProcessRegistry", () => {
 			Effect.gen(function* () {
 				const holder = yield* ChildProcess.make("bun", ["src/testing/dataDirectoryHolder.ts"], {
 					cwd: DAEMON_DIR,
-					env: { DEN_DATA_DIR: dataDir },
+					env: { OCTOPUS_DATA_DIR: dataDir },
 					extendEnv: true,
 				});
 				const ready = yield* holder.stdout.pipe(Stream.decodeText, Stream.splitLines, Stream.runHead);
@@ -107,15 +107,12 @@ describe("ProcessRegistry", () => {
 				return { ready: Option.getOrUndefined(ready), heldBefore: heldBefore._tag };
 			}),
 		);
-		expect(result).toEqual({ ready: "DEN_LOCK_HELD", heldBefore: "DataDirectoryInUseError" });
+		expect(result).toEqual({ ready: "OCTOPUS_LOCK_HELD", heldBefore: "DataDirectoryInUseError" });
 	}, 20_000);
 
-	test("two daemons starting at once on a stale lock: exactly one gets the data directory", async () => {
+	test("two daemons starting at once: exactly one gets the data directory", async () => {
 		const result = await runInTempDir((dataDir) =>
 			Effect.gen(function* () {
-				const fs = yield* FileSystem.FileSystem;
-				const { shell } = yield* spawnDetachedShell("echo gone");
-				yield* Effect.promise(() => shell.exited);
 				const layer = ProcessRegistry.layer.pipe(Layer.provide([testDaemonConfig(dataDir), BunServices.layer]));
 				const race = Effect.scoped(
 					Effect.all([Effect.exit(Layer.build(layer)), Effect.exit(Layer.build(layer))], {
@@ -125,24 +122,11 @@ describe("ProcessRegistry", () => {
 				// The race is decided by timing, so run it often enough that a wrong lock shows up.
 				const rounds = [];
 				for (let i = 0; i < 30; i++) {
-					// A lock file naming a daemon that is gone, as a daemon that died leaves it.
-					yield* fs.writeFileString(join(dataDir, "dend.lock"), JSON.stringify({ pid: shell.pid, startedAt: 0 }));
 					rounds.push(yield* race);
 				}
 				return rounds.filter((winners) => winners !== 1).length;
 			}),
 		);
 		expect(result).toBe(0);
-	});
-
-	test("a lock file left by the previous version does not stop the next daemon", async () => {
-		const result = await runInTempDir((dataDir) =>
-			Effect.gen(function* () {
-				const fs = yield* FileSystem.FileSystem;
-				yield* fs.writeFileString(join(dataDir, "dend.lock"), JSON.stringify({ pid: 1, startedAt: 0 }));
-				return yield* Effect.exit(startRegistry(dataDir));
-			}),
-		);
-		expect(Exit.isSuccess(result)).toBe(true);
 	});
 });

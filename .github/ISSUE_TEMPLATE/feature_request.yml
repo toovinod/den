@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest something Den should do.
+description: Suggest something Octopus should do.
 labels: [enhancement]
 body:
   - type: textarea

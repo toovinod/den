@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // A stand-in for the codex CLI in tests. It answers `--version` and speaks a small,
 // scripted slice of the app-server protocol. The user's message picks the script:
-// "approve" asks for a command approval, "ask" sends a request Den does not support,
+// "approve" asks for a command approval, "ask" sends a request Octopus does not support,
 // anything else streams a short reply.
 import codexVersion from "../generated/CODEX_VERSION" with { type: "text" };
 
@@ -155,8 +155,8 @@ const runTurn = async (
 	completeTurn("completed");
 };
 
-// Den must pin these, or the user's own Codex config could turn approvals off.
-const hasDenPolicy = (params: { approvalPolicy?: string; sandbox?: string }) =>
+// Octopus must pin these, or the user's own Codex config could turn approvals off.
+const hasOctopusPolicy = (params: { approvalPolicy?: string; sandbox?: string }) =>
 	params.approvalPolicy === "on-request" && params.sandbox === "workspace-write";
 
 const serve = async () => {
@@ -224,7 +224,7 @@ const serve = async () => {
 				break;
 			case "thread/start":
 			case "thread/resume":
-				if (!hasDenPolicy(message.params)) {
+				if (!hasOctopusPolicy(message.params)) {
 					send({
 						id: message.id,
 						error: { code: -32602, message: "approval policy not pinned" },

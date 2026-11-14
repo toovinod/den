@@ -184,7 +184,7 @@ const ProjectMenuItems = ({
 		<Item onSelect={() => openDialog({ kind: "newWorkspace", projectId: project.id })}>New workspace</Item>
 		<Separator />
 		<Item variant="destructive" onSelect={() => void removeProject(project.id)}>
-			Remove from Den
+			Remove from Octopus
 		</Item>
 	</>
 );

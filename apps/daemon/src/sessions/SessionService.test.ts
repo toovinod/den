@@ -549,7 +549,7 @@ describe("SessionService", () => {
 				const path = join(tempDir, "data", "attachments", session.id, attachmentId);
 				const mode = ((yield* fs.stat(path)).mode & 0o777).toString(8);
 				const served = yield* sessions.getAttachment(session.id, attachmentId);
-				const unknown = yield* Effect.flip(sessions.getAttachment(session.id, "../../den.db"));
+				const unknown = yield* Effect.flip(sessions.getAttachment(session.id, "../../octopus.db"));
 				yield* Effect.flatMap(WorkspaceService, (workspaces) =>
 					workspaces.archive(session.workspaceId, { force: false }),
 				);

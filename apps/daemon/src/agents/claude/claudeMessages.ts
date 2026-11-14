@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 
-// The fields Den reads from Agent SDK messages. Extra fields are ignored, and the last
-// member of each union catches kinds Den does not use yet.
+// The fields Octopus reads from Agent SDK messages. Extra fields are ignored, and the last
+// member of each union catches kinds Octopus does not use yet.
 
 const Other = Schema.Struct({ type: Schema.String });
 

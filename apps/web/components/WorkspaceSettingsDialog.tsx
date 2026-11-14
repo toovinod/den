@@ -100,8 +100,8 @@ const Trust = ({ project }: { readonly project: Project }) => (
 				Trust this project
 			</Label>
 			<p className="text-xs text-muted-foreground">
-				A repository can ship its own agent settings: hooks that run commands and rules that skip approvals. Den loads
-				them only for projects you trust. Turn this on only for code you would run yourself.
+				A repository can ship its own agent settings: hooks that run commands and rules that skip approvals. Octopus
+				loads them only for projects you trust. Turn this on only for code you would run yourself.
 			</p>
 		</div>
 		<Switch

@@ -29,12 +29,12 @@ import { keepOutputTail } from "../keepOutputTail.ts";
 import { toAgentError } from "../toAgentError.ts";
 import { ClaudeQuery } from "./ClaudeQuery.ts";
 
-// Den runs the user's own `claude`, found on PATH unless this names another one. Inside a
+// Octopus runs the user's own `claude`, found on PATH unless this names another one. Inside a
 // `bun build --compile` binary the SDK cannot find the CLI it bundles, and the user's install
 // is also the one their login belongs to.
 export const ClaudeAdapterConfig = Context.Reference<{
 	readonly executable: string;
-}>("den/daemon/agents/claude/ClaudeAdapterConfig", {
+}>("octopus/daemon/agents/claude/ClaudeAdapterConfig", {
 	defaultValue: () => ({ executable: "claude" }),
 });
 
@@ -299,7 +299,7 @@ const makeMessageHandler = Effect.fnUntraced(function* (session: AgentSession) {
 });
 
 export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>()(
-	"den/daemon/agents/claude/ClaudeAdapter",
+	"octopus/daemon/agents/claude/ClaudeAdapter",
 ) {
 	static readonly layer = Layer.effect(
 		ClaudeAdapter,
@@ -415,7 +415,7 @@ export class ClaudeAdapter extends Context.Service<ClaudeAdapter, AgentAdapter>(
 							Effect.mapError(
 								(cause) =>
 									new AgentProtocolError({
-										message: "Claude Code sent a message Den could not read.",
+										message: "Claude Code sent a message Octopus could not read.",
 										cause,
 									}),
 							),

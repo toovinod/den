@@ -3,15 +3,13 @@ import { Effect, FileSystem, Predicate, Schema } from "effect";
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 
-// Not `dend.lock`: the previous version left a JSON file there, which SQLite cannot open. That
-// version is never running next to this one, so its file is simply ignored.
-export const LOCK_FILE_NAME = "dend.lock.db";
+export const LOCK_FILE_NAME = "octopusd.lock";
 
 export class DataDirectoryInUseError extends Schema.TaggedError<DataDirectoryInUseError>()("DataDirectoryInUseError", {
 	dataDir: Schema.String,
 }) {
 	override get message() {
-		return `Another Den is already running on ${this.dataDir}. Quit it, then start Den again.`;
+		return `Another Octopus is already running on ${this.dataDir}. Quit it, then start Octopus again.`;
 	}
 }
 

@@ -95,7 +95,7 @@ const availabilityText = (availability: AgentAvailability) => {
 		case "notInstalled":
 			return "Not installed on this computer";
 		case "versionMismatch":
-			return `Version ${availability.actual} is installed, Den needs ${availability.expected}`;
+			return `Version ${availability.actual} is installed, Octopus needs ${availability.expected}`;
 		case "unknown":
 			return availability.message;
 	}
@@ -121,8 +121,8 @@ const AgentAccount = ({ agent }: { readonly agent: AgentInfo }) => {
 			</div>
 			{agent.kind === "claude" ? (
 				<p className="text-xs text-muted-foreground">
-					Anthropic does not yet allow Claude subscriptions in other apps, so Den runs Claude Code with your Anthropic
-					API key. The key stays in the system keychain.
+					Anthropic does not yet allow Claude subscriptions in other apps, so Octopus runs Claude Code with your
+					Anthropic API key. The key stays in the system keychain.
 				</p>
 			) : null}
 			{agent.authModes.length > 1 ? (
@@ -261,7 +261,7 @@ const Notifications = () => {
 	return (
 		<div className="flex flex-col gap-4">
 			<p className="text-xs text-muted-foreground">
-				When Den is in the background and a turn finishes or an agent needs approval.
+				When Octopus is in the background and a turn finishes or an agent needs approval.
 			</p>
 			<div className="flex items-center justify-between gap-4">
 				<Label htmlFor="notify-desktop" className="text-sm text-foreground">

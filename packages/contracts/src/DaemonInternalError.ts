@@ -6,6 +6,6 @@ export class DaemonInternalError extends Schema.TaggedError<DaemonInternalError>
 	operation: Schema.String,
 }) {
 	override get message() {
-		return `Den could not ${this.operation}. Try again, and check the daemon logs if it keeps failing.`;
+		return `Octopus could not ${this.operation}. Try again, and check the daemon logs if it keeps failing.`;
 	}
 }

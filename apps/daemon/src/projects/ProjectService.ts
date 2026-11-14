@@ -22,7 +22,7 @@ import { basename, join } from "node:path";
 
 const normalizeScript = (script: string | null) => script?.trim() || null;
 
-export class ProjectService extends Context.Service<ProjectService>()("den/daemon/projects/ProjectService", {
+export class ProjectService extends Context.Service<ProjectService>()("octopus/daemon/projects/ProjectService", {
 	make: Effect.gen(function* () {
 		const database = yield* LocalDatabase;
 		const fs = yield* FileSystem.FileSystem;

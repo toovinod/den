@@ -212,7 +212,7 @@ describe("CodexAdapter", () => {
 		});
 		const pinned = codexVersionFile.trim();
 		expect(error.message).toBe(
-			`Den needs Codex ${pinned}, but the installed codex is 0.0.1. Install Codex ${pinned} to use it with Den.`,
+			`Octopus needs Codex ${pinned}, but the installed codex is 0.0.1. Install Codex ${pinned} to use it with Octopus.`,
 		);
 	});
 
@@ -220,7 +220,7 @@ describe("CodexAdapter", () => {
 		const error = await runWithCodex(Effect.flip(checkAuth), "/nonexistent/codex");
 		expect(error._tag).toBe("AgentNotInstalledError");
 		expect(error.message).toBe(
-			"Den could not find /nonexistent/codex. Install it, or add its folder to the PATH your login shell sets.",
+			"Octopus could not find /nonexistent/codex. Install it, or add its folder to the PATH your login shell sets.",
 		);
 	});
 

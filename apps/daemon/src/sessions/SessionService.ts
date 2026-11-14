@@ -124,7 +124,7 @@ const fromAuthStatus = (auth: AgentAuthStatus): AgentAvailability => {
 		case "loggedOut":
 			return { status: "loggedOut" };
 		case "unknown":
-			return { status: "unknown", message: "Den could not read its sign-in status." };
+			return { status: "unknown", message: "Octopus could not read its sign-in status." };
 	}
 };
 
@@ -134,7 +134,7 @@ const toUnavailable = (agent: AgentKind) => (error: AgentError) =>
 const decodeEvent = Schema.decodeUnknownEffect(AgentEvent);
 const decodeMediaType = Schema.decodeUnknownOption(ImageMediaType);
 
-export class SessionService extends Context.Service<SessionService>()("den/daemon/sessions/SessionService", {
+export class SessionService extends Context.Service<SessionService>()("octopus/daemon/sessions/SessionService", {
 	make: Effect.gen(function* () {
 		const database = yield* LocalDatabase;
 		const credentials = yield* CredentialStore;
@@ -804,7 +804,10 @@ export class SessionService extends Context.Service<SessionService>()("den/daemo
 						const adapter = adapters[kind];
 						return new AgentInfo({
 							kind,
-							availability: { status: "unknown", message: "Den could not read your keychain. Unlock it, then retry." },
+							availability: {
+								status: "unknown",
+								message: "Octopus could not read your keychain. Unlock it, then retry.",
+							},
 							capabilities: adapter.capabilities,
 							authModes: adapter.authModes,
 							authMode: adapter.authModes[0] ?? "apiKey",

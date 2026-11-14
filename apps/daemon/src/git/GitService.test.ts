@@ -545,7 +545,7 @@ describe("GitService pull requests", () => {
 			expect(error).toMatchObject({ _tag: "BranchChangedError", expected: "feature", actual: "elsewhere" });
 		}
 		expect(result.errors[0]?.message).toBe(
-			"This workspace is on elsewhere, but Den set it up on feature. Switch back to feature, or start a new workspace.",
+			"This workspace is on elsewhere, but Octopus set it up on feature. Switch back to feature, or start a new workspace.",
 		);
 		expect(result.detached).toMatchObject({ _tag: "BranchChangedError", expected: "feature", actual: null });
 		expect(result.remoteBranches).toBe("");

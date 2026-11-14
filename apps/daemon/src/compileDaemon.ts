@@ -32,13 +32,13 @@ const compile = Effect.fn("compile")(function* (target: keyof typeof rustTargets
 				"build",
 				"--compile",
 				`--target=${target}`,
-				// dend reads its settings only from the environment the app gives it, never from
+				// octopusd reads its settings only from the environment the app gives it, never from
 				// a .env or bunfig.toml that happens to sit in its working directory.
 				"--no-compile-autoload-dotenv",
 				"--no-compile-autoload-bunfig",
 				"src/main.ts",
 				"--outfile",
-				`dist/dend-${rustTargets[target]}`,
+				`dist/octopusd-${rustTargets[target]}`,
 			],
 			{ cwd: `${import.meta.dir}/..`, stdout: "inherit", stderr: "inherit" },
 		),

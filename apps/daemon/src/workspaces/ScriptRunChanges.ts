@@ -7,7 +7,7 @@ const KEPT_CHANGES = 256;
 // Every script run status change, published where the change is written, so clients see a run start
 // and end without polling.
 export class ScriptRunChanges extends Context.Service<ScriptRunChanges, PubSub.PubSub<ScriptRun>>()(
-	"den/daemon/workspaces/ScriptRunChanges",
+	"octopus/daemon/workspaces/ScriptRunChanges",
 ) {
 	static readonly layer = Layer.effect(ScriptRunChanges, PubSub.sliding<ScriptRun>(KEPT_CHANGES));
 }

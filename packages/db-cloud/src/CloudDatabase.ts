@@ -29,7 +29,7 @@ export class CloudDatabase extends Context.Service<
 			run: (db: CloudDrizzle) => Effect.Effect<A, EffectDrizzleQueryError | SqlError>,
 		): Effect.Effect<A, CloudDatabaseError>;
 	}
->()("den/db-cloud/CloudDatabase") {
+>()("octopus/db-cloud/CloudDatabase") {
 	static readonly layer = Layer.effect(
 		CloudDatabase,
 		Effect.gen(function* () {

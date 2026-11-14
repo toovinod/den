@@ -12,7 +12,7 @@ export class Auth extends Context.Service<
 	{
 		readonly handler: (request: Request) => Promise<Response>;
 	}
->()("den/auth/Auth") {
+>()("octopus/auth/Auth") {
 	static readonly layer = Layer.effect(
 		Auth,
 		Effect.gen(function* () {

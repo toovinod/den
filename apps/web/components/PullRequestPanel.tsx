@@ -112,7 +112,7 @@ const CreatePullRequest = ({
 			}}
 		>
 			<p className="text-xs text-muted-foreground">
-				Den pushes {workspace.branch} and opens a pull request with the GitHub CLI.
+				Octopus pushes {workspace.branch} and opens a pull request with the GitHub CLI.
 			</p>
 			<Input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="Title" placeholder="Title" />
 			<Textarea

@@ -6,7 +6,7 @@ export class CredentialStoreError extends Schema.TaggedError<CredentialStoreErro
 }) {}
 
 // One OS keychain entry per agent, named after the agent kind.
-const KEYCHAIN_SERVICE = "app.den.agent";
+const KEYCHAIN_SERVICE = "app.octopus.agent";
 
 const keychain = <A>(run: (secrets: typeof Bun.secrets) => Promise<A>) =>
 	Effect.tryPromise({
@@ -22,7 +22,7 @@ export class CredentialStore extends Context.Service<
 		set(agent: AgentKind, apiKey: Redacted.Redacted<string>): Effect.Effect<void, CredentialStoreError>;
 		remove(agent: AgentKind): Effect.Effect<void, CredentialStoreError>;
 	}
->()("den/daemon/agents/CredentialStore") {
+>()("octopus/daemon/agents/CredentialStore") {
 	static readonly layer = Layer.succeed(
 		CredentialStore,
 		CredentialStore.of({

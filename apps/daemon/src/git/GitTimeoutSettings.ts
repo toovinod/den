@@ -7,7 +7,7 @@ export const GitTimeoutSettings = Context.Reference<{
 	readonly local: Duration.Duration;
 	// For commands that talk to a remote. Every gh command does.
 	readonly network: Duration.Duration;
-}>("den/daemon/git/GitTimeoutSettings", {
+}>("octopus/daemon/git/GitTimeoutSettings", {
 	defaultValue: () => ({ local: Duration.minutes(2), network: Duration.minutes(5) }),
 });
 

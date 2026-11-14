@@ -28,7 +28,7 @@ interface RunningTerminal {
 // A slow client loses old output rather than growing the daemon's memory.
 const LIVE_BUFFER = 4096;
 
-export class TerminalService extends Context.Service<TerminalService>()("den/daemon/terminals/TerminalService", {
+export class TerminalService extends Context.Service<TerminalService>()("octopus/daemon/terminals/TerminalService", {
 	make: Effect.gen(function* () {
 		const shell = yield* Config.String("SHELL").pipe(Config.withDefault("/bin/sh"));
 		const services = yield* Effect.context<SecureRandom.SecureRandom | ProcessRegistry>();

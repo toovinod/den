@@ -53,7 +53,7 @@ export class WorktreeCreateError extends Schema.TaggedError<WorktreeCreateError>
 	branch: Schema.String,
 }) {
 	override get message() {
-		return `Den could not create a worktree for ${this.branch}. Check that the base branch exists and the repository is not locked.`;
+		return `Octopus could not create a worktree for ${this.branch}. Check that the base branch exists and the repository is not locked.`;
 	}
 }
 
@@ -61,7 +61,7 @@ export class WorktreeRemoveError extends Schema.TaggedError<WorktreeRemoveError>
 	path: Schema.String,
 }) {
 	override get message() {
-		return `Den could not remove the worktree at ${this.path}. Close programs using it and try again.`;
+		return `Octopus could not remove the worktree at ${this.path}. Close programs using it and try again.`;
 	}
 }
 

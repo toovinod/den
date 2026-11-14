@@ -36,7 +36,7 @@ export class ProcessRegistry extends Context.Service<
 		readonly add: (pgid: number) => Effect.Effect<void>;
 		readonly remove: (pgid: number) => Effect.Effect<void>;
 	}
->()("den/daemon/processes/ProcessRegistry") {
+>()("octopus/daemon/processes/ProcessRegistry") {
 	static readonly layer = Layer.effect(
 		ProcessRegistry,
 		Effect.gen(function* () {
